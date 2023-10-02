@@ -1,0 +1,3 @@
+qe/__pycache__/*
+QuantumEnvelope.egg-info/*
+*.pyc
