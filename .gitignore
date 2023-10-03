@@ -1,3 +1,8 @@
-qe/__pycache__/*
 QuantumEnvelope.egg-info/*
+*/__pycache__/
+qe/src/*test*
+*/build/
+build/
 *.pyc
+*.o
+*.so

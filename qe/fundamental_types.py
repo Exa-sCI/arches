@@ -272,9 +272,7 @@ class Spin_determinant_tuple(Tuple[OrbitalIdx, ...]):
         return (self ^ right) & right
 
     def single_phase(
-        self,
-        h: OrbitalIdx,
-        p: OrbitalIdx,
+        self, h: OrbitalIdx, p: OrbitalIdx,
     ):
         """Function to compute phase for <I|H|J> when I and J differ by exactly one orbital h <-> pd
 

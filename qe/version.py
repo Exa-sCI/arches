@@ -1,1 +1,1 @@
-__version__ = "02.10.2023" # DD/MM/YYYY
+__version__ = "2023.10.03"  # YYYY.MM.DD

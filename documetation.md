@@ -1,4 +1,4 @@
-# Hight level algorithm.
+# High level algorithm.
 
 So in high level summary we have 2 phases:
 
@@ -25,8 +25,3 @@ For one det:
 - alpha^2*(orb-alpha)^2 AB doubles 
 - comb(alpha,2)*comb(orb-alpha,2) AA doubles
 - comb(beta,2)*comb(orb-beta,2) BB doubles
-
-
-         
-
-   
