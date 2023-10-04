@@ -2,6 +2,10 @@ from functools import cache
 import math
 from ctypes import CDLL, Structure, c_int, POINTER, pointer, byref
 from ctypes import c_longlong as idx_t
+from qe.func_decorators import return_tuple, offload
+import pathlib
+
+run_folder = pathlib.Path(__file__).parent.resolve()
 
 
 class ij_tuple(Structure):
@@ -63,33 +67,31 @@ class ijkl_perms(Structure):
 #                                     __/ |
 #                                    |___/
 
-## TODO: I'm still not quite sure what the best interface method is.
-## Is there a way to directly register each function with a function defintition?
-## Or, i.e., to import the submodules into the namespace more cleanly?
-indexing_utils_lib = CDLL("./qe/build/libintegral_indexing_utils.so")
+iu_lib = CDLL(run_folder.joinpath("build/libintegral_indexing_utils.so"))
 
-indexing_utils_lib.compound_idx2.restype = idx_t
-indexing_utils_lib.compound_idx2.argtypes = [idx_t, idx_t]
+iu_lib.compound_idx2.restype = idx_t
+iu_lib.compound_idx2.argtypes = [idx_t, idx_t]
 
-indexing_utils_lib.compound_idx4.restype = idx_t
-indexing_utils_lib.compound_idx4.argtypes = [idx_t, idx_t, idx_t, idx_t]
+iu_lib.compound_idx4.restype = idx_t
+iu_lib.compound_idx4.argtypes = [idx_t, idx_t, idx_t, idx_t]
 
-indexing_utils_lib.compound_idx2_reverse.restype = ij_tuple
-indexing_utils_lib.compound_idx2_reverse.argtypes = [idx_t]
+iu_lib.compound_idx2_reverse.restype = ij_tuple
+iu_lib.compound_idx2_reverse.argtypes = [idx_t]
 
-indexing_utils_lib.compound_idx4_reverse.restype = ijkl_tuple
-indexing_utils_lib.compound_idx4_reverse.argtypes = [idx_t]
+iu_lib.compound_idx4_reverse.restype = ijkl_tuple
+iu_lib.compound_idx4_reverse.argtypes = [idx_t]
 
-indexing_utils_lib.canonical_idx4.restype = ijkl_tuple
-indexing_utils_lib.canonical_idx4.argtypes = [idx_t, idx_t, idx_t, idx_t]
+iu_lib.canonical_idx4.restype = ijkl_tuple
+iu_lib.canonical_idx4.argtypes = [idx_t, idx_t, idx_t, idx_t]
 
-indexing_utils_lib.compound_idx4_reverse_all.restype = ijkl_perms
-indexing_utils_lib.compound_idx4_reverse_all.argtypes = [idx_t]
+iu_lib.compound_idx4_reverse_all.restype = ijkl_perms
+iu_lib.compound_idx4_reverse_all.argtypes = [idx_t]
 
-# indexing_utils_lib.get_unique_idx4.restype = c_int
-# indexing_utils_lib.get_unique_idx4.argtypes = [POINTER(ijkl_tuple), ijkl_perms]
+# iu_lib.get_unique_idx4.restype = c_int
+# iu_lib.get_unique_idx4.argtypes = [POINTER(ijkl_tuple), ijkl_perms]
 
 
+@offload(iu_lib.compound_idx2)
 def compound_idx2(i, j):
     """
     get compound (triangular) index from (i,j)
@@ -118,11 +120,11 @@ def compound_idx2(i, j):
     >>> compound_idx2(2,1)
     4
     """
-    # p, q = min(i, j), max(i, j)
-    # return (q * (q + 1)) // 2 + p
-    return indexing_utils_lib.compound_idx2(idx_t(i), idx_t(j))
+    p, q = min(i, j), max(i, j)
+    return (q * (q + 1)) // 2 + p
 
 
+@offload(iu_lib.compound_idx4)
 def compound_idx4(i, j, k, l):
     """
     nested calls to compound_idx2
@@ -137,10 +139,10 @@ def compound_idx4(i, j, k, l):
     >>> compound_idx4(1,0,1,1)
     4
     """
-    # return compound_idx2(compound_idx2(i, k), compound_idx2(j, l))
-    return indexing_utils_lib.compound_idx4(i, j, k, l)
+    return compound_idx2(compound_idx2(i, k), compound_idx2(j, l))
 
 
+@offload(return_tuple(iu_lib.compound_idx2_reverse))
 def compound_idx2_reverse(ij):
     """
     inverse of compound_idx2
@@ -154,13 +156,13 @@ def compound_idx2_reverse(ij):
     >>> compound_idx2_reverse(3)
     (0, 2)
     """
-    # assert (1 + 8 * ij) >= 0
-    # j = (math.isqrt(1 + 8 * ij) - 1) // 2
-    # i = ij - (j * (j + 1) // 2)
-    # return i, j
-    return indexing_utils_lib.compound_idx2_reverse(idx_t(ij)).t
+    assert (1 + 8 * ij) >= 0
+    j = (math.isqrt(1 + 8 * ij) - 1) // 2
+    i = ij - (j * (j + 1) // 2)
+    return i, j
 
 
+@offload(return_tuple(iu_lib.compound_idx4_reverse))
 def compound_idx4_reverse(ijkl):
     """
     inverse of compound_idx4
@@ -177,14 +179,13 @@ def compound_idx4_reverse(ijkl):
     >>> compound_idx4_reverse(37)
     (0, 2, 1, 3)
     """
-    # ik, jl = compound_idx2_reverse(ijkl)
-    # i, k = compound_idx2_reverse(ik)
-    # j, l = compound_idx2_reverse(jl)
-    # return i, j, k, l
-    return indexing_utils_lib.compound_idx4_reverse(ijkl).t
+    ik, jl = compound_idx2_reverse(ijkl)
+    i, k = compound_idx2_reverse(ik)
+    j, l = compound_idx2_reverse(jl)
+    return i, j, k, l
 
 
-# @cache
+@offload(return_tuple(iu_lib.compound_idx4_reverse_all))
 def compound_idx4_reverse_all(ijkl):
     """
     return all 8 permutations that are equivalent for real orbitals
@@ -199,22 +200,20 @@ def compound_idx4_reverse_all(ijkl):
     >>> compound_idx4_reverse_all(37)
     ((0, 2, 1, 3), (2, 0, 3, 1), (1, 3, 0, 2), (3, 1, 2, 0), (0, 3, 1, 2), (3, 0, 2, 1), (1, 2, 0, 3), (2, 1, 3, 0))
     """
-    # i, j, k, l = compound_idx4_reverse(ijkl)
-    # return (
-    #     (i, j, k, l),
-    #     (j, i, l, k),
-    #     (k, l, i, j),
-    #     (l, k, j, i),
-    #     (i, l, k, j),
-    #     (l, i, j, k),
-    #     (k, j, i, l),
-    #     (j, k, l, i),
-    # )
-    return indexing_utils_lib.compound_idx4_reverse_all(ijkl).t
+    i, j, k, l = compound_idx4_reverse(ijkl)
+    return (
+        (i, j, k, l),
+        (j, i, l, k),
+        (k, l, i, j),
+        (l, k, j, i),
+        (i, l, k, j),
+        (l, i, j, k),
+        (k, j, i, l),
+        (j, k, l, i),
+    )
 
 
-# @cache
-# TODO: Not implemented in cpp, this is not currently used anywhere
+# TODO: Stil debugging implementation, but not used anywhere, so moving on for now.
 def compound_idx4_reverse_all_unique(ijkl):
     """
     return only the unique 4-tuples from compound_idx4_reverse_all
@@ -232,6 +231,7 @@ def compound_idx4_reverse_all_unique(ijkl):
     # return tuple([u_set[i].t for i in range(N)])
 
 
+@offload(return_tuple(iu_lib.canonical_idx4))
 def canonical_idx4(i, j, k, l):
     """
     for real orbitals, return same 4-tuple for all equivalent integrals
@@ -249,12 +249,11 @@ def canonical_idx4(i, j, k, l):
     >>> canonical_idx4(1, 3, 4, 2)
     (2, 1, 3, 4)
     """
-    # i, k = min(i, k), max(i, k)
-    # ik = compound_idx2(i, k)
-    # j, l = min(j, l), max(j, l)
-    # jl = compound_idx2(j, l)
-    # if ik <= jl:
-    #     return i, j, k, l
-    # else:
-    #     return j, i, l, k
-    return indexing_utils_lib.canonical_idx4(i, j, k, l).t
+    i, k = min(i, k), max(i, k)
+    ik = compound_idx2(i, k)
+    j, l = min(j, l), max(j, l)
+    jl = compound_idx2(j, l)
+    if ik <= jl:
+        return i, j, k, l
+    else:
+        return j, i, l, k
