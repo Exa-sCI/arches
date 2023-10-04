@@ -22,6 +22,13 @@ from qe.fundamental_types import (
 from typing import Iterator, Set, Tuple, List, Dict
 from qe.integral_indexing_utils import compound_idx4_reverse, compound_idx4, canonical_idx4
 
+import pathlib
+from ctypes import CDLL, c_char
+from ctypes import c_longlong as idx_t
+from qe.func_decorators import return_str, offload
+
+run_folder = pathlib.Path(__file__).parent.resolve()
+
 #  _____      _                       _   _
 # |_   _|    | |                     | | | |
 #   | | _ __ | |_ ___  __ _ _ __ __ _| | | |_ _   _ _ __   ___  ___
@@ -31,7 +38,12 @@ from qe.integral_indexing_utils import compound_idx4_reverse, compound_idx4, can
 #                      __/ |                   __/ | |
 #                     |___/                   |___/|_|
 
+it_lib = CDLL(run_folder.joinpath("build/libintegral_types.so"))
 
+it_lib.integral_category.restype = c_char
+it_lib.integral_category.argtypes = [idx_t, idx_t, idx_t, idx_t]
+
+@offload(return_str(it_lib.integral_category))
 def integral_category(i, j, k, l):
     """
     +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
@@ -59,7 +71,8 @@ def integral_category(i, j, k, l):
     |       | j<i<k<l (2,1,3,4) |   <    <   <  |  >   <   <   <  |                               | 1<->4 x 2<->3                |                             |
     +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
     """
-    assert (i, j, k, l) == canonical_idx4(i, j, k, l)
+    if (i, j, k, l) != canonical_idx4(i, j, k, l):
+        raise ValueError("Integral indices are not cannonical.")
     if i == l:
         return "A"
     elif (i == k) and (j == l):

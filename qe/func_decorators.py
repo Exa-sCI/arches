@@ -50,3 +50,13 @@ def return_tuple(func):
         return func(*args, **kwargs).t
 
     return wrapper
+
+
+def return_str(func):
+    """Decorator for wrapping return types of indexing type calls."""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs).decode("UTF-8")
+
+    return wrapper
