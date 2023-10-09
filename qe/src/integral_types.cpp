@@ -2,8 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 
-extern "C" char integral_category(const idx_t i, const idx_t j, const idx_t k,
-                                  const idx_t l) {
+extern "C" char integral_category(const idx_t i, const idx_t j, const idx_t k, const idx_t l) {
 
     struct ijkl_tuple in_idx = {i, j, k, l};
     struct ijkl_tuple can_idx = canonical_idx4(i, j, k, l);

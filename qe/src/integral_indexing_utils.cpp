@@ -14,8 +14,7 @@ extern "C" idx_t compound_idx2(const idx_t i, const idx_t j) {
     return res;
 }
 
-extern "C" idx_t compound_idx4(const idx_t i, const idx_t j, const idx_t k,
-                               const idx_t l) {
+extern "C" idx_t compound_idx4(const idx_t i, const idx_t j, const idx_t k, const idx_t l) {
     idx_t a = compound_idx2(i, k);
     idx_t b = compound_idx2(j, l);
     return compound_idx2(a, b);
@@ -39,16 +38,15 @@ extern "C" struct ijkl_tuple compound_idx4_reverse(const idx_t ijkl) {
 extern "C" struct ijkl_perms compound_idx4_reverse_all(const idx_t ijkl) {
     struct ijkl_tuple idx = compound_idx4_reverse(ijkl);
     struct ijkl_perms res = {
-        idx.i, idx.j, idx.k, idx.l, idx.j, idx.i, idx.l, idx.k,
-        idx.k, idx.l, idx.i, idx.j, idx.l, idx.k, idx.j, idx.i,
-        idx.i, idx.l, idx.k, idx.j, idx.l, idx.i, idx.j, idx.k,
-        idx.k, idx.j, idx.i, idx.l, idx.j, idx.k, idx.l, idx.i,
+        idx.i, idx.j, idx.k, idx.l, idx.j, idx.i, idx.l, idx.k, idx.k, idx.l, idx.i,
+        idx.j, idx.l, idx.k, idx.j, idx.i, idx.i, idx.l, idx.k, idx.j, idx.l, idx.i,
+        idx.j, idx.k, idx.k, idx.j, idx.i, idx.l, idx.j, idx.k, idx.l, idx.i,
     };
     return res;
 }
 
-extern "C" struct ijkl_tuple canonical_idx4(const idx_t i, const idx_t j,
-                                            const idx_t k, const idx_t l) {
+extern "C" struct ijkl_tuple canonical_idx4(const idx_t i, const idx_t j, const idx_t k,
+                                            const idx_t l) {
     // idx_t ii = std::min(i, k);
     // idx_t kk = std::max(i, k);
     // idx_t jj = std::min(j, l);

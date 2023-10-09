@@ -6,8 +6,7 @@ idx_t isqrt(const idx_t i) { return (idx_t)std::sqrt(i); }
 
 extern "C" idx_t compound_idx2(const idx_t i, const idx_t j);
 
-extern "C" idx_t compound_idx4(const idx_t i, const idx_t j, const idx_t k,
-                               const idx_t l);
+extern "C" idx_t compound_idx4(const idx_t i, const idx_t j, const idx_t k, const idx_t l);
 
 struct ij_tuple {
     idx_t i;
@@ -29,13 +28,11 @@ struct ijkl_tuple {
     idx_t l;
 };
 inline bool operator==(const ijkl_tuple &lhs, const ijkl_tuple &rhs) {
-    return (lhs.i == rhs.i) && (lhs.j == rhs.j) && (lhs.k == rhs.k) &&
-           (lhs.l == rhs.l);
+    return (lhs.i == rhs.i) && (lhs.j == rhs.j) && (lhs.k == rhs.k) && (lhs.l == rhs.l);
 }
 
 inline bool operator<(const ijkl_tuple &lhs, const ijkl_tuple &rhs) {
-    return (lhs.i < rhs.i) || (lhs.j < rhs.j) || (lhs.k < rhs.k) ||
-           (lhs.l < rhs.l);
+    return (lhs.i < rhs.i) || (lhs.j < rhs.j) || (lhs.k < rhs.k) || (lhs.l < rhs.l);
 }
 
 struct ijkl_perms {
@@ -51,8 +48,8 @@ struct ijkl_perms {
 
 // Would like to use std::tuple here but not handled in ctypes. Easier to use
 // structs for now.
-extern "C" struct ijkl_tuple canonical_idx4(const idx_t i, const idx_t j,
-                                            const idx_t k, const idx_t l);
+extern "C" struct ijkl_tuple canonical_idx4(const idx_t i, const idx_t j, const idx_t k,
+                                            const idx_t l);
 
 extern "C" struct ij_tuple compound_idx2_reverse(const idx_t ij);
 
