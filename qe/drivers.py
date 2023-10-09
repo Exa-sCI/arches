@@ -20,7 +20,11 @@ from qe.fundamental_types import (
     Two_electron_integral_index_phase,
 )
 from typing import Iterator, Set, Tuple, List, Dict
-from qe.integral_indexing_utils import compound_idx4_reverse, compound_idx4, canonical_idx4
+from qe.integral_indexing_utils import (
+    compound_idx4_reverse,
+    compound_idx4,
+    canonical_idx4,
+)
 
 import pathlib
 from ctypes import CDLL, c_char
@@ -42,6 +46,7 @@ it_lib = CDLL(run_folder.joinpath("build/libintegral_types.so"))
 
 it_lib.integral_category.restype = c_char
 it_lib.integral_category.argtypes = [idx_t, idx_t, idx_t, idx_t]
+
 
 @offload(return_str(it_lib.integral_category))
 def integral_category(i, j, k, l):
@@ -157,7 +162,7 @@ def batch_apply_same_spin_double_excitation(
 
 
 def batch_apply_opposite_spin_double_excitation(
-    batch: List[Determinant], h1: OrbitalIdx, p1: OrbitalIdx, h2: OrbitalIdx, p2: OrbitalIdx
+    batch: List[Determinant], h1: OrbitalIdx, p1: OrbitalIdx, h2: OrbitalIdx, p2: OrbitalIdx,
 ) -> List[Determinant]:
     """Apply double (same-spin) excitation to a batch of determinants at a time
     :param b:        Batch of Determinants to apply h->p excitation to
@@ -424,7 +429,7 @@ class Hamiltonian_two_electrons_determinant_driven(Hamiltonian_two_electrons, ob
     ) -> Iterator[Two_electron_integral_index_phase]:
         for a, det_i in enumerate(psi_internal):
             for b, det_j in enumerate(psi_j):
-                for idx, phase in Hamiltonian_two_electrons_determinant_driven.H_ij_indices(
+                for (idx, phase,) in Hamiltonian_two_electrons_determinant_driven.H_ij_indices(
                     det_i, det_j
                 ):
                     yield (a, b), idx, phase
@@ -504,7 +509,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
 
     @staticmethod
     def do_diagonal(
-        det_indices: List[int], psi_i: Psi_det, det_to_index_j: Dict[Determinant, int], phase: int
+        det_indices: List[int], psi_i: Psi_det, det_to_index_j: Dict[Determinant, int], phase: int,
     ):
         # contribution from integrals to diagonal elements
         for a in det_indices:
@@ -618,7 +623,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         # In order
         #   1. Apply simultaneous single h -> p excitation to pre-filtered determinants in `batch_of_dets`
         exc_batch = batch_apply_same_spin_double_excitation(
-            [index_det_pair[1] for index_det_pair in batch_of_dets], h1, p1, h2, p2, spin
+            [index_det_pair[1] for index_det_pair in batch_of_dets], h1, p1, h2, p2, spin,
         )
         #   2. Batch filter of excitation pairs based on whether excitation is \in psi_internal
         filtered_pairs = [
@@ -741,7 +746,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         # In order
         #   1. Apply simultaneous single h1, h2 -> p1, p2 (same-spin) excitation to pre-filtered determinants in `batch_of_dets`
         exc_batch = batch_apply_same_spin_double_excitation(
-            [index_det_pair[1] for index_det_pair in batch_of_dets], h1, p1, h2, p2, spin
+            [index_det_pair[1] for index_det_pair in batch_of_dets], h1, p1, h2, p2, spin,
         )
         #   2. Organize excitation pairs of (I, det_J);
         #       a. I is index of det_I \in psi
@@ -965,7 +970,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         def do_diagonal_A(i, j, psi_i, det_to_index_j, spindet_occ_i, oppspindet_occ_i):
             # Get indices of determinants occupied in ia and ib
             det_indices = Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
-                spindet_occ_i, oppspindet_occ_i, {"same": {i}, "opposite": {j}}, "all"
+                spindet_occ_i, oppspindet_occ_i, {"same": {i}, "opposite": {j}}, "all",
             )
 
             # phase is always 1
@@ -1005,13 +1010,13 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             # Get indices of determinants occupied in ia and ja, jb and jb, ia and jb, and ib and ja
             det_indices = chain(
                 Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
-                    spindet_occ_i, oppspindet_occ_i, {"same": {i}, "opposite": {j}}, "all"
+                    spindet_occ_i, oppspindet_occ_i, {"same": {i}, "opposite": {j}}, "all",
                 ),
                 Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
                     spindet_occ_i, oppspindet_occ_i, {"same": {i, j}}, "all"
                 ),
                 Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
-                    oppspindet_occ_i, spindet_occ_i, {"same": {i}, "opposite": {j}}, "all"
+                    oppspindet_occ_i, spindet_occ_i, {"same": {i}, "opposite": {j}}, "all",
                 ),
                 Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
                     oppspindet_occ_i, spindet_occ_i, {"same": {i, j}}, "all"
@@ -1061,7 +1066,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                     spindet_occ_i, {}, {"same": {j, i}}, {"same": {k}}
                 ),
                 Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ_i, oppspindet_occ_i, {"same": {i}, "opposite": {j}}, {"same": {k}}
+                    spindet_occ_i, oppspindet_occ_i, {"same": {i}, "opposite": {j}}, {"same": {k}},
                 ),
             )
             yield from Hamiltonian_two_electrons_integral_driven.do_single(
@@ -1074,7 +1079,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                     spindet_occ_i, {}, {"same": {j, k}}, {"same": {i}}
                 ),
                 Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ_i, oppspindet_occ_i, {"same": {k}, "opposite": {j}}, {"same": {i}}
+                    spindet_occ_i, oppspindet_occ_i, {"same": {k}, "opposite": {j}}, {"same": {i}},
                 ),
             )
 
@@ -1319,7 +1324,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             # One way: Indices of determinants related by excitations from psi_i -> psi_j
             # phasemod, occ, h, p = 1, i, j, l
             det_indices_1 = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                spindet_occ_i, oppspindet_occ_i, {"same": {j}, "opposite": {i}}, {"same": {l}}
+                spindet_occ_i, oppspindet_occ_i, {"same": {j}, "opposite": {i}}, {"same": {l}},
             )
             yield from Hamiltonian_two_electrons_integral_driven.do_single(
                 det_indices_1, 1, i, j, l, psi_i, det_to_index_j, spin
@@ -1327,7 +1332,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             # Other way: Indices of determinants related by excitations from psi_j -> psi_i
             # phasemod, occ, h, p = 1, i, l, j
             det_indices_2 = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                spindet_occ_i, oppspindet_occ_i, {"same": {l}, "opposite": {i}}, {"same": {j}}
+                spindet_occ_i, oppspindet_occ_i, {"same": {l}, "opposite": {i}}, {"same": {j}},
             )
 
             yield from Hamiltonian_two_electrons_integral_driven.do_single(
@@ -1515,10 +1520,10 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         # doubles, ia(b) to ka(b) and jb(a) to lb(a)
         for hp1, hp2 in product(permutations([i, k], 2), permutations([j, l], 2)):
             yield from Hamiltonian_two_electrons_integral_driven.do_double_oppspin(
-                hp1, hp2, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha"
+                hp1, hp2, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha",
             )
             yield from Hamiltonian_two_electrons_integral_driven.do_double_oppspin(
-                hp1, hp2, psi_i, det_to_index_j, spindet_b_occ_i, spindet_a_occ_i, "beta"
+                hp1, hp2, psi_i, det_to_index_j, spindet_b_occ_i, spindet_a_occ_i, "beta",
             )
 
         if i == j:  # <ii|kl> = <ii|lk> = <ik|li> -> - <ik|il>
@@ -1738,19 +1743,19 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
 
         # Only call for a single spin variable. Each excitation involves ia, ib to ka, kb. Flipping the spin just double counts it
         yield from Hamiltonian_two_electrons_integral_driven.do_double_oppspin(
-            [i, k], [i, k], psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha"
+            [i, k], [i, k], psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha",
         )
         # Need to do ph1, ph2 pairing twice, once for each spin. ia -> ka, kb -> ib
         yield from Hamiltonian_two_electrons_integral_driven.do_double_oppspin(
-            [i, k], [k, i], psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha"
+            [i, k], [k, i], psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha",
         )
         # Double from ia -> ka, kb -> ib
         yield from Hamiltonian_two_electrons_integral_driven.do_double_oppspin(
-            [i, k], [k, i], psi_i, det_to_index_j, spindet_b_occ_i, spindet_a_occ_i, "beta"
+            [i, k], [k, i], psi_i, det_to_index_j, spindet_b_occ_i, spindet_a_occ_i, "beta",
         )
         # Only call for a single spin variable. Each excitation involves ia, ib to ka, kb. Flipping the spin just double counts it
         yield from Hamiltonian_two_electrons_integral_driven.do_double_oppspin(
-            [k, i], [k, i], psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha"
+            [k, i], [k, i], psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha",
         )
 
     @staticmethod
@@ -1828,18 +1833,18 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         # doubles, i to k and j to l, same spin and opposite-spin excitations allowed
         for hp1, hp2 in product(permutations([i, k], 2), permutations([j, l], 2)):
             yield from Hamiltonian_two_electrons_integral_driven.do_double_samespin(
-                hp1, hp2, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha"
+                hp1, hp2, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha",
             )
             yield from Hamiltonian_two_electrons_integral_driven.do_double_samespin(
-                hp1, hp2, psi_i, det_to_index_j, spindet_b_occ_i, spindet_a_occ_i, "beta"
+                hp1, hp2, psi_i, det_to_index_j, spindet_b_occ_i, spindet_a_occ_i, "beta",
             )
         # doubles, i to k and j to l, same spin and opposite-spin excitations allowed
         for hp1, hp2 in product(permutations([i, k], 2), permutations([j, l], 2)):
             yield from Hamiltonian_two_electrons_integral_driven.do_double_oppspin(
-                hp1, hp2, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha"
+                hp1, hp2, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i, "alpha",
             )
             yield from Hamiltonian_two_electrons_integral_driven.do_double_oppspin(
-                hp1, hp2, psi_i, det_to_index_j, spindet_b_occ_i, spindet_a_occ_i, "beta"
+                hp1, hp2, psi_i, det_to_index_j, spindet_b_occ_i, spindet_a_occ_i, "beta",
             )
 
     @staticmethod
@@ -1995,7 +2000,8 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
 class H_indices_generator(object):
     """Generate and cache necessary utilities for building the
     two-electron Hamiltonian in an integral-driven fashion.
-    Re-created at each CIPSI iteration; i.e. for each new list of internal determinants."""
+    Re-created at each CIPSI iteration; i.e. for each new list of internal determinants.
+    """
 
     def __init__(self, psi_internal: Psi_det, psi_external: Psi_det = None):
         # Application dependent
@@ -2424,13 +2430,13 @@ class Davidson_manager(object):
         """
         I = np.eye(n, dim_S)
         V_iguess = I[
-            self.offsets[self.rank] : (self.offsets[self.rank] + self.distribution[self.rank]), :
+            self.offsets[self.rank] : (self.offsets[self.rank] + self.distribution[self.rank]), :,
         ]
 
         return V_iguess
 
     def distributed_davidson(
-        self, V_iguess=None, n_eig=1, conv_tol=1e-8, subspace_tol=1e-10, max_iter=1000, m=1, q=100
+        self, V_iguess=None, n_eig=1, conv_tol=1e-8, subspace_tol=1e-10, max_iter=1000, m=1, q=100,
     ):
         """Davidson's method implemented in parallel. The Hamiltonian
         matrix is distrubted row-wise across MPI rank.
@@ -2580,7 +2586,7 @@ class Davidson_manager(object):
         # Gather Ritz vectors on all ranks
         self.comm.Allgatherv(
             [X_ik, MPI.DOUBLE],
-            [X_k, m * np.array(self.distribution), m * np.array(self.offsets), MPI.DOUBLE],
+            [X_k, m * np.array(self.distribution), m * np.array(self.offsets), MPI.DOUBLE,],
         )
 
         return L_k, X_k
@@ -2704,7 +2710,7 @@ class Powerplant_manager(object):
                 # Inner pass (for each |I⟩) generates all excitations satisfying constraint |C⟩ from |I⟩
                 # Triplet constrained singles
                 for det_J in det_I.triplet_constrained_single_excitations_from_det(C, self.N_orb):
-                    for idx, phase in self.H_i_generator.Hamiltonian_2e_driver.H_ij_indices(
+                    for (idx, phase,) in self.H_i_generator.Hamiltonian_2e_driver.H_ij_indices(
                         det_I, det_J
                     ):
                         nominator_conts_table[det_J] += (
@@ -2717,7 +2723,7 @@ class Powerplant_manager(object):
                     ] * self.H_i_generator.Hamiltonian_1e_driver.H_ij(det_I, det_J)
                 # Triplet-constrained doubles
                 for det_J in det_I.triplet_constrained_double_excitations_from_det(C, self.N_orb):
-                    for idx, phase in self.H_i_generator.Hamiltonian_2e_driver.H_ij_indices(
+                    for (idx, phase,) in self.H_i_generator.Hamiltonian_2e_driver.H_ij_indices(
                         det_I, det_J
                     ):
                         nominator_conts_table[det_J] += (
@@ -2726,7 +2732,7 @@ class Powerplant_manager(object):
                             * self.H_i_generator.Hamiltonian_2e_driver.H_ijkl_orbital(*idx)
                         )
         elif self.H_i_generator.driven_by == "integral":
-            for (I, det_J), idx, phase in self.H_i_generator.Hamiltonian_2e_driver.H_indices_pt2(
+            for ((I, det_J), idx, phase,) in self.H_i_generator.Hamiltonian_2e_driver.H_indices_pt2(
                 self.psi_internal, C
             ):
                 nominator_conts_table[det_J] += (
