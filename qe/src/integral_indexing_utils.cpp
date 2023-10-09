@@ -7,8 +7,9 @@
 // and canonical idx
 // TODO: create array forms with offloading/SIMD ?
 extern "C" idx_t compound_idx2(const idx_t i, const idx_t j) {
-    idx_t p = std::min(i, j);
-    idx_t q = std::max(i, j);
+    // idx_t p = std::min(i, j);
+    // idx_t q = std::max(i, j);
+    const auto &[p, q] = std::minmax(i, j);
     idx_t res = (q * (q + 1)) / 2 + p;
     return res;
 }
@@ -48,11 +49,12 @@ extern "C" struct ijkl_perms compound_idx4_reverse_all(const idx_t ijkl) {
 
 extern "C" struct ijkl_tuple canonical_idx4(const idx_t i, const idx_t j,
                                             const idx_t k, const idx_t l) {
-    idx_t ii = std::min(i, k); // Is it worth reducing the numnber of min/max
-                               // calls? How often is this called?
-    idx_t jj = std::min(j, l);
-    idx_t kk = std::max(i, k);
-    idx_t ll = std::max(j, l);
+    // idx_t ii = std::min(i, k);
+    // idx_t kk = std::max(i, k);
+    // idx_t jj = std::min(j, l);
+    // idx_t ll = std::max(j, l);
+    const auto &[ii, kk] = std::minmax(i, k);
+    const auto &[jj, ll] = std::minmax(j, l);
 
     idx_t a = compound_idx2(ii, kk);
     idx_t b = compound_idx2(jj, ll);
