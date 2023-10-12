@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <determinant.h>
 #include <integral_indexing_utils.h>
 #include <tuple>
 
@@ -38,6 +39,7 @@ JChunk : OEJ {
         return owns_idx(ij) ? integrals[ij] : null_J;
     }
 
+    // in practice, likely that one electron integrals will be owned by a single worker
     bool owns_index(const idx_t i, const idx_t j) {
         idx_t ij = compound_idx2(i, j);
         return owns_index(ij);
@@ -98,6 +100,7 @@ std::vector<T> e_pt2_ii_OE(const OEJ<T> &J, const T E0, const std::vector<det_t>
     return res;
 }
 
+// TODO: maybe convert double loops to single loop over 2_idx block
 template <class T>
 std::vector<T> e_pt2_ij_OE(const OEJ<T> &J, const std::vector<det_t> &psi_int,
                            const std::vector<det_t> &psi_ext) {
@@ -105,15 +108,41 @@ std::vector<T> e_pt2_ij_OE(const OEJ<T> &J, const std::vector<det_t> &psi_int,
     std::vector<T> res(psi_ext.size());
 
     auto N = psi_ext.size();
-    // for (auto &d_i : psi_int) {
-    //     for (auto j = 0; j < N; j++) {
-    //     }
-    // }
+    for (auto &orb_i : J.active_orbitals) { // loop over all active orbitals in integrals
+        for (auto &orb_j : J_active_orbitals) {
+
+            // loop over internal determinants and check if orb_i is occupied in either spin
+            for (auto &int_det : psi_int) {
+                // i must be occupied only in int_det; j only in det_j
+                bool i_alpha = int_det.alpha[orb_i] && ~int_det.alpha[orb_j];
+                bool i_beta = int_det.beta[orb_i] && ~int_det.beta[orb_j];
+                if (i_alpha || i_beta) {
+                    // loop over external determinants
+                    for (auto j = 0; j < N; j++) {
+                        auto &ext_det = psi_ext[j];
+                        std::array<int, N_species> exc_degree = int_det.exc_degree(ext_det);
+                        if ((exc_degree[0] + exc_degree[1]) != 1)
+                            continue; // determinants not related by single exc
+                        bool j_check = exc_degree[0]
+                                           ? (~ext_det.alpha[orb_i] && ext_det.alpha[orb_j])
+                                           : (~ext_det.beta[orb_i] && ext_det.beta[orb_j]);
+                        if (~j_check)
+                            continue; // integral doesn't apply
+
+                        int phase =
+                            compute_phase_single_excitation(int_det[exc_degree[1]], orb_i, orb_j);
+                        res[j] += phase * J(orb_i, orb_j);
+                    }
+                }
+            }
+        }
+    }
 
     return res;
 };
 
 // two electron contributions
+// TODO: convert double loops to single loop over 4_idx block
 template <class T>
 std::vector<T> e_pt2_ii_TE(const TEJ<T> &J, const T E0, const std::vector<det_t> &psi_ext) {
     // Contribution to denominator from two electron integrals
@@ -133,29 +162,28 @@ std::vector<T> e_pt2_ii_TE(const TEJ<T> &J, const T E0, const std::vector<det_t>
             for (auto det_j = 0; det_j < N; det_j++) {
                 auto &ext_det = psi_ext[det_j];
                 // alpha contributions
-                res[det_j] += det_j.alpha[orb_i] * det_j.alpha[orb_j] *
+                res[det_j] += ext_det.alpha[orb_i] * ext_det.alpha[orb_j] *
                               J(orb_i, orb_j, orb_i,
                                 orb_j); // multiply by occupancy to ensure combination exists
-                res[det_j] -= det_j.alpha[orb_i] * det_j.alpha[orb_j] *
+                res[det_j] -= ext_det.alpha[orb_i] * ext_det.alpha[orb_j] *
                               J(orb_i, orb_j, orb_j, orb_i); // phase implicit in -=/+=
 
                 // beta contributions
-                res[det_j] += det_j.beta[orb_i] * det_j.beta[orb_j] * J(orb_i, orb_j, orb_i, orb_j);
-                res[det_j] -= det_j.beta[orb_i] * det_j.beta[orb_j] * J(orb_i, orb_j, orb_j, orb_i);
+                res[det_j] +=
+                    ext_det.beta[orb_i] * ext_det.beta[orb_j] * J(orb_i, orb_j, orb_i, orb_j);
+                res[det_j] -=
+                    ext_det.beta[orb_i] * ext_det.beta[orb_j] * J(orb_i, orb_j, orb_j, orb_i);
             }
         }
     }
 
     // one loop for product of alpha X beta
-    for (auto i = 0; i < J.N_active_orb; i++) { // loop over pairs of active orbitals
-        auto orb_i = J.active_orbitals[orb_i];
-        for (auto j = 0; j < J.N_active_orb; j++) {
-            auto orb_j = J.active_orbitals[orb_j];
-
+    for (auto &orb_i : J.active_orbitals) { // loop over all active orbitals in integrals
+        for (auto &orb_j : J_active_orbitals) {
             for (auto det_j = 0; det_j < N; det_j++) {
                 auto &ext_det = psi_ext[det_j];
                 res[det_j] +=
-                    det_j.alpha[orb_i] * det_j.beta[orb_j] * J(orb_i, orb_j, orb_i, orb_j);
+                    ext_det.alpha[orb_i] * ext_det.beta[orb_j] * J(orb_i, orb_j, orb_i, orb_j);
             }
         }
     }

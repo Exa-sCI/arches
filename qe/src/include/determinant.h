@@ -52,6 +52,13 @@ class det_t { // The class
     // https://stackoverflow.com/a/27830679/7674852 seem to recommand doing the
     // other way arround
     const spin_det_t &operator[](unsigned i) const { return (*this)[i]; }
+
+    // get excitation degree between self and other determinant
+    std::array<int, N_SPIN_SPECIES> exc_degree(const det_t &b) {
+        auto ed_alpha = (*this.alpha ^ b.alpha).count() / 2;
+        auto ed_beta = (*this.beta ^ b.beta).count() / 2;
+        return std::array<int, N_SPIN_SPECIES>{ed_alpha, ed_beta};
+    }
 };
 
 template <> struct std::hash<det_t> {
@@ -75,13 +82,14 @@ typedef std::array<spin_unoccupancy_mask_t, N_SPIN_SPECIES> unoccupancy_mask_t;
 
 typedef std::array<uint64_t, 4> eri_4idx_t;
 
+det_t exc_det(det_t &a, det_t &b);
+
 int compute_phase_single_excitation(spin_det_t d, uint64_t h, uint64_t p);
 int compute_phase_double_excitation(spin_det_t d, uint64_t h1, uint64_t h2, uint64_t p1,
                                     uint64_t p2);
 int compute_phase_double_excitation(det_t d, uint64_t h1, uint64_t h2, uint64_t p1, uint64_t p2);
 
 // overload phase compute for (1,1) excitations
-
 det_t apply_single_excitation(det_t s, int spin, uint64_t hole, uint64_t particle);
 
 spin_det_t apply_spin_single_excitation(spin_det_t s, uint64_t hole, uint64_t particle);
