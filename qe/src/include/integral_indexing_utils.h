@@ -1,6 +1,9 @@
+#pragma once
 #include <cmath>
 
 typedef long long int idx_t;
+
+enum j_category { IC_A, IC_B, IC_C, IC_D, IC_E, IC_F, IC_G };
 
 idx_t isqrt(const idx_t i) { return (idx_t)std::sqrt(i); }
 
@@ -57,4 +60,5 @@ extern "C" struct ijkl_tuple compound_idx4_reverse(const idx_t ijkl);
 
 extern "C" struct ijkl_perms compound_idx4_reverse_all(const idx_t ijkl);
 
+idx_t compound_idx4(const ijkl_tuple ijkl);
 // extern "C" int get_unique_idx4(ijkl_tuple* u_idx, const ijkl_perms all_idx);

@@ -20,6 +20,8 @@ extern "C" idx_t compound_idx4(const idx_t i, const idx_t j, const idx_t k, cons
     return compound_idx2(a, b);
 }
 
+idx_t compound_idx4(const ijkl_tuple ijkl) { return compound_idx4(ijkl.i, ijkl.j, ijkl.k, ijkl.l); }
+
 extern "C" struct ij_tuple compound_idx2_reverse(const idx_t ij) {
     idx_t j = (isqrt(1 + 8 * ij) - 1) / 2;
     idx_t i = ij - (j * (j + 1) / 2);
