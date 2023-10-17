@@ -38,6 +38,12 @@ int compute_phase_double_excitation(det_t d, uint64_t h1, uint64_t h2, uint_64_t
     return phase;
 }
 
+det_t exc_det(det_t &a, det_t &b) {
+    spin_det_t alpha = a[0] ^ b[0];
+    spin_det_t beta = a[1] ^ b[1];
+    return det_t(alpha, beta);
+}
+
 det_t apply_single_excitation(det_t s, int spin, uint64_t h, uint64_t p) {
     assert(s[spin][h] == 1);
     assert(s[spin][p] == 0);

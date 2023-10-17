@@ -8,14 +8,10 @@
 template <class T> class JChunk {
 
   public:
-    std::array<T> integrals;            // this will break, how to create constructor?
+    std::vector<T> integrals;           // this will break, how to create constructor?
     spin_det_t orbital_mask;            // cheap bit mask filter for owned orbitals
     std::vector<idx_T> active_orbitals; // list of owned orbitals
     idx_t N_orb;                        // number of orbitals
-    idx_t N_active_orb;                 // number of active orbitals
-    idx_t interal_offset;               // integrals are packed towards zero
-    idx_t sidx;                         // canonical starting index
-    idt_t eidx;                         // canonical ending index
     T null_J = 0;
 
     bool det_in_chunk(const spin_det_t &s) { return (active_orbitals & s).any(); }
@@ -189,45 +185,120 @@ std::vector<T> e_pt2_ii_TE(const TEJ<T> &J, const T E0, const std::vector<det_t>
     }
 }
 
+// TODO determine level of const needed
+
+/*
+General kernel workflow:
+Iterate over all integrals
+{
+    For ea. J, convert to standard form
+    then,
+    iterate over all psi_int
+    {
+        check if integral applies,
+        then,
+        iterate over all psi_ext
+        {
+            check if integral applies and check if correct exc. degree/type
+            apply integral to result
+        }
+    }
+}
+
+when needed, iterate over spin types in most nested loop
+*/
+
+void map_idx_C(const ijkl_tuple idx, idx_t &q, idx_t &r, idx_t &s) {
+    if (idx.i == idx.k) {
+        q = idx.i;
+        r = idx.j;
+        s = idx.l;
+    } else {
+        q = idx.j;
+        r = idx.i;
+        s = idx.k;
+    }
+}
+
+/*
+C: J_qrqs has the following contributions, of forms hipi:
+    C1s) r_a -> s_a; q occupied in a
+    C1o) r_a -> s_a; q occupied in b
+    C2s) r_b -> s_b; q occupied in a
+    C2o) r_b -> s_b; q occupied in b
+    C3s) s_a -> r_a; q occupied in a
+    C3o) s_a -> r_a; q occupied in b
+    C4s) s_b -> r_b; q occupied in a
+    C4o) s_b -> r_b; q occupied in b
+*/
 template <class T>
-std::vector<T> ept2_C(const TEJ<T> &J, const std::vector<det_t> &psi_int,
-                      const std::vector<det_t> &psi_ext) {
+void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, idx_t N_orb, det_t *psi_int, idx_t N_int,
+                  det_t *psi_ext, idx_t N_ext, T *res) {
+    /*
+    J is array of integral values
+    J_ind is array of integral compound indices
+    N is number of integrals in chunk
+    psi_int is array of internal determinants
+    N_int is number of internal determinants
+    psi_ext is array of external determinants for which we are evaluating pt2 contribution
+    N_ext is number of external determinants
+    N_orb is number of orbitals
+    res is output array for pt2 storage
+    */
 
-    std::vector<T> res(psi_ext.size());
+    // Iterate over all integrals in chunk
+    for (auto i = 0; i < N; i++) {
 
-    return res;
-};
+        // by construction of the chunks, this should be the canonical index
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
 
-template <class T>
-std::vector<T> ept2_D(const TEJ<T> &J, const std::vector<det_t> &psi_int,
-                      const std::vector<det_t> &psi_ext) {
+        // map index to standard form: J_ijil, J_ijkj -> J_qrqs
+        idx_t q, r, s;
+        map_index_c(c_idx, q, r, s);
 
-    std::vector<T> res(psi_ext.size());
+        // iterate over internal determinants
+        for (auto d_i = 0; d_i < N_int; d_i++) {
+            bool c13, c24, q_ai, q_bi;
+            det_t &d_int = psi_int[d_i];
+            q_ai = d_int[0][q];
+            q_bi = d_int[1][q];
+            c13 = (d_int[0][r] != d_int[0][s]) && (q_a || q_b);
+            c24 = (d_int[1][r] != d_int[1][s]) && (q_a || q_b);
 
-    return res;
-};
-template <class T>
-std::vector<T> ept2_E(const TEJ<T> &J, const std::vector<det_t> &psi_int,
-                      const std::vector<det_t> &psi_ext) {
+            if (!(c13 || c24)) // J[i] has no contribution for this internal det
+                continue;
+            // iterate over external determinants
+            for (auto d_e = 0; d_e < N_ext; d_e++) {
+                det_t &d_ext = psi_ext[d_e];
+                bool q_a = d_ext[0][q] && q_ai;
+                bool q_b = d_ext[1][q] && q_bi;
+                if (!(q_a || q_b)) // q must be occupied in beta/alpha simultaneously
+                    continue;
 
-    std::vector<T> res(psi_ext.size());
+                // Can probably optimize for early exit: will need to check many things overall
+                // But for now, will need to get excitations for every contribution anyway
+                // and it is a definite exit point
+                det_t exc = exc_det(d_int, d_ext);
+                auto degree = (exc[0].count() + exc[1].count()) / 2;
+                if (degree != 1) // |d_i> and |d_e> not related by a single excitation
+                    continue;
 
-    return res;
-};
-template <class T>
-std::vector<T> ept2_F(const TEJ<T> &J, const std::vector<det_t> &psi_int,
-                      const std::vector<det_t> &psi_ext) {
+                // TODO: consider branchless? Profile and see
+                int phase;
+                if (c13 && exc[0][r] && exc[0][s]) {
+                    phase = compute_phase_single_excitation(det_i[0], r, s);
+                    res[d_e] += q_a * J[i] * phase;
+                    res[d_e] += q_b * J[i] * phase;
+                }
 
-    std::vector<T> res(psi_ext.size());
-
-    return res;
-};
-
-template <class T>
-std::vector<T> ept2_G(const TEJ<T> &J, const std::vector<det_t> &psi_int,
-                      const std::vector<det_t> &psi_ext) {
-
-    std::vector<T> res(psi_ext.size());
+                if (c24 && exc[1][r] && exc[1][s]) {
+                    phase = compute_phase_single_excitation(det_i[1], r, s);
+                    res[d_e] += q_a * J[i] * phase;
+                    res[d_e] += q_b * J[i] * phase;
+                }
+            }
+        }
+    }
 
     return res;
 };
