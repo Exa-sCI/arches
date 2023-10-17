@@ -492,10 +492,10 @@ void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
 
 /*
 F: J_qqrr has the following (off diagonal) contributions, all opposite spin doubles:
-    D_1) q_a -> r_a | q_b -> r_b
-    D_2) r_a -> q_a | r_b -> q_b
-    D_3) q_a -> r_a | r_b -> q_b
-    D_4) r_a -> q_a | q_b -> r_b
+    F_1) q_a -> r_a | q_b -> r_b
+    F_2) r_a -> q_a | r_b -> q_b
+    F_3) q_a -> r_a | r_b -> q_b
+    F_4) r_a -> q_a | q_b -> r_b
 */
 template <class T>
 void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
