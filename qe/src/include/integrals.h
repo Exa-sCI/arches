@@ -527,7 +527,7 @@ void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
                 det_t exc = exc_det(d_int, d_ext);
                 auto a_degree = exc[1].count() / 2;
                 auto b_degree = exc[0].count() / 2;
-                if (!(a_degree == 1) && (b_degree == 1)) // must be opp. spin double
+                if (!((a_degree == 1) && (b_degree == 1))) // must be opp. spin double
                     continue;
 
                 if (exc[0][q] && exc[0][r] && exc[1][q] && exc[1][r]) {
@@ -539,9 +539,43 @@ void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
     }
 }
 
+/*
+This is the most expensive kernel, and by far where most compute time will be spent.
+At 64 MOs, G integrals comprise ~88% of all unique integrals (C, E ~5.8% ea.)
+At 128 MOs, G integrals comprise ~94% of all unique integrals (C, E ~3% ea.)
+
+G:
+    G_A := q < r < s < t
+    G_B := q < s < r < t
+    G_C := r < q < s < t
+
+    J_qrst has the following contributions:
+    Opposite spin doubles: (h1, h2, p1, p2)*(phase_a * phase_b)
+        G_a) q_a -> s_a | r_b -> t_b
+        G_c) s_a -> q_a | t_b -> r_b
+        G_e) q_a -> s_a | t_b -> r_b
+        G_g) s_a -> q_a | r_b -> t_b
+
+        G_b) r_a -> t_a | q_b -> s_b
+        G_d) t_a -> r_a | s_b -> q_b
+        G_f) t_a -> r_a | q_b -> s_b
+        G_h) r_a -> t_a | s_b -> q_b
+
+    Same spin doubles: (h1, h2, p1, p2)*(phase) - (h1, h2, p2, p1)*(phase)
+        G_11) q,r -> s,t | A, B    || q r !s !t, C is complement integral
+              r,q -> t,s | C
+
+        G_22) s,t -> q,r | A, B, C || s t !q !r, C is complement integral
+
+        G_33) q,t -> s,r | A, B, C || q t !s !r, B is complement integral
+
+        G_44) r,s -> t,q | A, C    || r s !q !t, B is complement integral
+              s,r -> q,t | B
+
+*/
 template <class T>
-void pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
-                idx_t N_ext, T *res) {
+void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
+                  idx_t N_ext, T *res) {
 
     // Iterate over all integrals in chunk
     for (auto i = 0; i < N; i++) {
@@ -549,17 +583,103 @@ void pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t 
         // by construction of the chunks, this should be the canonical index
         struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
 
-        // map index to standard form: J_ijil, J_ijkj -> J_qrqs
+        // index already in standard form: J_ijkl -> J_qrst
         idx_t q, r, s, t;
-        map_idx(c_idx, q, r, s, t);
+        q = c_idx.i;
+        r = c_idx.j;
+        s = c_idx.k;
+        t = c_idx.l;
 
         // iterate over internal determinants
         for (auto d_i = 0; d_i < N_int; d_i++) {
             det_t &d_int = psi_int[d_i];
 
+            // checks for opposite spin doubles
+            bool g_aceg, g_bdfh;
+            g_aceg = (d_int[0][q] != d_int[0][s]) && (d_int[1][r] != d_int[1][t]);
+            g_bdfh = (d_int[0][r] != d_int[0][t]) && (d_int[1][q] != d_int[1][s]);
+
+            // checks for same spin doubles
+            // g_ii in (0,1,2,3) :
+            // 0 - none, 1 - only alpha 2- only beta 3 - both alpha and beta
+            int g_11, g_22, g_33, g_44 = 0;
+            for (auto spin = 0; spin < N_SPIN_SPECIES; spin++) {
+                g_11 = (spin + 1) *
+                       ((d_int[spin][q] && d_int[spin][r]) && (!d_int[spin][s] && !d_int[spin][t]));
+                g_22 = (spin + 1) *
+                       ((d_int[spin][s] && d_int[spin][t]) && (!d_int[spin][q] && !d_int[spin][r]));
+                g_33 = (spin + 1) *
+                       ((d_int[spin][q] && d_int[spin][t]) && (!d_int[spin][s] && !d_int[spin][r]));
+                g_44 = (spin + 1) *
+                       ((d_int[spin][r] && d_int[spin][s]) && (!d_int[spin][q] && !d_int[spin][t]));
+            }
+
+            if (!(g_aceg || g_bdfh || ((g_11 + g_22 + g_33 + g44) > 0))) // J[i] has no contribution
+                continue;
+
             // iterate over external determinants
             for (auto d_e = 0; d_e < N_ext; d_e++) {
                 det_t &d_ext = psi_ext[d_e];
+
+                det_t exc = exc_det(d_int, d_ext);
+                auto a_degree = exc[0].count() / 2;
+                auto degree = a_degree + exc[1].count() / 2;
+                if (degree != 2) // |d_i> and |d_e> not connnected by double exc.
+                    continue;
+
+                // TODO: profile branching
+                // e.g., default phase = 0 and then always add into result?
+                // using checks to make phase nonzero?
+
+                // TODO: profile some form of inlining for phase computations
+                int phase;
+                if (a_degree == 1) {
+                    // aceg
+                    if (exc[0][q] && exc[0][s] && exc[1][r] && exc[1][t]) {
+                        phase = compute_phase_double_excitation(d_int, q, r, s, t);
+                        res[d_e] += J[i] * phase;
+                    }
+
+                    // bdfh
+                    if (exc[0][r] && exc[0][t] && exc[1][q] && exc[1][s]) {
+                        phase = compute_phase_double_excitation(d_int, r, q, t, s);
+                        res[d_e] += J[i] * phase;
+                    }
+                } else if (a_degree == 0) {
+                    // (0,2) : g_ii >= 2 is criterion for acceptance
+                    bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
+                    if (!aa_check)
+                        continue;
+
+                    // now must be one of g_11, g_22, g_33, g_44
+                    if (g_11 >= 2) {
+                        phase = compute_phase_double_excitation(d_int[0], q, r, s, t);
+                    } else if (g_22 >= 2) {
+                        phase = compute_phase_double_excitation(d_int[0], s, t, q, r);
+                    } else if (g_33 >= 2) {
+                        phase = compute_phase_double_excitation(d_int[0], q, t, s, r);
+                    } else {
+                        phase = compute_phase_double_excitation(d_int[0], r, s, q, t);
+                    }
+                    res[d_e] += J[i] * phase;
+                } else {
+                    // (2,0) : g_ii % 2 is criterion for acceptance
+                    bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
+                    if (!bb_check)
+                        continue;
+
+                    // now must be one of g_11, g_22, g_33, g_44
+                    if (g_11 % 2) {
+                        phase = compute_phase_double_excitation(d_int[1], q, r, s, t);
+                    } else if (g_22 % 2) {
+                        phase = compute_phase_double_excitation(d_int[1], s, t, q, r);
+                    } else if (g_33 % 2) {
+                        phase = compute_phase_double_excitation(d_int[1], q, t, s, r);
+                    } else {
+                        phase = compute_phase_double_excitation(d_int[1], r, s, q, t);
+                    }
+                    res[d_e] += J[i] * phase;
+                }
             }
         }
     }
