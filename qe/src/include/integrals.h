@@ -490,6 +490,55 @@ void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
     }
 }
 
+/*
+F: J_qqrr has the following (off diagonal) contributions, all opposite spin doubles:
+    D_1) q_a -> r_a | q_b -> r_b
+    D_2) r_a -> q_a | r_b -> q_b
+    D_3) q_a -> r_a | r_b -> q_b
+    D_4) r_a -> q_a | q_b -> r_b
+*/
+template <class T>
+void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
+                  idx_t N_ext, T *res) {
+
+    // Iterate over all integrals in chunk
+    for (auto i = 0; i < N; i++) {
+
+        // by construction of the chunks, this should be the canonical index
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // index already in standard form: J_iikk -> J_qqrr
+        idx_t q, r;
+        q = c_idx.i;
+        r = c_idx.k;
+
+        // iterate over internal determinants
+        for (auto d_i = 0; d_i < N_int; d_i++) {
+            det_t &d_int = psi_int[d_i];
+
+            bool i_check = (d_int[0][q] != d_int[0][r]) && (d_int[1][q] != d_int[1][r]);
+
+            if (!i_check) // J[i] has no contribution
+                continue;
+
+            // iterate over external determinants
+            for (auto d_e = 0; d_e < N_ext; d_e++) {
+                det_t &d_ext = psi_ext[d_e];
+                det_t exc = exc_det(d_int, d_ext);
+                auto a_degree = exc[1].count() / 2;
+                auto b_degree = exc[0].count() / 2;
+                if (!(a_degree == 1) && (b_degree == 1)) // must be opp. spin double
+                    continue;
+
+                if (exc[0][q] && exc[0][r] && exc[1][q] && exc[1][r]) {
+                    int phase = compute_phase_double_excitation(d_int, q, q, r, r);
+                    res[d_e] += J[i] * phase;
+                }
+            }
+        }
+    }
+}
+
 template <class T>
 void pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
                 idx_t N_ext, T *res) {
