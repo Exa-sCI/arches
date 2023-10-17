@@ -257,12 +257,12 @@ void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
 
         // iterate over internal determinants
         for (auto d_i = 0; d_i < N_int; d_i++) {
-            bool c13, c24, q_ai, q_bi;
             det_t &d_int = psi_int[d_i];
+            bool c13, c24, q_ai, q_bi;
             q_ai = d_int[0][q];
             q_bi = d_int[1][q];
-            c13 = (d_int[0][r] != d_int[0][s]) && (q_a || q_b);
-            c24 = (d_int[1][r] != d_int[1][s]) && (q_a || q_b);
+            c13 = (d_int[0][r] != d_int[0][s]) && (q_ai || q_bi);
+            c24 = (d_int[1][r] != d_int[1][s]) && (q_ai || q_bi);
 
             if (!(c13 || c24)) // J[i] has no contribution for this internal det
                 continue;
@@ -329,7 +329,7 @@ void D_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
         // by construction of the chunks, this should be the canonical index
         struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
 
-        // map index to standard form: J_ijil, J_ijkj -> J_qrqs
+        // map index to standard form: J_iiil, J_ijjj -> J_qqqr
         idx_t q, r;
         map_idx_D(c_idx, q, r);
 
@@ -368,6 +368,122 @@ void D_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
                 if (d24 && q_a && exc[1][q] && exc[1][r]) {
                     phase = compute_phase_single_excitation(det_i[1], q, r);
                     res[d_e] += J[i] * phase;
+                }
+            }
+        }
+    }
+}
+
+void map_idx_E(const ijkl_tuple idx, idx_t &q, idx_t &r, idx_t &s) {
+    if (idx.i == idx.j) {
+        q = idx.i;
+        r = idx.k;
+        s = idx.l;
+    } else if (idx.j == idx_k) {
+        q = idx.j;
+        r = idx.i;
+        s = idx.l;
+    } else {
+        q = idx.k;
+        r = idx.i;
+        s = idx.j;
+    }
+}
+
+/*
+E: J_qqrs has the following contributions,
+    Singles of form hiip:
+        E_1) r_a -> s_a; q occupied in a
+        E_2) r_b -> s_b; q occupied in b
+        E_3) s_a -> r_a; q_occupied in a
+        E_4) s_b -> r_b; q occupied in b
+
+    Oposite spin doubles:
+        E_a) q_a -> r_a | q_b -> s_b
+        E_d) r_a -> q_a | s_b -> q_b
+        E_e) q_a -> r_a | s_b -> q_b
+        E_g) r_a -> q_a | q_b -> s_b
+
+        E_b) q_a -> s_a | q_b -> r_b
+        E_c) s_a -> q_a | r_b -> q_b
+        E_f) s_a -> q_a | q_b -> r_b
+        E_h) q_a -> s_a | r_b -> q_b
+
+*/
+template <class T>
+void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
+                  idx_t N_ext, T *res) {
+
+    // Iterate over all integrals in chunk
+    for (auto i = 0; i < N; i++) {
+
+        // by construction of the chunks, this should be the canonical index
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // map index to standard form: J_iikl, J_ijjl, J_ijkk -> J_qqrs
+        idx_t q, r, s;
+        map_idx_E(c_idx, q, r, s);
+
+        // iterate over internal determinants
+        for (auto d_i = 0; d_i < N_int; d_i++) {
+            det_t &d_int = psi_int[d_i];
+            bool e13, e24, e_adeg, e_bcfh, q_ai, q_bi;
+            q_ai = d_int[0][q];
+            q_bi = d_int[1][q];
+            e_13 = (d_int[0][r] != d_int[0][s]) && q_ai;
+            e_24 = (d_int[1][r] != d_int[1][s]) && q_bi;
+
+            e_adeg = (d_int[0][q] != d_int[0][r]) && (d_int[1][q] != d_int[1][s]);
+            e_bcfh = (d_int[0][q] != d_int[0][r]) && (d_int[1][q] != d_int[1][s]);
+
+            if (!(e_13 || e_24 || e_adeg || e_bcfh)) // J[i] has no contribution
+                continue;
+
+            // iterate over external determinants
+            for (auto d_e = 0; d_e < N_ext; d_e++) {
+                det_t &d_ext = psi_ext[d_e];
+
+                // early exit on exc degree is probably simplest
+                det_t exc = exc_det(d_int, d_ext);
+                auto degree = (exc[0].count() + exc[1].count()) / 2;
+                if (degree > 2) // |d_i> and |d_e> not connnected, assumes d_i != d_e
+                    continue;
+
+                int phase;
+                if (degree == 1) {
+                    bool q_a = d_ext[0][q] && q_ai;
+                    bool q_b = d_ext[1][q] && q_bi;
+                    if (!(q_a || q_b)) // q must be occupied in beta/alpha simultaneously
+                        continue;
+
+                    if (e13 && q_a && exc[0][r] && exc[0][s]) {
+                        phase = compute_phase_single_excitation(det_i[0], r, s);
+                        res[d_e] += J[i] * phase * -1;
+                    }
+
+                    if (e24 && q_b && exc[1][r] && exc[1][s]) {
+                        phase = compute_phase_single_excitation(det_i[0], r, s);
+                        res[d_e] += J[i] * phase * -1;
+                    }
+                } else if (degree == 2) {
+
+                    if (exc[0].count() == 0 || exc[1].count() == 0) // must be opp. spin double
+                        continue;
+
+                    if (!(exc[0][q] && exc[1][q])) // q must be involved in both spins
+                        continue;
+
+                    // adeg
+                    if (exc[0][r] && exc[1][s]) {
+                        phase = compute_phase_double_excitation(d_int, q, q, r, s);
+                        res[d_e] += J[i] * phase;
+                    }
+
+                    // bcfh
+                    if (exc[0][s] && exc[1][r]) {
+                        phase = compute_phase_double_excitation(d_int, q, q, s, r);
+                        res[d_e] += J[i] * phase;
+                    }
                 }
             }
         }
