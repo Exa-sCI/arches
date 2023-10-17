@@ -221,7 +221,7 @@ void map_idx_C(const ijkl_tuple idx, idx_t &q, idx_t &r, idx_t &s) {
 }
 
 /*
-C: J_qrqs has the following contributions, of forms hipi:
+C: J_qrqs has the following contributions, singles of form hipi:
     C1s) r_a -> s_a; q occupied in a
     C1o) r_a -> s_a; q occupied in b
     C2s) r_b -> s_b; q occupied in a
@@ -232,8 +232,8 @@ C: J_qrqs has the following contributions, of forms hipi:
     C4o) s_b -> r_b; q occupied in b
 */
 template <class T>
-void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, idx_t N_orb, det_t *psi_int, idx_t N_int,
-                  det_t *psi_ext, idx_t N_ext, T *res) {
+void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
+                  idx_t N_ext, T *res) {
     /*
     J is array of integral values
     J_ind is array of integral compound indices
@@ -242,7 +242,6 @@ void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, idx_t N_orb, det_t *psi_int, idx_
     N_int is number of internal determinants
     psi_ext is array of external determinants for which we are evaluating pt2 contribution
     N_ext is number of external determinants
-    N_orb is number of orbitals
     res is output array for pt2 storage
     */
 
@@ -254,7 +253,7 @@ void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, idx_t N_orb, det_t *psi_int, idx_
 
         // map index to standard form: J_ijil, J_ijkj -> J_qrqs
         idx_t q, r, s;
-        map_index_c(c_idx, q, r, s);
+        map_idx_C(c_idx, q, r, s);
 
         // iterate over internal determinants
         for (auto d_i = 0; d_i < N_int; d_i++) {
@@ -302,3 +301,101 @@ void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, idx_t N_orb, det_t *psi_int, idx_
 
     return res;
 };
+
+void map_idx_D(const ijkl_tuple idx, idx_t &q, idx_t &r) {
+    if (idx.i == idx.j) {
+        q = idx.i;
+        r = idx.l;
+    } else {
+        q = idx.j;
+        r = idx.i;
+    }
+}
+
+/*
+D: J_qqqr has the following contributions, singles of form hipi(o):
+    D_1) q_a -> r_a; q occupied in b
+    D_2) q_b -> r_b; q occupied in a
+    D_3) r_a -> q_a; q_occupied in b
+    D_4) r_b -> q_b; q occupied in a
+*/
+template <class T>
+void D_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
+                  idx_t N_ext, T *res) {
+
+    // Iterate over all integrals in chunk
+    for (auto i = 0; i < N; i++) {
+
+        // by construction of the chunks, this should be the canonical index
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // map index to standard form: J_ijil, J_ijkj -> J_qrqs
+        idx_t q, r;
+        map_idx_D(c_idx, q, r);
+
+        // iterate over internal determinants
+        for (auto d_i = 0; d_i < N_int; d_i++) {
+            det_t &d_int = psi_int[d_i];
+            bool d13, d24, q_ai, q_bi;
+            q_ai = d_int[0][q];
+            q_bi = d_int[1][q];
+            d13 = (d_int[0][q] != d_int[0][r]) && q_bi;
+            d24 = (d_int[1][q] != d_int[1][r]) && q_ai;
+
+            if (!(d13 || d24)) // J[i] has no contribution
+                continue;
+
+            // iterate over external determinants
+            for (auto d_e = 0; d_e < N_ext; d_e++) {
+                det_t &d_ext = psi_ext[d_e];
+                bool q_a = d_ext[0][q] && q_ai;
+                bool q_b = d_ext[1][q] && q_bi;
+                if (!(q_a || q_b)) // q must be occupied in beta/alpha simultaneously
+                    continue;
+
+                det_t exc = exc_det(d_int, d_ext);
+                auto degree = (exc[0].count() + exc[1].count()) / 2;
+                if (degree != 1) // |d_i> and |d_e> not related by a single excitation
+                    continue;
+
+                int phase;
+                // include q_(a/b) in check since there is only one contribution
+                if (d13 && q_b && exc[0][q] && exc[0][r]) {
+                    phase = compute_phase_single_excitation(det_i[0], q, r);
+                    res[d_e] += J[i] * phase;
+                }
+
+                if (d24 && q_a && exc[1][q] && exc[1][r]) {
+                    phase = compute_phase_single_excitation(det_i[1], q, r);
+                    res[d_e] += J[i] * phase;
+                }
+            }
+        }
+    }
+}
+
+template <class T>
+void pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
+                idx_t N_ext, T *res) {
+
+    // Iterate over all integrals in chunk
+    for (auto i = 0; i < N; i++) {
+
+        // by construction of the chunks, this should be the canonical index
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // map index to standard form: J_ijil, J_ijkj -> J_qrqs
+        idx_t q, r, s, t;
+        map_idx(c_idx, q, r, s, t);
+
+        // iterate over internal determinants
+        for (auto d_i = 0; d_i < N_int; d_i++) {
+            det_t &d_int = psi_int[d_i];
+
+            // iterate over external determinants
+            for (auto d_e = 0; d_e < N_ext; d_e++) {
+                det_t &d_ext = psi_ext[d_e];
+            }
+        }
+    }
+}
