@@ -23,16 +23,18 @@ template <class T> class JChunk {
 template <class T>
 JChunk : OEJ {
   public:
-    T &operator[](idx_t ij) { return integrals[ij - internal_offset]; }
-    const T &operator[](const idx_t ij) const { return integrals[ij - internal_offset]; }
+    T &operator[](idx_t ij) { return integrals[ij]; }
+    const T &operator[](const idx_t ij) const { return integrals[ij]; }
 
     T &operator()(idx_t i, idx_t j) {
         idx_t ij = compound_idx2(i, j);
-        return owns_idx(ij) ? integrals[ij] : null_J;
+        return integrals[ij];
+        // return owns_idx(ij) ? integrals[ij] : null_J;
     }
     const T &operator()(const idx_t i, const idx_t j) const {
         idx_t ij = compound_idx2(i, j);
-        return owns_idx(ij) ? integrals[ij] : null_J;
+        return integrals[ij];
+        // return owns_idx(ij) ? integrals[ij] : null_J;
     }
 
     // in practice, likely that one electron integrals will be owned by a single worker
@@ -69,67 +71,58 @@ template <class T> JChunk : TEJ {
 }
 
 /*
- Functions for performing integral driven calculations
- // TODO: look into unique pointers and evaluate how
+ Kernels for performing integral driven calculations
+
+ Intended strategy: since G >> (A,B,C,D,E,F, and OE), root worker will get all non-G and small G
+ chunk; every other worker distributes G evenly.
+
+ root worker will iterate through all of its work and everyone else will just dispatch to G kernel
 */
 
-//// Dispatch kernel
-// void dispatch_chunk()
-
-// one electron contributions
-// TODO: pass in result pointer instead of returning
+// One electron contributions
 template <class T>
-std::vector<T> e_pt2_ii_OE(const OEJ<T> &J, const T E0, const std::vector<det_t> &psi_ext) {
+void e_pt2_ii_OE(T *J, idx_t N_orb, const T E0, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contribution to denominator from one electron integrals
-    std::vector<T> res(psi_ext.size(), E0);
-    auto N = psi_ext.size();
 
-    // TODO: benchmark ordering of loops
-    for (auto &orb : J.active_orbitals) { // loop over all active orbitals
-        for (auto det_j = 0; det_j < N; det_j++) {
-            auto &ext_det = psi_ext[det_j]; // TODO: make sure this doesn't copy
-            res[det_j] += (ext_det.alpha[orb] + ext_det.beta[orb]) *
-                          J(orb, orb); // TODO: wasted computation if dets not prefiltered
+    for (auto det_j = 0; det_j < N_ext; det_j++) {
+        res[det_j] = E0;                         // TODO: perhaps initialize denom with E0 outside
+        for (auto orb = 0; orb < N_orb; orb++) { // loop over all active orbitals
+            auto &ext_det = psi_ext[det_j];
+            idx_t idx = compound_idx2(orb, orb);
+            res[det_j] += (ext_det.alpha[orb] + ext_det.beta[orb]) * J[idx];
         }
     }
-
-    return res;
 }
 
-// TODO: maybe convert double loops to single loop over 2_idx block
 template <class T>
-std::vector<T> e_pt2_ij_OE(const OEJ<T> &J, const std::vector<det_t> &psi_int,
-                           const std::vector<det_t> &psi_ext) {
+void e_pt2_ij_OE(T *J, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contribution to numerator from one electron integrals
-    std::vector<T> res(psi_ext.size());
+    for (auto i = 0; i < N; i++) { // loop over all integrals
 
-    auto N = psi_ext.size();
-    for (auto &orb_i : J.active_orbitals) { // loop over all active orbitals in integrals
-        for (auto &orb_j : J_active_orbitals) {
+        struct ij_tuple ij = compound_idx2_reverse(i);
+        // loop over internal determinants and check if orb_i is occupied in either spin
+        for (auto det_i = 0; det_i < N_int; det_i++) {
 
-            // loop over internal determinants and check if orb_i is occupied in either spin
-            for (auto &int_det : psi_int) {
-                // i must be occupied only in int_det; j only in det_j
-                bool i_alpha = int_det.alpha[orb_i] && ~int_det.alpha[orb_j];
-                bool i_beta = int_det.beta[orb_i] && ~int_det.beta[orb_j];
-                if (i_alpha || i_beta) {
-                    // loop over external determinants
-                    for (auto j = 0; j < N; j++) {
-                        auto &ext_det = psi_ext[j];
-                        std::array<int, N_species> exc_degree = int_det.exc_degree(ext_det);
-                        if ((exc_degree[0] + exc_degree[1]) != 1)
-                            continue; // determinants not related by single exc
-                        bool j_check = exc_degree[0]
-                                           ? (~ext_det.alpha[orb_i] && ext_det.alpha[orb_j])
-                                           : (~ext_det.beta[orb_i] && ext_det.beta[orb_j]);
-                        if (~j_check)
-                            continue; // integral doesn't apply
+            // i must be occupied only in int_det; j only in det_j
+            bool i_alpha = int_det.alpha[ij.i] && ~int_det.alpha[ij.j];
+            bool i_beta = int_det.beta[ij.i] && ~int_det.beta[ij.j];
+            if (!(i_alpha || i_beta))
+                continue;
 
-                        int phase =
-                            compute_phase_single_excitation(int_det[exc_degree[1]], orb_i, orb_j);
-                        res[j] += phase * J(orb_i, orb_j);
-                    }
-                }
+            // loop over external determinants
+            for (auto det_j = 0; det_j < N; det_j++) {
+                auto &ext_det = psi_ext[det_j];
+                std::array<int, N_species> exc_degree = int_det.exc_degree(ext_det);
+                if ((exc_degree[0] + exc_degree[1]) != 1)
+                    continue; // determinants not related by single exc
+
+                bool j_check = exc_degree[0] ? (~ext_det.alpha[ij.i] && ext_det.alpha[ij.j])
+                                             : (~ext_det.beta[ij.i] && ext_det.beta[ij.j]);
+                if (~j_check)
+                    continue; // integral doesn't apply
+
+                int phase = compute_phase_single_excitation(int_det[exc_degree[1]], ij.i, ij.j);
+                res[det_j] += phase * J[i];
             }
         }
     }
@@ -137,56 +130,7 @@ std::vector<T> e_pt2_ij_OE(const OEJ<T> &J, const std::vector<det_t> &psi_int,
     return res;
 };
 
-// two electron contributions
-// TODO: convert double loops to single loop over 4_idx block
-template <class T>
-std::vector<T> e_pt2_ii_TE(const TEJ<T> &J, const T E0, const std::vector<det_t> &psi_ext) {
-    // Contribution to denominator from two electron integrals
-    std::vector<T> res(psi_ext.size(), 0);
-    auto N = psi_ext.size();
-
-    // TODO: benchmark ordering of loops, which locality wins?
-    // one loop for internal combinations of alpha (beta)
-    for (auto i = 0; i < J.N_active_orb; i++) { // loop over pairs of active orbitals
-        auto orb_i = J.active_orbitals[orb_i];
-        // start at i + 1 to restrict to N_orb choose 2
-        for (auto j = i + 1; j <= J.N_active_orb; j++) {
-            auto orb_j = J.active_orbitals[orb_j];
-
-            // loop over determinants
-            // TODO: wasted computation if dets not prefiltered
-            for (auto det_j = 0; det_j < N; det_j++) {
-                auto &ext_det = psi_ext[det_j];
-                // alpha contributions
-                res[det_j] += ext_det.alpha[orb_i] * ext_det.alpha[orb_j] *
-                              J(orb_i, orb_j, orb_i,
-                                orb_j); // multiply by occupancy to ensure combination exists
-                res[det_j] -= ext_det.alpha[orb_i] * ext_det.alpha[orb_j] *
-                              J(orb_i, orb_j, orb_j, orb_i); // phase implicit in -=/+=
-
-                // beta contributions
-                res[det_j] +=
-                    ext_det.beta[orb_i] * ext_det.beta[orb_j] * J(orb_i, orb_j, orb_i, orb_j);
-                res[det_j] -=
-                    ext_det.beta[orb_i] * ext_det.beta[orb_j] * J(orb_i, orb_j, orb_j, orb_i);
-            }
-        }
-    }
-
-    // one loop for product of alpha X beta
-    for (auto &orb_i : J.active_orbitals) { // loop over all active orbitals in integrals
-        for (auto &orb_j : J_active_orbitals) {
-            for (auto det_j = 0; det_j < N; det_j++) {
-                auto &ext_det = psi_ext[det_j];
-                res[det_j] +=
-                    ext_det.alpha[orb_i] * ext_det.beta[orb_j] * J(orb_i, orb_j, orb_i, orb_j);
-            }
-        }
-    }
-}
-
-// TODO determine level of const needed
-
+// Two electron contributions
 /*
 General kernel workflow:
 Iterate over all integrals
@@ -206,7 +150,55 @@ Iterate over all integrals
 }
 
 when needed, iterate over spin types in most nested loop
+
+TODO: determine level of const needed
 */
+
+/*
+A: J_qqqq only has one contribution (to the denominator), when q is occupied in both spins
+Contribution is part of product terms
+*/
+template <class T> void A_pt2_kernel(T *J, idx_t N, det_t *psi_ext, idx_t N_ext, T *res) {
+    // Contributes to denominator of pt2 energy
+
+    // iterate over external determinants first since A chunk is almost always smaller
+    for (auto d_e = 0; d_e < N_ext; d_e++) {
+        auto &ext_det = psi_ext[d_e];
+
+        // Iterate over all integrals in chunk (should be N_orb integrals)
+        // order of integrals in chunk is known by construction
+        for (auto i = 0; i < N; i++) {
+            res[d_e] += ext_det[0][i] * ext_det[1][i] * J[i];
+        }
+    }
+}
+
+/*
+B: J_qqrr has the following contributions (to the denominator):
+    B_1) q_a -> q_a, r_b -> r_b
+    B_2) r_a -> r_a, q_b -> q_b
+
+Contributions are part of combination terms
+*/
+temp template <class T>
+void B_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *res) {
+    // Contributes to denominator of pt2 energy
+    for (auto i = 0; i < N; i++) {
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // index already in standard form: J_ijij -> J_qrqr
+        idx_t q, r;
+        q = c_idx.i;
+        r = c_idx.j;
+
+        // iterate over external determinants
+        for (auto d_e = 0; d_e < N_ext; d_e++) {
+            auto &ext_det = psi_ext[d_e];
+            res[d_e] += ext_det[0][q] * ext_det[0][r] * J[i];
+            res[d_e] += ext_det[1][q] * ext_det[1][r] * J[i];
+        }
+    }
+}
 
 void map_idx_C(const ijkl_tuple idx, idx_t &q, idx_t &r, idx_t &s) {
     if (idx.i == idx.k) {
@@ -535,6 +527,30 @@ void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
                     res[d_e] += J[i] * phase;
                 }
             }
+        }
+    }
+}
+
+template <class T>
+void F_pt2_kernel_denom(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *res) {
+    // Contributions to combination terms in denominator
+
+    // Iterate over all integrals in chunk
+    for (auto i = 0; i < N; i++) {
+
+        // by construction of the chunks, this should be the canonical index
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // index already in standard form: J_iikk -> J_qqrr
+        idx_t q, r;
+        q = c_idx.i;
+        r = c_idx.k;
+
+        // iterate over external determinants
+        for (auto d_e = 0; d_e < N_ext; d_e++) {
+            det_t &d_ext = psi_ext[d_e];
+            res[d_e] -= d_ext[0][q] * d_ext[0][r] * J[i]; // phase implicit in -=
+            res[d_e] -= d_ext[1][q] * d_ext[1][r] * J[i];
         }
     }
 }
