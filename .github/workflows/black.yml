@@ -5,7 +5,6 @@ on: [pull_request]
 jobs:
   lint:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/head/main'
     steps:
       - uses: actions/checkout@v2
       - uses: psf/black@stable
