@@ -1,3 +1,4 @@
+# ruff : noqa : E741
 from arches.fundamental_types import (
     Tuple,
     One_electron_integral,
@@ -70,7 +71,7 @@ def load_integrals(
 
     # Using takewhile we 'take lines from the file' while '/' has not been found
     # Needed so we can start reading data on the integrals.
-    lines = list(takewhile(lambda line: "/" not in manipulate_line(line, used_zip), f))
+    lines = list(takewhile(lambda line: "/" not in manipulate_line(line, used_zip), f))  # noqa
 
     d_one_e_integral = defaultdict(int)
     d_two_e_integral = defaultdict(int)

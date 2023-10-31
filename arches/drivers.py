@@ -1,7 +1,8 @@
+# ruff : noqa : E741
 # Yes, I like itertools
 from dataclasses import dataclass
-from itertools import chain, product, combinations, takewhile, permutations, accumulate
-from functools import partial, cached_property, cache
+from itertools import chain, product, combinations, permutations
+from functools import cached_property
 from collections import defaultdict
 import numpy as np
 
@@ -2555,7 +2556,7 @@ class Hamiltonian_generator(object):
         ) + H_i_implicit_matrix_product_step(self.H_i_2e_matrix_elements, M)
 
 
-import inspect
+import inspect  # noqa
 
 __test__ = {}
 for name, member in inspect.getmembers(Hamiltonian_generator):

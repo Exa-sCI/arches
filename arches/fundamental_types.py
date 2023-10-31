@@ -1,9 +1,8 @@
 # For forward declaration in type hints
 from __future__ import annotations
 
-from typing import Tuple, Dict, NamedTuple, List, NewType, Iterator
+from typing import Tuple, Dict, List, NewType, Iterator
 from itertools import chain, product, combinations, takewhile
-from functools import partial, cache
 
 # Orbital index (0,1,2,...,n_orb-1)
 OrbitalIdx = NewType("OrbitalIdx", int)
