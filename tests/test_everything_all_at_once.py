@@ -28,7 +28,7 @@ from arches.drivers import (
 )
 from arches.io import load_eref, load_integrals, load_wf
 from collections import defaultdict
-from itertools import product, chain
+from itertools import product
 from functools import cached_property
 from arches.fundamental_types import Determinant
 from mpi4py import MPI

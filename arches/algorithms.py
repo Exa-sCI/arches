@@ -1,3 +1,5 @@
+# ruff : noqa : E741
+
 import numpy as np
 from scipy.linalg import lapack
 from arches.matrix import diagonalize, AMatrix
