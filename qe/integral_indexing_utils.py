@@ -2,7 +2,7 @@
 import math
 from ctypes import CDLL, Structure
 from ctypes import c_longlong as idx_t
-from qe.func_decorators import return_tuple, offload
+from arches.func_decorators import return_tuple, offload
 import pathlib
 
 run_folder = pathlib.Path(__file__).parent.resolve()

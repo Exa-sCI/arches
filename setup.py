@@ -7,7 +7,7 @@ from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
 version_ns = {}
-vpath = convert_path("qe/version.py")
+vpath = convert_path("arches/version.py")
 with open(vpath) as version_file:
     exec(version_file.read(), version_ns)
 
@@ -59,17 +59,17 @@ class cmake_build_ext(build_ext):
             subprocess.check_call(["cmake", "--build", "."], cwd=self.build_temp)
 
 
-c_module_name = "quantum_envelope.kernels"
+c_module_name = "arches.kernels"
 
 setup(
-    name="QuantumEnvelope",
+    name="ARCHES",
     version=version_ns["__version__"],
     packages=find_packages(),
-    description="An open source python package for processing and analysis of 4D STEM data.",
-    url="https://github.com/lerandc/QuantumEnvelope/",
+    description="Argonne Configuration Interaction for High-Performance Exascale Systems ",
+    url="https://github.com/lerandc/arches/",
     author="Luis Rangel DaCosta",
     author_email="luisrd@berkeley.edu",
-    python_requires=">=3.9",
+    python_requires=">=3.10",
     install_requires=["numpy", "mpi4py"],
     # ext_modules=[CMakeExtension(c_module_name)],
     cmdclass={"build_ext": cmake_build_ext},

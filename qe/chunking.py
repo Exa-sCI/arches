@@ -3,11 +3,11 @@ from dataclasses import dataclass
 from itertools import islice, combinations, product
 import numpy as np
 import numpy.typing as npt
-from qe.integral_indexing_utils import (
+from arches.integral_indexing_utils import (
     compound_idx4,
     canonical_idx4,
 )
-from qe.drivers import integral_category
+from arches.drivers import integral_category
 
 
 def batched(iterable, n):

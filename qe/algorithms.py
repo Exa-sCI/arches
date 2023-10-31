@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.linalg import lapack
-from qe.matrix import diagonalize, AMatrix
-from qe.chunking import JChunk
-from qe.fundamental_types import Determinant
+from arches.matrix import diagonalize, AMatrix
+from arches.chunking import JChunk
+from arches.fundamental_types import Determinant
 from typing import Tuple, Iterable, Callable
 from mpi4py import MPI
 

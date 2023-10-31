@@ -8,7 +8,7 @@ import numpy as np
 # Import mpi4py and utilities
 from mpi4py import MPI  # Note this initializes and finalizes MPI session automatically
 
-from qe.fundamental_types import (
+from arches.fundamental_types import (
     Determinant,
     Psi_det,
     OrbitalIdx,
@@ -20,7 +20,7 @@ from qe.fundamental_types import (
     Two_electron_integral_index_phase,
 )
 from typing import Iterator, Set, Tuple, List, Dict
-from qe.integral_indexing_utils import (
+from arches.integral_indexing_utils import (
     compound_idx4_reverse,
     compound_idx4,
     canonical_idx4,
@@ -29,7 +29,7 @@ from qe.integral_indexing_utils import (
 import pathlib
 from ctypes import CDLL, c_char
 from ctypes import c_longlong as idx_t
-from qe.func_decorators import return_str, offload
+from arches.func_decorators import return_str, offload
 
 run_folder = pathlib.Path(__file__).parent.resolve()
 

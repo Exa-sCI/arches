@@ -1,4 +1,4 @@
-from qe.fundamental_types import (
+from arches.fundamental_types import (
     Tuple,
     One_electron_integral,
     Two_electron_integral,
@@ -7,7 +7,7 @@ from qe.fundamental_types import (
     List,
 )
 from collections import defaultdict
-from qe.integral_indexing_utils import compound_idx4
+from arches.integral_indexing_utils import compound_idx4
 import math
 from itertools import takewhile
 

@@ -1,6 +1,6 @@
-QuantumEnvelope.egg-info/*
+arches.egg-info/*
 */__pycache__/
-qe/src/*test*
+arches/src/*test*
 */build/
 build/
 *.pyc
