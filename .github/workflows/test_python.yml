@@ -1,6 +1,6 @@
 name: Python package
 
-on: [push, pull_request, pull_request_review]
+on: [pull_request, pull_request_review]
 
 jobs:
   build:
@@ -9,8 +9,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10"]
-        
-    if: github.ref == 'refs/head/main'
+
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
