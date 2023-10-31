@@ -1,6 +1,6 @@
-from functools import cache
+# ruff : noqa : E741
 import math
-from ctypes import CDLL, Structure, c_int, POINTER, pointer, byref
+from ctypes import CDLL, Structure
 from ctypes import c_longlong as idx_t
 from qe.func_decorators import return_tuple, offload
 import pathlib

@@ -103,7 +103,9 @@ def load_integrals(
     return n_orb, E0, d_one_e_integral, d_two_e_integral
 
 
-def load_wf(path_wf, det_representation="tuple") -> Tuple[List[float], List[Determinant]]:
+def load_wf(
+    path_wf, det_representation="tuple"
+) -> Tuple[List[float], List[Determinant]]:
     """Read the input file :
     Representation of the Slater determinants (basis) and
     vector of coefficients in this basis (wave function)."""
@@ -163,10 +165,16 @@ def load_wf(path_wf, det_representation="tuple") -> Tuple[List[float], List[Dete
                 )
             )
         elif det_representation == "bitstring":
-            alpha_str = ["0", "b"] + [bit for bit in decode_det(det_i, det_representation)][::-1]
-            beta_str = ["0", "b"] + [bit for bit in decode_det(det_j, det_representation)][::-1]
+            alpha_str = ["0", "b"] + [
+                bit for bit in decode_det(det_i, det_representation)
+            ][::-1]
+            beta_str = ["0", "b"] + [
+                bit for bit in decode_det(det_j, det_representation)
+            ][::-1]
             det.append(
-                Determinant(int(("".join(alpha_str)), 2), int(("".join(beta_str)), 2), "bitset")
+                Determinant(
+                    int(("".join(alpha_str)), 2), int(("".join(beta_str)), 2), "bitset"
+                )
             )
         else:
             raise NotImplementedError
