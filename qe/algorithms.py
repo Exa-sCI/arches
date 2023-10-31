@@ -1,7 +1,9 @@
 import numpy as np
 from scipy.linalg import lapack
-from qe.func_decorators import return_tuple, offload
-from qe.matrix import diagonalize
+from qe.matrix import diagonalize, AMatrix
+from qe.chunking import JChunk
+from qe.fundamental_types import Determinant
+from typing import Tuple, Iterable, Callable
 from mpi4py import MPI
 
 
@@ -74,7 +76,9 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
     return Q, R, T
 
 
-def davidson_serial(H, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-6):
+def davidson(
+    H, *args, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-6, **kwargs
+):  # noqa: E741
     """
     Implementation of the Davidson diagonalization algorithm in serial,
     with blocked eigenvector prediction and BMGS.
@@ -144,7 +148,9 @@ def davidson_serial(H, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-
         V_k, R_k, T_k = bmgs_h(np.hstack([V_k, V_kk]), l // 2, V_k, R_k, T_k)
 
 
-def davidson_par_0(H, comm, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-6):
+def davidson_par_0(
+    H, comm, *args, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-6, **kwargs
+):  # noqa: E741
     """
     Implementation of the Davidson diagonalization algorithm in parallel.
 
@@ -229,3 +235,102 @@ def davidson_par_0(H, comm, V_0=None, N_states=1, l=32, pc="D", max_iter=100, to
 
         ### Form new orthonormal subspace
         V_k, R_k, T_k = bmgs_h(np.hstack([V_k, V_kk]), l // 2, V_k, R_k, T_k)
+
+
+def dispatch_kernel(
+    chunk: JChunk
+) -> Tuple[
+    Callable[
+        JChunk,
+        Iterable[Determinant],
+        Iterable[float],
+        Iterable[Determinant],
+        Iterable[float],
+    ]
+]:  # TODO: annotate callable types to include denom. kerneland provide kernel interface
+    match chunk.category:
+        case "OE":
+            raise NotImplementedError
+        case "A":
+            raise NotImplementedError
+        case "B":
+            raise NotImplementedError
+        case "C":
+            raise NotImplementedError
+        case "D":
+            raise NotImplementedError
+        case "E":
+            raise NotImplementedError
+        case "F":
+            raise NotImplementedError
+        case "G":
+            raise NotImplementedError
+
+
+def get_connected_dets(int_dets: Iterable[Determinant]) -> Iterable[Determinant]:
+    raise NotImplementedError
+
+
+def cipsi(
+    E0,
+    int_dets,
+    psi_coef,
+    J_chunks: Iterable[JChunk],
+    *args,
+    pt2_threshold=1e-8,
+    exc_constraints=None,
+    **kwargs,
+):
+    ext_dets = get_connected_dets(int_dets, exc_constraints)
+
+    e_pt2_n = np.array(len(ext_dets))  # TODO: convert these arrays to pointers
+    e_pt2_d = np.array(len(ext_dets))
+
+    for chunk in J_chunks:
+        kernels = dispatch_kernel(
+            chunk
+        )  # kernels[0] is numerator contrib., kernels[1] is denom. contrib.
+        match chunk.category:
+            case "OE" | "F":  # both num and denominator
+                kernels[0](chunk, int_dets, psi_coef, ext_dets, e_pt2_n)
+                kernels[1](chunk, ext_dets, e_pt2_d, E0)
+            case "A" | "B":  # only denominator
+                kernels[1](chunk, ext_dets, e_pt2_d, E0)
+            case _:  # only numerator
+                kernels[0](chunk, int_dets, psi_coef, ext_dets, e_pt2_n)
+
+    # reduce e_pt2_n,d over processes
+    e_pt2 = e_pt2_n / e_pt2_d
+    pt2_filter = e_pt2 > pt2_threshold
+    e_pt2_total = np.sum(e_pt2)
+
+    # TODO: sort ext dets so that they are in weight order? Or otherwise, pass in information if N_max_dets will be hit
+    return int_dets + ext_dets[pt2_filter], e_pt2_total
+
+
+def prepare_hamiltonian(psi_dets, H_partial: AMatrix = None) -> AMatrix:
+    raise NotImplementedError
+
+
+def s_CI(
+    E0,
+    dets,
+    psi_coef,
+    J_chunks,
+    *args,
+    N_states=1,
+    N_max_dets=1e6,
+    pt2_conv=1e-4,
+    **kwargs,
+):
+    est_pt2_correction = np.inf
+
+    while len(dets) < N_max_dets and est_pt2_correction > pt2_conv:
+        # expand wavefunction in space of Slater determinants
+        dets, est_pt2_correction = cipsi(E0, dets, psi_coef, J_chunks)
+
+        # find wavefunctions and energies of first N states
+        H = prepare_hamiltonian(dets)
+        E0, psi_coef = davidson(H)
+
+    return E0, psi_coef, dets

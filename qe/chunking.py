@@ -36,6 +36,7 @@ class JChunk:
     chunk_size: int
     J: npt.NDArray[[np.float32, np.float64]]
     idx: np.ndarray[[np.int32, np.int64]]
+    category: str
 
     def __getitem__(self, idx):
         if idx > 0 and idx < self.chunk_size:
