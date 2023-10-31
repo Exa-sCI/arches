@@ -223,9 +223,7 @@ class Spin_determinant_tuple(Tuple[OrbitalIdx, ...]):
         """
         return ((self ^ right).popcnt()) // 2
 
-    def gen_all_connected_spindet(
-        self, ed: int, n_orb: int
-    ) -> Iterator[Spin_determinant_tuple]:
+    def gen_all_connected_spindet(self, ed: int, n_orb: int) -> Iterator[Spin_determinant_tuple]:
         """Generate all connected spin determinants to self relative to a particular excitation degree
         :param n_orb: global parameter
         >>> sorted(Spin_determinant_tuple((0, 1)).gen_all_connected_spindet(1, 4))
@@ -295,9 +293,7 @@ class Spin_determinant_tuple(Tuple[OrbitalIdx, ...]):
         parity = (self & pmask).popcnt() % 2
         return -1 if parity else 1
 
-    def double_phase(
-        self, h1: OrbitalIdx, p1: OrbitalIdx, h2: OrbitalIdx, p2: OrbitalIdx
-    ):
+    def double_phase(self, h1: OrbitalIdx, p1: OrbitalIdx, h2: OrbitalIdx, p2: OrbitalIdx):
         """Function to compute phase for <I|H|J> when I and J differ by exactly two orbitals h1, h2 <-> p1, p2
         Only for same spin double excitations
         h1, h2 is occupied in self, p1, p2 is unoccupied
@@ -319,9 +315,7 @@ class Spin_determinant_tuple(Tuple[OrbitalIdx, ...]):
             phase *= -1
         return phase
 
-    def single_exc(
-        self, right: Spin_determinant_tuple
-    ) -> Tuple[int, OrbitalIdx, OrbitalIdx]:
+    def single_exc(self, right: Spin_determinant_tuple) -> Tuple[int, OrbitalIdx, OrbitalIdx]:
         """phase, hole, particle of <I|H|J> when I and J differ by exactly one orbital
            h is occupied only in I
            p is occupied only in J
@@ -434,9 +428,7 @@ class Spin_determinant_bitstring(int):
             bitstring_mask = self.create_bitmask(mask)
             return Spin_determinant_bitstring(self & bitstring_mask)
         else:
-            raise TypeError(
-                f"Unsupported operand type(s) for &: '{type(self)}' and '{type(mask)}'"
-            )
+            raise TypeError(f"Unsupported operand type(s) for &: '{type(self)}' and '{type(mask)}'")
 
     def __or__(self, mask: int or Tuple[OrbitalIdx, ...]) -> int:
         """Overload `|` operator to hole-particle mask as |tuple| or |int| and return |int|
@@ -470,9 +462,7 @@ class Spin_determinant_bitstring(int):
             bitstring_mask = self.create_bitmask(mask)
             return Spin_determinant_bitstring(self | bitstring_mask)
         else:
-            raise TypeError(
-                f"Unsupported operand type(s) for |: '{type(self)}' and '{type(mask)}'"
-            )
+            raise TypeError(f"Unsupported operand type(s) for |: '{type(self)}' and '{type(mask)}'")
 
     def __xor__(self, mask: int or Tuple[OrbitalIdx, ...]) -> int:
         """Overload `^` operator to hole-particle mask as |tuple| or |int| and return |int|
@@ -506,9 +496,7 @@ class Spin_determinant_bitstring(int):
             bitstring_mask = self.create_bitmask(mask)
             return Spin_determinant_bitstring(self ^ bitstring_mask)
         else:
-            raise TypeError(
-                f"Unsupported operand type(s) for ^: '{type(self)}' and '{type(mask)}'"
-            )
+            raise TypeError(f"Unsupported operand type(s) for ^: '{type(self)}' and '{type(mask)}'")
 
     def __sub__(self, spin_bs: int) -> int:
         """Overload `-` operator to perform logical bitwise comparison
@@ -544,9 +532,7 @@ class Spin_determinant_bitstring(int):
             bitstring_mask = self.create_bitmask(mask)
             return Spin_determinant_bitstring(bitstring_mask) - self
         else:
-            raise TypeError(
-                f"Unsupported operand type(s) for -: '{type(self)}' and '{type(mask)}'"
-            )
+            raise TypeError(f"Unsupported operand type(s) for -: '{type(self)}' and '{type(mask)}'")
 
     def popcnt(self) -> int:
         """Perform a `popcount'; number of bits set to True in self"""
@@ -599,9 +585,7 @@ class Determinant:
     #    |_ >< (_ |  |_ (_|  |_ | (_) | |
     #
 
-    def apply_single_excitation(
-        self, h: OrbitalIdx, p: OrbitalIdx, spin: str
-    ) -> Determinant:
+    def apply_single_excitation(self, h: OrbitalIdx, p: OrbitalIdx, spin: str) -> Determinant:
         """Apply single excitation to self, return new abstract |Determinant| class
         Each fundamental type has own implementation of spindet excitaations
         Inputs
@@ -616,13 +600,9 @@ class Determinant:
         Determinant(alpha=(0, 1), beta=(1, 2))
         """
         if spin == "alpha":
-            return Determinant(
-                self.alpha.apply_single_excitation(h, p), self.beta, self.flag
-            )
+            return Determinant(self.alpha.apply_single_excitation(h, p), self.beta, self.flag)
         elif spin == "beta":
-            return Determinant(
-                self.alpha, self.beta.apply_single_excitation(h, p), self.flag
-            )
+            return Determinant(self.alpha, self.beta.apply_single_excitation(h, p), self.flag)
         else:
             raise NotImplementedError
 
@@ -743,8 +723,7 @@ class Determinant:
 
         # Doubles; opposite-spin
         exc_ab = (
-            Determinant(det_alpha, det_beta, self.flag)
-            for det_alpha, det_beta in l_double_ab
+            Determinant(det_alpha, det_beta, self.flag) for det_alpha, det_beta in l_double_ab
         )
 
         return chain(exc_a, exc_b, exc_ab)
@@ -755,9 +734,7 @@ class Determinant:
         """Called by inherited classes; Generate singlet excitations from constraint
         :param spin: Refers to the spin type of `constraint`"""
 
-        ha, pa, hb, pb = self.get_holes_particles_for_constrained_singles(
-            constraint, n_orb, spin
-        )
+        ha, pa, hb, pb = self.get_holes_particles_for_constrained_singles(constraint, n_orb, spin)
         # Excitations of argument `spin`
         for h, p in product(ha, pa):
             if spin == "alpha":
@@ -796,14 +773,10 @@ class Determinant:
         for (h1, h2), (p1, p2) in product(haa, paa):
             if spin == "alpha":
                 # Then, det_a is alpha spindet
-                excited_det = self.apply_same_spin_double_excitation(
-                    h1, p1, h2, p2, "alpha"
-                )
+                excited_det = self.apply_same_spin_double_excitation(h1, p1, h2, p2, "alpha")
             else:
                 # det_a is beta spindet
-                excited_det = self.apply_same_spin_double_excitation(
-                    h1, p1, h2, p2, "beta"
-                )
+                excited_det = self.apply_same_spin_double_excitation(h1, p1, h2, p2, "beta")
             assert getattr(excited_det, spin)[-3:] == constraint
             yield excited_det
 
@@ -811,14 +784,10 @@ class Determinant:
         for (h1, h2), (p1, p2) in product(hbb, pbb):
             if spin == "alpha":
                 # Then, det_b is beta spindet
-                excited_det = self.apply_same_spin_double_excitation(
-                    h1, p1, h2, p2, "beta"
-                )
+                excited_det = self.apply_same_spin_double_excitation(h1, p1, h2, p2, "beta")
             else:
                 # det_b is alpha spindet
-                excited_det = self.apply_same_spin_double_excitation(
-                    h1, p1, h2, p2, "alpha"
-                )
+                excited_det = self.apply_same_spin_double_excitation(h1, p1, h2, p2, "alpha")
             assert getattr(excited_det, spin)[-3:] == constraint
             yield excited_det
 
@@ -857,18 +826,14 @@ class Determinant:
 
         all_orbs = tuple(range(n_orb))
         a1 = min(constraint)  # Index of `smallest` occupied constraint orbital
-        B = tuple(
-            range(a1 + 1, n_orb)
-        )  # B: `Bitmask' -> |Determinant| {a1 + 1, ..., Norb - 1}
+        B = tuple(range(a1 + 1, n_orb))  # B: `Bitmask' -> |Determinant| {a1 + 1, ..., Norb - 1}
         if spin == "alpha":
             det_a = getattr(
                 self, spin
             )  # Get |Spin_determinant| of inputted |Determinant|, |D> (default is alpha)
             det_b = getattr(self, "beta")
         else:
-            det_a = getattr(
-                self, spin
-            )  # Get |Spin_determinant| of inputted |Determinant|, |D>
+            det_a = getattr(self, spin)  # Get |Spin_determinant| of inputted |Determinant|, |D>
             det_b = getattr(self, "alpha")
 
         # Some things can be pre-computed:
@@ -893,9 +858,7 @@ class Determinant:
             # (Two constraint orbitals occupied) e.g., a1, a2 \in |D_a> -> A single (a) x_a \in ha to a_unocc is necessary to satisfy the constraint
             # A single (b) will still not satisfy constraint
             # Operation equivalent to `(det_a ^ constraint) & constraint `
-            (a_unocc,) = det_a.get_particles(
-                constraint
-            )  # The 1 unoccupied constraint orbital
+            (a_unocc,) = det_a.get_particles(constraint)  # The 1 unoccupied constraint orbital
             pa.append(a_unocc)
         if constraint_orbitals_occupied.popcnt() == 3:
             # a1, a2, a3 \in |D_a> -> |D> satisfies constraint! ->
@@ -962,18 +925,14 @@ class Determinant:
 
         all_orbs = tuple(range(n_orb))
         a1 = min(constraint)  # Index of `smallest` occupied alpha constraint orbital
-        B = tuple(
-            range(a1 + 1, n_orb)
-        )  # B: `Bitmask' -> |Determinant| {a1 + 1, ..., Norb - 1}
+        B = tuple(range(a1 + 1, n_orb))  # B: `Bitmask' -> |Determinant| {a1 + 1, ..., Norb - 1}
         if spin == "alpha":
             det_a = getattr(
                 self, spin
             )  # Get |Spin_determinant| of inputted |Determinant|, |D> (default is alpha)
             det_b = getattr(self, "beta")
         else:
-            det_a = getattr(
-                self, spin
-            )  # Get |Spin_determinant| of inputted |Determinant|, |D>
+            det_a = getattr(self, spin)  # Get |Spin_determinant| of inputted |Determinant|, |D>
             det_b = getattr(self, "alpha")
 
         # Some things can be pre-computed:
@@ -1008,9 +967,7 @@ class Determinant:
             # (Two constraint orbitals occupied) e.g., a1, a2 \in |D_a> ->
             #   A same-spin (aa) double (x_a, y_a) \in haa to (z_a, a_unocc), where z_a\not\in|D_a>, and z_a < a1 (if excited to z_a > a1, constraint ruined!)
             # Operation equivalent to `(det_a ^ constraint) & constraint `
-            (a_unocc,) = det_a.get_particles(
-                constraint
-            )  # The 1 unoccupied constraint orbital
+            (a_unocc,) = det_a.get_particles(constraint)  # The 1 unoccupied constraint orbital
             # Operation below is equivalent to `all_orbs - det_a`
             det_unocc_a_orbs = det_a.get_particles(all_orbs)  # Unocc orbitals in |D_a>
             for z_a in takewhile(lambda x: x < a1, det_unocc_a_orbs):

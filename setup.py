@@ -51,9 +51,7 @@ class cmake_build_ext(build_ext):
                 os.makedirs(self.build_temp)
 
             # Config
-            subprocess.check_call(
-                ["cmake", ext.cmake_lists_dir] + cmake_args, cwd=self.build_temp
-            )
+            subprocess.check_call(["cmake", ext.cmake_lists_dir] + cmake_args, cwd=self.build_temp)
 
             # Build
             subprocess.check_call(["cmake", "--build", "."], cwd=self.build_temp)
