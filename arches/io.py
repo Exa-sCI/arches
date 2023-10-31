@@ -1,3 +1,4 @@
+# ruff : noqa : E741
 from arches.fundamental_types import (
     Tuple,
     One_electron_integral,
@@ -70,7 +71,7 @@ def load_integrals(
 
     # Using takewhile we 'take lines from the file' while '/' has not been found
     # Needed so we can start reading data on the integrals.
-    lines = list(takewhile(lambda line: "/" not in manipulate_line(line, used_zip), f))
+    lines = list(takewhile(lambda line: "/" not in manipulate_line(line, used_zip), f))  # noqa
 
     d_one_e_integral = defaultdict(int)
     d_two_e_integral = defaultdict(int)
@@ -88,7 +89,9 @@ def load_integrals(
             # One-electron integrals are symmetric (when real, not complex)
             d_one_e_integral[
                 (i - 1, k - 1)
-            ] = v  # index minus one to be consistent with determinant orbital indexing starting at zero
+            ] = (
+                v
+            )  # index minus one to be consistent with determinant orbital indexing starting at zero
             d_one_e_integral[(k - 1, i - 1)] = v
         else:
             # Two-electron integrals have many permutation symmetries:
@@ -103,9 +106,7 @@ def load_integrals(
     return n_orb, E0, d_one_e_integral, d_two_e_integral
 
 
-def load_wf(
-    path_wf, det_representation="tuple"
-) -> Tuple[List[float], List[Determinant]]:
+def load_wf(path_wf, det_representation="tuple") -> Tuple[List[float], List[Determinant]]:
     """Read the input file :
     Representation of the Slater determinants (basis) and
     vector of coefficients in this basis (wave function)."""
@@ -165,16 +166,10 @@ def load_wf(
                 )
             )
         elif det_representation == "bitstring":
-            alpha_str = ["0", "b"] + [
-                bit for bit in decode_det(det_i, det_representation)
-            ][::-1]
-            beta_str = ["0", "b"] + [
-                bit for bit in decode_det(det_j, det_representation)
-            ][::-1]
+            alpha_str = ["0", "b"] + [bit for bit in decode_det(det_i, det_representation)][::-1]
+            beta_str = ["0", "b"] + [bit for bit in decode_det(det_j, det_representation)][::-1]
             det.append(
-                Determinant(
-                    int(("".join(alpha_str)), 2), int(("".join(beta_str)), 2), "bitset"
-                )
+                Determinant(int(("".join(alpha_str)), 2), int(("".join(beta_str)), 2), "bitset")
             )
         else:
             raise NotImplementedError

@@ -1,3 +1,5 @@
+# ruff : noqa : E741
+
 import numpy as np
 from scipy.linalg import lapack
 from arches.matrix import diagonalize, AMatrix
@@ -59,9 +61,7 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
         H_k = T[a, a].T @ H_k
 
         Y_k = X[:, b] - Q[:, a] @ H_k
-        Q_kk, R_kk = np.linalg.qr(
-            Y_k, mode="reduced"
-        )  # any fast, stable QR can replace this
+        Q_kk, R_kk = np.linalg.qr(Y_k, mode="reduced")  # any fast, stable QR can replace this
         F_k = Q[:, a].T @ Q_kk
         G_k = -T[a, a] @ F_k
 
@@ -76,9 +76,7 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
     return Q, R, T
 
 
-def davidson(
-    H, *args, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-6, **kwargs
-):  # noqa: E741
+def davidson(H, *args, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-6, **kwargs):  # noqa: E741
     """
     Implementation of the Davidson diagonalization algorithm in serial,
     with blocked eigenvector prediction and BMGS.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-from arches.drivers import *
-from arches.io import *
-import sys
+from arches.drivers import Hamiltonian_generator, selection_step
+from arches.io import load_integrals, load_wf
+from mpi4py import MPI
 import argparse
 
 if __name__ == "__main__":
@@ -40,9 +40,7 @@ if __name__ == "__main__":
     rank = comm.Get_rank()
     # Only master will load integrals and wave functions
     if rank == 0:
-        n_ord, E0, d_one_e_integral, d_two_e_integral = load_integrals(
-            args.fcidump_path
-        )
+        n_ord, E0, d_one_e_integral, d_two_e_integral = load_integrals(args.fcidump_path)
         # Load wave function
         psi_coef, psi_det = load_wf(args.wf_path)
 
@@ -52,9 +50,7 @@ if __name__ == "__main__":
         load_tup = None
 
     # broadcast variables to all ranks
-    n_ord, E0, d_one_e_integral, d_two_e_integral, psi_coef, psi_det = comm.bcast(
-        load_tup, 0
-    )
+    n_ord, E0, d_one_e_integral, d_two_e_integral, psi_coef, psi_det = comm.bcast(load_tup, 0)
 
     # Hamiltonian engine
     lewis = Hamiltonian_generator(
@@ -62,9 +58,7 @@ if __name__ == "__main__":
     )
 
     while len(psi_det) < args.N_det_target:
-        E, psi_coef, psi_det = selection_step(
-            comm, lewis, n_ord, psi_coef, psi_det, len(psi_det)
-        )
+        E, psi_coef, psi_det = selection_step(comm, lewis, n_ord, psi_coef, psi_det, len(psi_det))
         # Update Hamiltonian engine
         lewis = Hamiltonian_generator(
             comm,

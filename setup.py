@@ -41,8 +41,10 @@ class cmake_build_ext(build_ext):
         for ext in self.extensions:
             extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
 
+            cfg = "Debug"
             cmake_args = [
                 "-DPYTHON_EXECUTABLE={}".format(sys.executable),
+                "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}".format(cfg.upper(), extdir),
             ]
 
             cmake_args += cmake_cmd_args
@@ -51,9 +53,7 @@ class cmake_build_ext(build_ext):
                 os.makedirs(self.build_temp)
 
             # Config
-            subprocess.check_call(
-                ["cmake", ext.cmake_lists_dir] + cmake_args, cwd=self.build_temp
-            )
+            subprocess.check_call(["cmake", ext.cmake_lists_dir] + cmake_args, cwd=self.build_temp)
 
             # Build
             subprocess.check_call(["cmake", "--build", "."], cwd=self.build_temp)

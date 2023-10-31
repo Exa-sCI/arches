@@ -1,7 +1,8 @@
+# ruff : noqa : E741
 # Yes, I like itertools
 from dataclasses import dataclass
-from itertools import chain, product, combinations, takewhile, permutations, accumulate
-from functools import partial, cached_property, cache
+from itertools import chain, product, combinations, permutations
+from functools import cached_property
 from collections import defaultdict
 import numpy as np
 
@@ -158,9 +159,7 @@ def batch_apply_same_spin_double_excitation(
     # TODO: Once in C, replace with allocation of space for new determinants...
     # For now, we do list comprehension
 
-    return [
-        det_I.apply_same_spin_double_excitation(h1, p1, h2, p2, spin) for det_I in batch
-    ]
+    return [det_I.apply_same_spin_double_excitation(h1, p1, h2, p2, spin) for det_I in batch]
 
 
 def batch_apply_opposite_spin_double_excitation(
@@ -185,9 +184,7 @@ def batch_apply_opposite_spin_double_excitation(
     # TODO: Once in C, replace with allocation of space for new determinants...
     # For now, we do list comprehension
 
-    return [
-        det_I.apply_opposite_spin_double_excitation(h1, p1, h2, p2) for det_I in batch
-    ]
+    return [det_I.apply_opposite_spin_double_excitation(h1, p1, h2, p2) for det_I in batch]
 
 
 def batch_single_phase(
@@ -204,9 +201,7 @@ def batch_single_phase(
     >>> batch_single_phase(batch, 1, 12, "alpha")
     array([-1, 1])
     """
-    return np.array(
-        [getattr(det, spin).single_phase(h, p) for det in batch], dtype="int"
-    )
+    return np.array([getattr(det, spin).single_phase(h, p) for det in batch], dtype="int")
 
 
 def batch_double_phase(
@@ -299,9 +294,7 @@ class Hamiltonian_one_electron(object):
             return 0.0
 
     def H(self, psi_i, psi_j) -> List[List[Energy]]:
-        h = np.array(
-            [self.H_ij(det_i, det_j) for det_i, det_j in product(psi_i, psi_j)]
-        )
+        h = np.array([self.H_ij(det_i, det_j) for det_i, det_j in product(psi_i, psi_j)])
         return h.reshape(len(psi_i), len(psi_j))
 
 
@@ -326,9 +319,7 @@ class Hamiltonian_two_electrons(object):
 
     d_two_e_integral: Two_electron_integral
 
-    def H_ijkl_orbital(
-        self, i: OrbitalIdx, j: OrbitalIdx, k: OrbitalIdx, l: OrbitalIdx
-    ) -> float:
+    def H_ijkl_orbital(self, i: OrbitalIdx, j: OrbitalIdx, k: OrbitalIdx, l: OrbitalIdx) -> float:
         """Assume that *all* the integrals are in
         `d_two_e_integral` In this function, for simplicity we don't use any
         symmetry sparse representation.  For real calculations, symmetries and
@@ -361,9 +352,7 @@ class Hamiltonian_two_electrons(object):
         return max(compound_idx4_reverse(key)) + 1
 
     def H_ii(self, det_i: Determinant):
-        return sum(
-            phase * self.H_ijkl_orbital(*idx) for idx, phase in self.H_ii_indices(det_i)
-        )
+        return sum(phase * self.H_ijkl_orbital(*idx) for idx, phase in self.H_ii_indices(det_i))
 
 
 #   ___            _
@@ -427,9 +416,7 @@ class Hamiltonian_two_electrons_determinant_driven(Hamiltonian_two_electrons, ob
             yield from Hamiltonian_two_electrons_determinant_driven.H_ii_indices(det_i)
         # Single excitation
         elif (ed_up, ed_dn) == (1, 0):
-            yield from H_ij_single_indices(
-                det_i.alpha, det_j.alpha, det_i.beta, "alpha"
-            )
+            yield from H_ij_single_indices(det_i.alpha, det_j.alpha, det_i.beta, "alpha")
         elif (ed_up, ed_dn) == (0, 1):
             yield from H_ij_single_indices(det_i.beta, det_j.beta, det_i.alpha, "beta")
         # Double excitation of same spin
@@ -450,9 +437,7 @@ class Hamiltonian_two_electrons_determinant_driven(Hamiltonian_two_electrons, ob
                 for (
                     idx,
                     phase,
-                ) in Hamiltonian_two_electrons_determinant_driven.H_ij_indices(
-                    det_i, det_j
-                ):
+                ) in Hamiltonian_two_electrons_determinant_driven.H_ij_indices(det_i, det_j):
                     yield (a, b), idx, phase
 
     def H(self, psi_internal: Psi_det, psi_external: Psi_det) -> List[List[Energy]]:
@@ -518,13 +503,10 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         {0}
         """
 
-        det_indices = (
-            Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
-                spindet_occ, oppspindet_occ, d_occupied, "all"
-            )
-            - Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
-                spindet_occ, oppspindet_occ, d_unoccupied, "any"
-            )
+        det_indices = Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
+            spindet_occ, oppspindet_occ, d_occupied, "all"
+        ) - Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
+            spindet_occ, oppspindet_occ, d_unoccupied, "any"
         )
 
         # if len(det_indices) == 0, `set()` is returned
@@ -645,10 +627,8 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         h1, p1 = hp1
         h2, p2 = hp2
         # Pre-filter; get list of candidate determinants that are possibly related via (same-spin) excitations h1 -> p1, h2 -> p2
-        det_indices_AA = (
-            Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                spindet_occ_i, {}, {"same": {h1, h2}}, {"same": {p1, p2}}
-            )
+        det_indices_AA = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+            spindet_occ_i, {}, {"same": {h1, h2}}, {"same": {p1, p2}}
         )
         # Get (I, D_I) pairs of dets indicaated by det_indices_AA
         batch_of_dets = [(I, psi_internal[I]) for I in det_indices_AA]
@@ -710,38 +690,38 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             elif ((p1 not in C) and (p1 < a1)) and ((p2 not in C) and (p2 < a1)):
                 # All excitation pairs related by <ij|kl> must already satisfy C
                 # Get `higher` orbitals not in C -> must be empty in the excitation pairs to satisfy C
-                unocc_spin_orbitals = (
-                    set(range(a1 + 1, n_orb)) - (set(C) | {h1, h2})
-                ) | {
+                unocc_spin_orbitals = (set(range(a1 + 1, n_orb)) - (set(C) | {h1, h2})) | {
                     p1,
                     p2,
                 }
                 # Related pairs must be:
                 #   Occupied in: (alpha) h1, h2 C = {a1, a2, a3} (beta) none
                 #   Empty in: (alpha) p1, p2 {a1 + 1, a1 + 2, ... N_orb - 1} - {a1, a2, a3, h1, h2} (beta) none
-                det_indices_AA = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ,
-                    {},
-                    {"same": ({h1, h2} | set(C))},
-                    {"same": (unocc_spin_orbitals)},
+                det_indices_AA = (
+                    Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                        spindet_occ,
+                        {},
+                        {"same": ({h1, h2} | set(C))},
+                        {"same": (unocc_spin_orbitals)},
+                    )
                 )
             elif (p1 not in C) and (p1 < a1):
                 # p1 not in C, p2 is by above conditonals
                 # Get `higher` orbitals not in C -> must be empty in the excitation pairs to satisfy C
-                unocc_spin_orbitals = (
-                    set(range(a1 + 1, n_orb)) - ((set(C) - {p2}) | {h1, h2})
-                ) | {
+                unocc_spin_orbitals = (set(range(a1 + 1, n_orb)) - ((set(C) - {p2}) | {h1, h2})) | {
                     p1,
                     p2,
                 }
                 # Related pairs must be:
                 #   Occupied in: (alpha) h1, h2 C - {p2} (beta) none
                 #   Empty in: (alpha) p1, p2 {a1 + 1, a1 + 2, ... N_orb - 1} - ((C - {p2}) | {h1, h2}) (beta) none
-                det_indices_AA = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ,
-                    {},
-                    {"same": ({h1, h2} | (set(C) - {p2}))},
-                    {"same": (unocc_spin_orbitals)},
+                det_indices_AA = (
+                    Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                        spindet_occ,
+                        {},
+                        {"same": ({h1, h2} | (set(C) - {p2}))},
+                        {"same": (unocc_spin_orbitals)},
+                    )
                 )
             elif (p2 not in C) and (p2 < a1):
                 # p2 not in C, p1 is by above conditonals
@@ -752,11 +732,13 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                 # Related pairs must be:
                 #   Occupied in: (alpha) h1, h2 C - {p1} (beta) none
                 #   Empty in: (alpha) p1, p2 {a1 + 1, a1 + 2, ... N_orb - 1} - ((C - {p1}) | {h1, h2}) (beta) none
-                det_indices_AA = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ,
-                    {},
-                    {"same": ({h1, h2} | (set(C) - {p1}))},
-                    {"same": (unocc_spin_orbitals)},
+                det_indices_AA = (
+                    Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                        spindet_occ,
+                        {},
+                        {"same": ({h1, h2} | (set(C) - {p1}))},
+                        {"same": (unocc_spin_orbitals)},
+                    )
                 )
             else:
                 # Both p1, p2 in C
@@ -766,11 +748,13 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                 # Related pairs must be:
                 #   Occupied in: (alpha) h1, h2 C - {p1, p2} (beta) none
                 #   Empty in: (alpha) p1, p2 {a1 + 1, a1 + 2, ... N_orb - 1} - ((C - {p1, p2}) | {h1, h2}) (beta) none
-                det_indices_AA = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ,
-                    {},
-                    {"same": ({h1, h2} | (set(C) - {p1, p2}))},
-                    {"same": (unocc_spin_orbitals)},
+                det_indices_AA = (
+                    Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                        spindet_occ,
+                        {},
+                        {"same": ({h1, h2} | (set(C) - {p1, p2}))},
+                        {"same": (unocc_spin_orbitals)},
+                    )
                 )
         else:  # Spin is beta
             # Here, candidates must alreaady be occupied in C
@@ -778,11 +762,13 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             # Related pairs must be:
             #   Occupied in: (alpha) C (beta) h1, h2
             #   Empty in: (alpha) {a1 + 1, a1 + 2, ... N_orb - 1} - C | {h1, h2}) (beta) p1, p2
-            det_indices_AA = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                spindet_occ,
-                oppspindet_occ,
-                {"same": {h1, h2}, "opposite": set(C)},
-                {"same": {p1, p2}, "opposite": unocc_oppspin_orbitals},
+            det_indices_AA = (
+                Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                    spindet_occ,
+                    oppspindet_occ,
+                    {"same": {h1, h2}, "opposite": set(C)},
+                    {"same": {p1, p2}, "opposite": unocc_oppspin_orbitals},
+                )
             )
 
         # Organized filtered dets into index, determinant (I, D_I) pairs
@@ -833,13 +819,11 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         h1, p1 = hp1
         h2, p2 = hp2
         # Pre-filter; get list of candidate determinants thaat are possibly related via (opposite-spin) excitations h1 -> p1, h2 -> p2
-        det_indices_AB = (
-            Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                spindet_occ_i,
-                oppspindet_occ_i,
-                {"same": {h1}, "opposite": {h2}},
-                {"same": {p1}, "opposite": {p2}},
-            )
+        det_indices_AB = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+            spindet_occ_i,
+            oppspindet_occ_i,
+            {"same": {h1}, "opposite": {h2}},
+            {"same": {p1}, "opposite": {p2}},
         )
         # Get (I, D_I) pairs of dets indicaated by det_indices_AA
         batch_of_dets = [(I, psi_internal[I]) for I in det_indices_AB]
@@ -905,32 +889,32 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             elif (p1 not in C) and (p1 < a1):
                 # All excitation pairs related by <ij|kl> must already satisfy C
                 # Get `higher` orbitals not in C -> must be empty in the excitation pairs to satisfy C
-                unocc_spin_orbitals = (set(range(a1 + 1, n_orb)) - (set(C) | {h1})) | {
-                    p1
-                }
+                unocc_spin_orbitals = (set(range(a1 + 1, n_orb)) - (set(C) | {h1})) | {p1}
                 # Related pairs must be:
                 #   Occupied in: (alpha) h1, C = {a1, a2, a3} (beta) h2
                 #   Empty in: (alpha) p1, {a1 + 1, a1 + 2, ... N_orb - 1} - {a1, a2, a3, h1} (beta) p2
-                det_indices_AB = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ,
-                    oppspindet_occ,
-                    {"same": ({h1} | set(C)), "opposite": {h2}},
-                    {"same": (unocc_spin_orbitals), "opposite": {p2}},
+                det_indices_AB = (
+                    Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                        spindet_occ,
+                        oppspindet_occ,
+                        {"same": ({h1} | set(C)), "opposite": {h2}},
+                        {"same": (unocc_spin_orbitals), "opposite": {p2}},
+                    )
                 )
             else:
                 # By above -> p1 \in C in this instance
                 # All excitation pairs related by <ij|kl> must be occupied in C - {p1}
-                unocc_spin_orbitals = (
-                    set(range(a1 + 1, n_orb)) - (set(C) - {p1} | {h1})
-                ) | {p1}
+                unocc_spin_orbitals = (set(range(a1 + 1, n_orb)) - (set(C) - {p1} | {h1})) | {p1}
                 # Related pairs must be:
                 #   Occupied in: (alpha) h1, C - {p1} (beta) h2
                 #   Empty in: (alpha) p1, {a1 + 1, a1 + 2, ... N_orb - 1} - ((C - {p1}) | {h1}) (beta) p2
-                det_indices_AB = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ,
-                    oppspindet_occ,
-                    {"same": ({h1} | (set(C) - {p1})), "opposite": {h2}},
-                    {"same": unocc_spin_orbitals, "opposite": {p2}},
+                det_indices_AB = (
+                    Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                        spindet_occ,
+                        oppspindet_occ,
+                        {"same": ({h1} | (set(C) - {p1})), "opposite": {h2}},
+                        {"same": unocc_spin_orbitals, "opposite": {p2}},
+                    )
                 )
         else:  # spin is beta
             if h2 in C:
@@ -942,32 +926,32 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             elif (p2 not in C) and (p2 < a1):
                 # All excitation pairs related by <ij|kl> must already satisfy C
                 # Get `higher` orbitals not in C -> must be empty in the excitation pairs to satisfy C
-                unocc_spin_orbitals = (set(range(a1 + 1, n_orb)) - (set(C) | {h2})) | {
-                    p2
-                }
+                unocc_spin_orbitals = (set(range(a1 + 1, n_orb)) - (set(C) | {h2})) | {p2}
                 # Related pairs must be:
                 #   Occupied in: (alpha) h2, C = {a1, a2, a3} (beta) h1
                 #   Empty in: (alpha) p2, {a1 + 1, a1 + 2, ... N_orb - 1} - {a1, a2, a3, h2} (beta) p1
-                det_indices_AB = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ,
-                    oppspindet_occ,
-                    {"same": {h1}, "opposite": ({h2} | set(C))},
-                    {"same": {p1}, "opposite": unocc_spin_orbitals},
+                det_indices_AB = (
+                    Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                        spindet_occ,
+                        oppspindet_occ,
+                        {"same": {h1}, "opposite": ({h2} | set(C))},
+                        {"same": {p1}, "opposite": unocc_spin_orbitals},
+                    )
                 )
             else:
                 # By above -> p2 \in C in this instance
                 # All excitation pairs related by <ij|kl> must be occupied in C - {p2}
-                unocc_spin_orbitals = (
-                    set(range(a1 + 1, n_orb)) - (set(C) - {p2} | {h2})
-                ) | {p2}
+                unocc_spin_orbitals = (set(range(a1 + 1, n_orb)) - (set(C) - {p2} | {h2})) | {p2}
                 # Related pairs must be:
                 #   Occupied in: (alpha) h2, C - {p2} (beta) h1
                 #   Empty in: (alpha) p2, {a1 + 1, a1 + 2, ... N_orb - 1} - ((C - {p2}) | {h2}) (beta) p1
-                det_indices_AB = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ,
-                    oppspindet_occ,
-                    {"same": {h1}, "opposite": ({h2} | (set(C) - {p2}))},
-                    {"same": {p1}, "opposite": unocc_spin_orbitals},
+                det_indices_AB = (
+                    Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                        spindet_occ,
+                        oppspindet_occ,
+                        {"same": {h1}, "opposite": ({h2} | (set(C) - {p2}))},
+                        {"same": {p1}, "opposite": unocc_spin_orbitals},
+                    )
                 )
 
         # Organized filtered dets into index, determinant (I, D_I) pairs
@@ -992,12 +976,8 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             for int_index_det_pair, exc_det_I in zip(batch_of_dets, exc_batch)
         ]
         #   3. Compute phase for filtered pairs
-        phaseA_of_batch = batch_single_phase(
-            [psi[I] for (I, _) in int_ext_pairs], h1, p1, spin
-        )
-        phaseB_of_batch = batch_single_phase(
-            [psi[I] for (I, _) in int_ext_pairs], h2, p2, oppspin
-        )
+        phaseA_of_batch = batch_single_phase([psi[I] for (I, _) in int_ext_pairs], h1, p1, spin)
+        phaseB_of_batch = batch_single_phase([psi[I] for (I, _) in int_ext_pairs], h2, p2, oppspin)
         # Element-wise multiplication of phaseA, phaseB
         phase_of_batch = phaseA_of_batch * phaseB_of_batch
         # Yield (I, J), phase pairs for computing <I|H|J>
@@ -1032,13 +1012,11 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
 
         def do_diagonal_A(i, j, psi_i, det_to_index_j, spindet_occ_i, oppspindet_occ_i):
             # Get indices of determinants occupied in ia and ib
-            det_indices = (
-                Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
-                    spindet_occ_i,
-                    oppspindet_occ_i,
-                    {"same": {i}, "opposite": {j}},
-                    "all",
-                )
+            det_indices = Hamiltonian_two_electrons_integral_driven.get_dets_occ_in_orbitals(
+                spindet_occ_i,
+                oppspindet_occ_i,
+                {"same": {i}, "opposite": {j}},
+                "all",
             )
 
             # phase is always 1
@@ -1046,9 +1024,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                 det_indices, psi_i, det_to_index_j, 1
             )
 
-        yield from do_diagonal_A(
-            i, j, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-        )
+        yield from do_diagonal_A(i, j, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i)
 
     @staticmethod
     def category_B(
@@ -1104,9 +1080,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                 det_indices, psi_i, det_to_index_j, 1
             )
 
-        yield from do_diagonal_B(
-            i, j, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-        )
+        yield from do_diagonal_B(i, j, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i)
 
     @staticmethod
     def category_C(
@@ -1136,9 +1110,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "C"
 
-        def do_single_C(
-            i, j, k, psi_i, det_to_index_j, spindet_occ_i, oppspindet_occ_i, spin
-        ):
+        def do_single_C(i, j, k, psi_i, det_to_index_j, spindet_occ_i, oppspindet_occ_i, spin):
             # One way: Indices of determinants related by excitations from psi_i -> psi_j
             # phasemod, occ, h, p = 1, j, i, k
             det_indices_1 = chain(
@@ -1245,9 +1217,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "C"
 
-        def do_single_C_pt2(
-            occ, h, p, psi, C, spindet_occ, oppspindet_occ, spin, n_orb
-        ):
+        def do_single_C_pt2(occ, h, p, psi, C, spindet_occ, oppspindet_occ, spin, n_orb):
             # Phasemod is always +1 in category C
             a1 = min(C)  # `Lowest` constraint orbital
             if spin == "alpha":  # If p -> h excitation is alpha spin
@@ -1265,9 +1235,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                         # If occ (alpha) is \not\in C and > a1 -> Excitation pairs related by <ij|kl> necessarily satisfy a different constraint
                         # So, in this case only yield related pairs where the occ orbital is beta spin
                         # Get unocc orbitals not in C (including `higher` ones) -> must be empty in the excitation pairs to satisfy C
-                        unocc_orbitals = (
-                            set(range(a1 + 1, n_orb)) - (set(C) | {h})
-                        ) | {p}
+                        unocc_orbitals = (set(range(a1 + 1, n_orb)) - (set(C) | {h})) | {p}
                         # Related pairs must be:
                         #   Occupied in: (alpha) h, C = {a1, a2, a3} (beta) occ
                         #   Empty in: (alpha) p, {a1 + 1, a1 + 2, ... N_orb - 1} - {a1, a2, a3, h} (beta) none
@@ -1285,9 +1253,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                         # Here, occ is either \in C, or \not\in C and < a1
                         # Now, can yield related pairs where occ is alpha or beta spin (alpha case won't affect C)
                         # Get unocc orbitals not in C (including `higher` ones) -> must be empty in the excitation pairs to satisfy C
-                        unocc_orbitals = (
-                            set(range(a1 + 1, n_orb)) - (set(C) | {h})
-                        ) | {p}
+                        unocc_orbitals = (set(range(a1 + 1, n_orb)) - (set(C) | {h})) | {p}
                         # Related pairs must be:
                         #   Occupied in: (alpha) h, C = {a1, a2, a3} (beta) occ, or (alpha) h, C = {a1, a2, a3}, occ (beta) none,
                         #   Empty in: (alpha) p, {a1 + 1, a1 + 2, ... N_orb - 1} - {a1, a2, a3, h} (beta) none
@@ -1316,9 +1282,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                         # If occ (alpha) is \not\in C and > a1 -> Excitation pairs related by <ij|kl> necessarily satisfy a different constraint
                         # So, in this case only yield related pairs where the occ orbital is beta spin
                         # Get unocc orbitals not in C (including `higher` ones) -> must be empty in the excitation pairs to satisfy C
-                        unocc_orbitals = (
-                            set(range(a1 + 1, n_orb)) - ((set(C) - {p}) | {h})
-                        ) | {p}
+                        unocc_orbitals = (set(range(a1 + 1, n_orb)) - ((set(C) - {p}) | {h})) | {p}
                         # Related pairs must be:
                         #   Occupied in: (alpha) h, C - {p} (beta) occ
                         #   Empty in: (alpha) p, {a1 + 1, a1 + 2, ... N_orb - 1} - ((C - {p}) | {h}) (beta) none
@@ -1335,9 +1299,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                     else:
                         # Here, occ is either \in C, or \not\in C and < a1
                         # Now, can yield related pairs where occ is alpha or beta spin (alpha case won't affect C)
-                        unocc_orbitals = (
-                            set(range(a1 + 1, n_orb)) - ((set(C) - {p}) | {h})
-                        ) | {p}
+                        unocc_orbitals = (set(range(a1 + 1, n_orb)) - ((set(C) - {p}) | {h})) | {p}
                         # Related pairs must be:
                         #   Occupied in: (alpha) h, C - {p}  (beta) occ, or (alpha) h,  C - {p}, occ (beta) none,
                         #   Empty in: (alpha) p, {a1 + 1, a1 + 2, ... N_orb - 1} - ((C - {p}) | {h}) (beta) none
@@ -1365,14 +1327,16 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                     # If occ (alpha) is \not\in C and > a1 -> Excitation pairs related by <ij|kl> necessarily satisfy a different constraint
                     # So, in this case only yield related pairs where the occ orbital is beta spin
                     # Get `higher` orbitals not in C -> must be empty in the excitation pairs to satisfy C
-                    det_indices = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                        spindet_occ,
-                        oppspindet_occ,
-                        {"same": {h, occ}, "opposite": set(C)},
-                        {
-                            "same": {p},
-                            "opposite": (set(range(a1 + 1, n_orb)) - set(C)),
-                        },
+                    det_indices = (
+                        Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                            spindet_occ,
+                            oppspindet_occ,
+                            {"same": {h, occ}, "opposite": set(C)},
+                            {
+                                "same": {p},
+                                "opposite": (set(range(a1 + 1, n_orb)) - set(C)),
+                            },
+                        )
                     )
                     yield from Hamiltonian_two_electrons_integral_driven.do_single_pt2(
                         det_indices, 1, occ, h, p, psi, C, spin
@@ -1395,9 +1359,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                             {"same": {h}, "opposite": (set(C) | {occ})},
                             {
                                 "same": {p},
-                                "opposite": (
-                                    set(range(a1 + 1, n_orb)) - (set(C) | {occ})
-                                ),
+                                "opposite": (set(range(a1 + 1, n_orb)) - (set(C) | {occ})),
                             },
                         ),
                     )
@@ -1412,12 +1374,8 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             yield from do_single_C_pt2(
                 i, l, j, psi, C, spindet_a_occ, spindet_b_occ, "alpha", n_orb
             )
-            yield from do_single_C_pt2(
-                i, j, l, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
-            yield from do_single_C_pt2(
-                i, l, j, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
+            yield from do_single_C_pt2(i, j, l, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
+            yield from do_single_C_pt2(i, l, j, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
 
         else:  # j == l, <ji|jk> = <ij|kj>, ia(b) to ka(b), occ = ja or jb
             yield from do_single_C_pt2(
@@ -1426,12 +1384,8 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             yield from do_single_C_pt2(
                 j, k, i, psi, C, spindet_a_occ, spindet_b_occ, "alpha", n_orb
             )
-            yield from do_single_C_pt2(
-                j, i, k, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
-            yield from do_single_C_pt2(
-                j, k, i, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
+            yield from do_single_C_pt2(j, i, k, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
+            yield from do_single_C_pt2(j, k, i, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
 
     @staticmethod
     def category_D(
@@ -1460,27 +1414,29 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "D"
 
-        def do_single_D(
-            i, j, l, psi_i, det_to_index_j, spindet_occ_i, oppspindet_occ_i, spin
-        ):
+        def do_single_D(i, j, l, psi_i, det_to_index_j, spindet_occ_i, oppspindet_occ_i, spin):
             # One way: Indices of determinants related by excitations from psi_i -> psi_j
             # phasemod, occ, h, p = 1, i, j, l
-            det_indices_1 = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                spindet_occ_i,
-                oppspindet_occ_i,
-                {"same": {j}, "opposite": {i}},
-                {"same": {l}},
+            det_indices_1 = (
+                Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                    spindet_occ_i,
+                    oppspindet_occ_i,
+                    {"same": {j}, "opposite": {i}},
+                    {"same": {l}},
+                )
             )
             yield from Hamiltonian_two_electrons_integral_driven.do_single(
                 det_indices_1, 1, i, j, l, psi_i, det_to_index_j, spin
             )
             # Other way: Indices of determinants related by excitations from psi_j -> psi_i
             # phasemod, occ, h, p = 1, i, l, j
-            det_indices_2 = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                spindet_occ_i,
-                oppspindet_occ_i,
-                {"same": {l}, "opposite": {i}},
-                {"same": {j}},
+            det_indices_2 = (
+                Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                    spindet_occ_i,
+                    oppspindet_occ_i,
+                    {"same": {l}, "opposite": {i}},
+                    {"same": {j}},
+                )
             )
 
             yield from Hamiltonian_two_electrons_integral_driven.do_single(
@@ -1558,9 +1514,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "D"
 
-        def do_single_D_pt2(
-            occ, h, p, psi, C, spindet_occ, oppspindet_occ, spin, n_orb
-        ):
+        def do_single_D_pt2(occ, h, p, psi, C, spindet_occ, oppspindet_occ, spin, n_orb):
             # TODO: Re-factor s.t. static part and part dep on psi are separate
             # Phasemod is always +1 in category D
             # Only opposite-spin single excitations are allowed
@@ -1582,11 +1536,13 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                     #   Occupied in: (alpha) h, C = {a1, a2, a3} (beta) occ
                     #   Empty in: (alpha) p, {a1 + 1, a1 + 2, ... N_orb - 1} - {a1, a2, a3, h} (beta) none
                     # p \not\in C in this instance, and < a1, so must include in `empty` orbital set
-                    det_indices = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                        spindet_occ,
-                        oppspindet_occ,
-                        {"same": ({h} | set(C)), "opposite": {occ}},
-                        {"same": unocc_orbitals},
+                    det_indices = (
+                        Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                            spindet_occ,
+                            oppspindet_occ,
+                            {"same": ({h} | set(C)), "opposite": {occ}},
+                            {"same": unocc_orbitals},
+                        )
                     )
                     yield from Hamiltonian_two_electrons_integral_driven.do_single_pt2(
                         det_indices, 1, occ, h, p, psi, C, spin
@@ -1596,18 +1552,18 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                     # All excitation pairs related by <ij|kl> must be occupied in C - {p}
                     # Since we are in category D, we need only do the case when occ is opposite spin
                     # Here, excitation is alpha -> occ is beta, no restrictions based on occ
-                    unocc_orbitals = (
-                        set(range(a1 + 1, n_orb)) - ((set(C) - {p}) | {h})
-                    ) | {p}
+                    unocc_orbitals = (set(range(a1 + 1, n_orb)) - ((set(C) - {p}) | {h})) | {p}
                     # Related pairs must be:
                     #   Occupied in: (alpha) h, C - {p} (beta) occ
                     #   Empty in: (alpha) p, {a1 + 1, a1 + 2, ... N_orb - 1} - ((C - {p}) | {h}) (beta) none
                     # p \not\in C in this instance, and < a1, so must include in `empty` orbital set
-                    det_indices = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                        spindet_occ,
-                        oppspindet_occ,
-                        {"same": ({h} | (set(C) - {p})), "opposite": {occ}},
-                        {"same": unocc_orbitals},
+                    det_indices = (
+                        Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                            spindet_occ,
+                            oppspindet_occ,
+                            {"same": ({h} | (set(C) - {p})), "opposite": {occ}},
+                            {"same": unocc_orbitals},
+                        )
                     )
                     yield from Hamiltonian_two_electrons_integral_driven.do_single_pt2(
                         det_indices, 1, occ, h, p, psi, C, spin
@@ -1622,14 +1578,16 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                 else:
                     # Occ is necessarily either in C or < a1, so don't demand its unoccupied
                     unocc_orbitals = set(range(a1 + 1, n_orb)) - (set(C) | {occ})
-                    det_indices = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                        spindet_occ,
-                        oppspindet_occ,
-                        {"same": {h}, "opposite": (set(C) | {occ})},
-                        {
-                            "same": {p},
-                            "opposite": unocc_orbitals,
-                        },
+                    det_indices = (
+                        Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                            spindet_occ,
+                            oppspindet_occ,
+                            {"same": {h}, "opposite": (set(C) | {occ})},
+                            {
+                                "same": {p},
+                                "opposite": unocc_orbitals,
+                            },
+                        )
                     )
                     yield from Hamiltonian_two_electrons_integral_driven.do_single_pt2(
                         det_indices, 1, occ, h, p, psi, C, spin
@@ -1642,12 +1600,8 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             yield from do_single_D_pt2(
                 i, l, i, psi, C, spindet_a_occ, spindet_b_occ, "alpha", n_orb
             )
-            yield from do_single_D_pt2(
-                i, i, l, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
-            yield from do_single_D_pt2(
-                i, l, i, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
+            yield from do_single_D_pt2(i, i, l, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
+            yield from do_single_D_pt2(i, l, i, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
         else:  # i < j == k == l, <ij|jj> = <jj|ij> = <jj|ji>, ja(b) <-> ia(b) occ = jb(a)
             yield from do_single_D_pt2(
                 j, j, i, psi, C, spindet_a_occ, spindet_b_occ, "alpha", n_orb
@@ -1655,12 +1609,8 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             yield from do_single_D_pt2(
                 j, i, j, psi, C, spindet_a_occ, spindet_b_occ, "alpha", n_orb
             )
-            yield from do_single_D_pt2(
-                j, j, i, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
-            yield from do_single_D_pt2(
-                j, i, j, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
+            yield from do_single_D_pt2(j, j, i, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
+            yield from do_single_D_pt2(j, i, j, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
 
     @staticmethod
     def category_E(
@@ -1690,21 +1640,23 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "E"
 
-        def do_single_E(
-            i, k, l, psi_i, det_to_index_j, spindet_occ_i, oppspindet_occ_i, spin
-        ):
+        def do_single_E(i, k, l, psi_i, det_to_index_j, spindet_occ_i, oppspindet_occ_i, spin):
             # One way: Indices of determinants related by excitations from psi_i -> psi_j
             # phasemod, occ, h, p = -1, i, k, l
-            det_indices_1 = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                spindet_occ_i, oppspindet_occ_i, {"same": {i, k}}, {"same": {l}}
+            det_indices_1 = (
+                Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                    spindet_occ_i, oppspindet_occ_i, {"same": {i, k}}, {"same": {l}}
+                )
             )
             yield from Hamiltonian_two_electrons_integral_driven.do_single(
                 det_indices_1, -1, i, k, l, psi_i, det_to_index_j, spin
             )
             # Other way: Indices of determinants related by excitations from psi_j -> psi_i
             # phasemod, occ, h, p = -1, i, l, k
-            det_indices_2 = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                spindet_occ_i, oppspindet_occ_i, {"same": {i, l}}, {"same": {k}}
+            det_indices_2 = (
+                Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                    spindet_occ_i, oppspindet_occ_i, {"same": {i, l}}, {"same": {k}}
+                )
             )
             yield from Hamiltonian_two_electrons_integral_driven.do_single(
                 det_indices_2, -1, i, l, k, psi_i, det_to_index_j, spin
@@ -1828,9 +1780,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "E"
 
-        def do_single_E_pt2(
-            occ, h, p, psi, C, spindet_occ, oppspindet_occ, spin, n_orb
-        ):
+        def do_single_E_pt2(occ, h, p, psi, C, spindet_occ, oppspindet_occ, spin, n_orb):
             # Phasemod is always -1 in category E
             # Only same-spin single excitations are allowed
             a1 = min(C)  # `Lowest` constraint orbital
@@ -1854,9 +1804,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                     else:
                         # Here, occ is either \in C, or \not\in C and < a1
                         # Now, can yield related pairs where occ is alpha spin
-                        unocc_orbitals = (
-                            set(range(a1 + 1, n_orb)) - (set(C) | {h})
-                        ) | {p}
+                        unocc_orbitals = (set(range(a1 + 1, n_orb)) - (set(C) | {h})) | {p}
                         # Related pairs must be:
                         #   Occupied in: (alpha) h, C = {a1, a2, a3}, occ (beta) none,
                         #   Empty in: (alpha) p, {a1 + 1, a1 + 2, ... N_orb - 1} - {a1, a2, a3, h} (beta) none
@@ -1880,9 +1828,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                     else:
                         # Here, occ is either \in C, or \not\in C and < a1
                         # Now, can yield related pairs where occ is alpha
-                        unocc_orbitals = (
-                            set(range(a1 + 1, n_orb)) - ((set(C) - {p}) | {h})
-                        ) | {p}
+                        unocc_orbitals = (set(range(a1 + 1, n_orb)) - ((set(C) - {p}) | {h})) | {p}
                         # Related pairs must be:
                         #   Occupied in: (alpha) h,  C - {p}, occ (beta) none,
                         #   Empty in: (alpha) p, {a1 + 1, a1 + 2, ... N_orb - 1} - ((C - {p}) | {h}) (beta) none
@@ -1900,14 +1846,16 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                 # All excitation pairs related by <ij|kl> must already satisfy C
                 # Necessarily, integrals in this category only invoke same-spin single excitations
                 # So, in this instance, occ is beta spin and has no restrictions on it
-                det_indices = Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
-                    spindet_occ,
-                    oppspindet_occ,
-                    {"same": {h, occ}, "opposite": set(C)},
-                    {
-                        "same": {p},
-                        "opposite": (set(range(a1 + 1, n_orb)) - set(C)),
-                    },
+                det_indices = (
+                    Hamiltonian_two_electrons_integral_driven.get_dets_via_orbital_occupancy(
+                        spindet_occ,
+                        oppspindet_occ,
+                        {"same": {h, occ}, "opposite": set(C)},
+                        {
+                            "same": {p},
+                            "opposite": (set(range(a1 + 1, n_orb)) - set(C)),
+                        },
+                    )
                 )
                 yield from Hamiltonian_two_electrons_integral_driven.do_single_pt2(
                     det_indices, -1, occ, h, p, psi, C, spin
@@ -1930,12 +1878,8 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             yield from do_single_E_pt2(
                 i, l, k, psi, C, spindet_a_occ, spindet_b_occ, "alpha", n_orb
             )
-            yield from do_single_E_pt2(
-                i, k, l, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
-            yield from do_single_E_pt2(
-                i, l, k, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
+            yield from do_single_E_pt2(i, k, l, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
+            yield from do_single_E_pt2(i, l, k, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
         elif j == k:  # <ij|jl> = - <ij|lj>
             # singles, ia(b) <-> la(b), occ = ja(b)
             yield from do_single_E_pt2(
@@ -1944,12 +1888,8 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             yield from do_single_E_pt2(
                 j, l, i, psi, C, spindet_a_occ, spindet_b_occ, "alpha", n_orb
             )
-            yield from do_single_E_pt2(
-                j, i, l, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
-            yield from do_single_E_pt2(
-                j, l, i, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
+            yield from do_single_E_pt2(j, i, l, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
+            yield from do_single_E_pt2(j, l, i, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
         else:  # k == l, <ij|kk> = <ji|kk> = <jk|ki> -> -<jk|ik>
             # singles, ja(b) <-> ia(b) occ = ka(b)
             yield from do_single_E_pt2(
@@ -1958,12 +1898,8 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             yield from do_single_E_pt2(
                 k, j, i, psi, C, spindet_a_occ, spindet_b_occ, "alpha", n_orb
             )
-            yield from do_single_E_pt2(
-                k, i, j, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
-            yield from do_single_E_pt2(
-                k, j, i, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb
-            )
+            yield from do_single_E_pt2(k, i, j, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
+            yield from do_single_E_pt2(k, j, i, psi, C, spindet_b_occ, spindet_a_occ, "beta", n_orb)
 
     @staticmethod
     def category_F(
@@ -2007,9 +1943,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
                 det_indices, psi_i, det_to_index_j, -1
             )
 
-        yield from do_diagonal_F(
-            i, k, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-        )
+        yield from do_diagonal_F(i, k, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i)
 
         # Only call for a single spin variable. Each excitation involves ia, ib to ka, kb. Flipping the spin just double counts it
         yield from Hamiltonian_two_electrons_integral_driven.do_double_oppspin(
@@ -2224,9 +2158,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             for (
                 (a, b),
                 phase,
-            ) in self.H_indices_idx(
-                idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-            ):
+            ) in self.H_indices_idx(idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i):
                 yield (a, b), idx, phase
 
     def H_indices_idx(
@@ -2240,33 +2172,19 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         # Call to get indices of determinant pairs + associated phase for a given integral idx
         category = integral_category(*idx)
         if category == "A":
-            yield from self.category_A(
-                idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-            )
+            yield from self.category_A(idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i)
         if category == "B":
-            yield from self.category_B(
-                idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-            )
+            yield from self.category_B(idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i)
         if category == "C":
-            yield from self.category_C(
-                idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-            )
+            yield from self.category_C(idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i)
         if category == "D":
-            yield from self.category_D(
-                idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-            )
+            yield from self.category_D(idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i)
         if category == "E":
-            yield from self.category_E(
-                idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-            )
+            yield from self.category_E(idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i)
         if category == "F":
-            yield from self.category_F(
-                idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-            )
+            yield from self.category_F(idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i)
         if category == "G":
-            yield from self.category_G(
-                idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-            )
+            yield from self.category_G(idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i)
 
     def H_indices_pt2(
         self, psi_i: Psi_det, C: Tuple[OrbitalIdx, ...]
@@ -2280,9 +2198,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             for (
                 (I, det_J),
                 phase,
-            ) in self.H_indices_idx_pt2(
-                idx, psi_i, C, spindet_a_occ_i, spindet_b_occ_i
-            ):
+            ) in self.H_indices_idx_pt2(idx, psi_i, C, spindet_a_occ_i, spindet_b_occ_i):
                 yield (I, det_J), idx, phase
 
     def H_indices_idx_pt2(
@@ -2331,9 +2247,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
             for (
                 (a, b),
                 phase,
-            ) in self.H_indices_idx(
-                idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i
-            ):
+            ) in self.H_indices_idx(idx, psi_i, det_to_index_j, spindet_a_occ_i, spindet_b_occ_i):
                 h[a, b] += phase * integral_values
         return h
 
@@ -2480,9 +2394,7 @@ class Hamiltonian_generator(object):
         # At initialization, each rank computes distribution of determinants
         floor, remainder = divmod(self.full_problem_size, self.world_size)
         ceiling = floor + 1
-        return np.array(
-            [ceiling] * remainder + [floor] * (self.world_size - remainder), dtype="i"
-        )
+        return np.array([ceiling] * remainder + [floor] * (self.world_size - remainder), dtype="i")
 
     @cached_property
     def local_size(self):
@@ -2508,9 +2420,7 @@ class Hamiltonian_generator(object):
         # TODO: Right now, having each rank do this. Will re-do each iteration, but can be optimized somehow
         # Each rank computes local determinants
         return self.psi_internal[
-            self.offsets[self.rank] : (
-                self.offsets[self.rank] + self.distribution[self.rank]
-            )
+            self.offsets[self.rank] : (self.offsets[self.rank] + self.distribution[self.rank])
         ]
 
     @cached_property
@@ -2537,9 +2447,7 @@ class Hamiltonian_generator(object):
     # ~ ~ ~
     def H_ii(self, det_i: Determinant) -> Energy:
         # Diagonal elements of local Hamiltonian
-        return self.Hamiltonian_1e_driver.H_ii(det_i) + self.Hamiltonian_2e_driver.H_ii(
-            det_i
-        )
+        return self.Hamiltonian_1e_driver.H_ii(det_i) + self.Hamiltonian_2e_driver.H_ii(det_i)
 
     @cached_property
     def D_i(self):
@@ -2576,9 +2484,7 @@ class Hamiltonian_generator(object):
             # Size of recvbuff
             recvcounts = np.zeros(self.world_size, dtype="i")
         self.comm.Gather(sendcounts, recvcounts, root=self.MPI_master_rank)
-        H_full = np.zeros(
-            (self.full_problem_size, self.full_problem_size), dtype="float"
-        )
+        H_full = np.zeros((self.full_problem_size, self.full_problem_size), dtype="float")
         # Master process gathers and sends full matrix Hamiltonian
         self.comm.Gatherv(H_i, (H_full, recvcounts), root=self.MPI_master_rank)
         self.comm.Bcast(np.array(H_full, dtype="float"), root=self.MPI_master_rank)
@@ -2593,9 +2499,7 @@ class Hamiltonian_generator(object):
         H_i_1e_matrix_elements = defaultdict(int)
         for I, det_I in enumerate(self.psi_local):
             for J, det_J in enumerate(self.psi_internal):
-                H_i_1e_matrix_elements[(I, J)] += self.Hamiltonian_1e_driver.H_ij(
-                    det_I, det_J
-                )
+                H_i_1e_matrix_elements[(I, J)] += self.Hamiltonian_1e_driver.H_ij(det_I, det_J)
         # Remove the default dict
         return dict(H_i_1e_matrix_elements)
 
@@ -2610,8 +2514,8 @@ class Hamiltonian_generator(object):
             self.psi_local, self.psi_internal
         ):
             # Update (I, J)th 2e matrix element
-            H_i_2e_matrix_elements[(I, J)] += (
-                phase * self.Hamiltonian_2e_driver.H_ijkl_orbital(*idx)
+            H_i_2e_matrix_elements[(I, J)] += phase * self.Hamiltonian_2e_driver.H_ijkl_orbital(
+                *idx
             )
         # Remove the default dict
         return dict(H_i_2e_matrix_elements)
@@ -2652,7 +2556,7 @@ class Hamiltonian_generator(object):
         ) + H_i_implicit_matrix_product_step(self.H_i_2e_matrix_elements, M)
 
 
-import inspect
+import inspect  # noqa
 
 __test__ = {}
 for name, member in inspect.getmembers(Hamiltonian_generator):
@@ -2750,9 +2654,7 @@ class Davidson_manager(object):
         t_k = np.zeros(
             self.full_problem_size, dtype="float"
         )  # Pre-allocate space to receive new guess vector
-        self.comm.Allgatherv(
-            [t_ik, MPI.DOUBLE], [t_k, self.distribution, self.offsets, MPI.DOUBLE]
-        )
+        self.comm.Allgatherv([t_ik, MPI.DOUBLE], [t_k, self.distribution, self.offsets, MPI.DOUBLE])
         norm_tk = np.linalg.norm(t_k)
         return t_ik / norm_tk, norm_tk  # Return new orthonormalized vector
 
@@ -2783,9 +2685,7 @@ class Davidson_manager(object):
         """
         I = np.eye(n, dim_S)
         V_iguess = I[
-            self.offsets[self.rank] : (
-                self.offsets[self.rank] + self.distribution[self.rank]
-            ),
+            self.offsets[self.rank] : (self.offsets[self.rank] + self.distribution[self.rank]),
             :,
         ]
 
@@ -2824,9 +2724,7 @@ class Davidson_manager(object):
         W_ik = np.zeros((self.local_size, 0), dtype="float")
         # Set initial guess vectors and minimal initial subspace dimension
         dim_S = min(m, n)
-        assert (
-            m >= n_eig
-        )  # No. of initial guess vectors must be >= no. of desired energy values
+        assert m >= n_eig  # No. of initial guess vectors must be >= no. of desired energy values
         # Set initial guess vectors TODO: For now, have some default guess vectors for testing
         if V_iguess is None:
             V_iguess = self.initial_guess_vectors(n, dim_S)
@@ -2856,9 +2754,7 @@ class Davidson_manager(object):
             )
             # Compute new columns of W_ik, W_inew = H_i * V_new
             # TODO: Some maximal allowed dimension before we switch to on the fly?
-            W_inew = self.H_i_generator.H_i_implicit_matrix_product(
-                V_new
-            )  # Default is to cache
+            W_inew = self.H_i_generator.H_i_implicit_matrix_product(V_new)  # Default is to cache
             W_ik = np.c_[W_ik, W_inew]
 
             # Each rank computes partial update to the projected Hamiltonian S_k
@@ -2868,9 +2764,7 @@ class Davidson_manager(object):
             else:  # Else, append new rows & columns
                 S_inew_c = np.dot(V_ik[:, :-n_newvecs].T, W_inew)
                 S_ik = np.c_[S_ik, S_inew_c]
-                S_inew_r = np.c_[
-                    np.dot(V_inew.T, W_ik[:, :-n_newvecs]), np.dot(V_inew.T, W_inew)
-                ]
+                S_inew_r = np.c_[np.dot(V_inew.T, W_ik[:, :-n_newvecs]), np.dot(V_inew.T, W_inew)]
                 S_ik = np.r_[S_ik, S_inew_r]
             # Reduce contributions and form new S_k
             S_k = np.zeros((dim_S, dim_S), dtype="float")
@@ -2879,12 +2773,8 @@ class Davidson_manager(object):
             L_k, Y_k = np.linalg.eigh(S_k)  # TODO: Some check that this is symmetric?
             L_k, Y_k = L_k[:n_eig], Y_k[:, :n_eig]
 
-            n_newvecs = (
-                0
-            )  # Initialize counter; no. of new vectors added to trial subspace
-            X_ik = np.dot(
-                V_ik, Y_k
-            )  # Pre-compute Ritz vectors (V_ik updated each iteration)
+            n_newvecs = 0  # Initialize counter; no. of new vectors added to trial subspace
+            X_ik = np.dot(V_ik, Y_k)  # Pre-compute Ritz vectors (V_ik updated each iteration)
             # Each rank computes local portion of residuals simultaneously
             R_i = np.dot(W_ik, Y_k) - np.dot(X_ik, np.diag(L_k))
             R = np.zeros((n, n_eig), dtype="float")  # Pre-allocate space for residuals
@@ -3087,63 +2977,45 @@ class Powerplant_manager(object):
             for I, det_I in enumerate(self.psi_internal):
                 # Inner pass (for each |I⟩) generates all excitations satisfying constraint |C⟩ from |I⟩
                 # Triplet constrained singles
-                for det_J in det_I.triplet_constrained_single_excitations_from_det(
-                    C, self.N_orb
-                ):
+                for det_J in det_I.triplet_constrained_single_excitations_from_det(C, self.N_orb):
                     for (
                         idx,
                         phase,
-                    ) in self.H_i_generator.Hamiltonian_2e_driver.H_ij_indices(
-                        det_I, det_J
-                    ):
+                    ) in self.H_i_generator.Hamiltonian_2e_driver.H_ij_indices(det_I, det_J):
                         nominator_conts_table[det_J] += (
                             c[I]
                             * phase
-                            * self.H_i_generator.Hamiltonian_2e_driver.H_ijkl_orbital(
-                                *idx
-                            )
+                            * self.H_i_generator.Hamiltonian_2e_driver.H_ijkl_orbital(*idx)
                         )
                     nominator_conts_table[det_J] += c[
                         I
                     ] * self.H_i_generator.Hamiltonian_1e_driver.H_ij(det_I, det_J)
                 # Triplet-constrained doubles
-                for det_J in det_I.triplet_constrained_double_excitations_from_det(
-                    C, self.N_orb
-                ):
+                for det_J in det_I.triplet_constrained_double_excitations_from_det(C, self.N_orb):
                     for (
                         idx,
                         phase,
-                    ) in self.H_i_generator.Hamiltonian_2e_driver.H_ij_indices(
-                        det_I, det_J
-                    ):
+                    ) in self.H_i_generator.Hamiltonian_2e_driver.H_ij_indices(det_I, det_J):
                         nominator_conts_table[det_J] += (
                             c[I]
                             * phase
-                            * self.H_i_generator.Hamiltonian_2e_driver.H_ijkl_orbital(
-                                *idx
-                            )
+                            * self.H_i_generator.Hamiltonian_2e_driver.H_ijkl_orbital(*idx)
                         )
         elif self.H_i_generator.driven_by == "integral":
             for (
                 (I, det_J),
                 idx,
                 phase,
-            ) in self.H_i_generator.Hamiltonian_2e_driver.H_indices_pt2(
-                self.psi_internal, C
-            ):
+            ) in self.H_i_generator.Hamiltonian_2e_driver.H_indices_pt2(self.psi_internal, C):
                 nominator_conts_table[det_J] += (
-                    c[I]
-                    * phase
-                    * self.H_i_generator.Hamiltonian_2e_driver.H_ijkl_orbital(*idx)
+                    c[I] * phase * self.H_i_generator.Hamiltonian_2e_driver.H_ijkl_orbital(*idx)
                 )
             # One-electron matrix elements
             for I, det_I in enumerate(self.psi_internal):
                 # Inner pass (for each |I⟩) generates all excitations satisfying constraint |C⟩ from |I⟩
                 # Triplet constrained singles
                 # Each det_J will show up all connected to multiple I.. so have to do this outside of integral loop
-                for det_J in det_I.triplet_constrained_single_excitations_from_det(
-                    C, self.N_orb
-                ):
+                for det_J in det_I.triplet_constrained_single_excitations_from_det(C, self.N_orb):
                     nominator_conts_table[det_J] += c[
                         I
                     ] * self.H_i_generator.Hamiltonian_1e_driver.H_ij(det_I, det_J)
@@ -3163,8 +3035,7 @@ class Powerplant_manager(object):
         psi_connected_C = [det_J for det_J in nominator_conts_table.keys()]
         denominator_conts = np.divide(
             1.0,
-            E_var
-            - np.array([self.H_i_generator.H_ii(det_J) for det_J in psi_connected_C]),
+            E_var - np.array([self.H_i_generator.H_ii(det_J) for det_J in psi_connected_C]),
         )
 
         # Compute E_pt2 contributions of this subset of connected space
@@ -3172,9 +3043,7 @@ class Powerplant_manager(object):
         # Return the determinants we generated as well for the selection step
         return (
             psi_connected_C,
-            np.einsum(
-                "i,i,i -> i", nominator_conts, nominator_conts, denominator_conts
-            ),
+            np.einsum("i,i,i -> i", nominator_conts, nominator_conts, denominator_conts),
         )  # vector * vector * vector -> scalar
 
     def E_pt2(self, psi_coef: Psi_coef) -> Energy:
@@ -3200,9 +3069,7 @@ class Powerplant_manager(object):
 
         # Sum in place -> MPI.Allreduce call
         # Equivalent to MPI AllGather + sum. Do this because we can't store the full external space
-        _E_pt2 = np.zeros(
-            1, dtype="double"
-        )  # Pre-allocate recvbuf for final E_pt2 value
+        _E_pt2 = np.zeros(1, dtype="double")  # Pre-allocate recvbuf for final E_pt2 value
         self.comm.Allreduce([E_pt2_conts, MPI.DOUBLE], [_E_pt2, MPI.DOUBLE])
 
         return _E_pt2.item()
@@ -3240,15 +3107,11 @@ def selection_step(
 
     # 1.
     # Compute the local best E_pt2 contributions + associated dets
-    local_best_dets, local_best_energies = local_sort_pt2_energies(
-        PP_manager, psi_coef, psi_det, n
-    )
+    local_best_dets, local_best_energies = local_sort_pt2_energies(PP_manager, psi_coef, psi_det, n)
 
     # 2.
     # Global sort local contributions to get global best E_pt2 contributions + dets
-    global_best_dets = global_sort_pt2_energies(
-        comm, local_best_dets, local_best_energies, n
-    )
+    global_best_dets = global_sort_pt2_energies(comm, local_best_dets, local_best_energies, n)
 
     # 3.
     # Add `best' determinants to the trial wavefunction
@@ -3286,9 +3149,7 @@ def local_sort_pt2_energies(
         # 1.
         # Compute E_pt2 contributions of current chunk of determinants
         # It is assumed that `chunk_size` is enough to fit in memory
-        psi_connected_C, E_pt2_energies_C = PP_manager.psi_external_pt2(
-            C, psi_coef, E_var
-        )
+        psi_connected_C, E_pt2_energies_C = PP_manager.psi_external_pt2(C, psi_coef, E_var)
 
         # 2.
         # Aggregate current E_pt2 contributions and current n `best' contributions to partial sort
@@ -3316,9 +3177,7 @@ def global_sort_pt2_energies(comm, local_best_dets: Psi_det, local_best_energies
     # Pre-allocate space + Gather locally best contributions on all ranks
     if comm.Get_size() > 1:
         aggregated_energies = np.zeros((comm.Get_size()) * n, dtype="float")
-        comm.Allgather(
-            [local_best_energies, MPI.DOUBLE], [aggregated_energies, MPI.DOUBLE]
-        )
+        comm.Allgather([local_best_energies, MPI.DOUBLE], [aggregated_energies, MPI.DOUBLE])
         # Lower-case MPI command for python objs
         aggregated_dets_ = comm.allgather(local_best_dets)
         # mpi4py gathers lists into a list of lists -> need to unpack into a single list
@@ -3338,9 +3197,7 @@ def global_sort_pt2_energies(comm, local_best_dets: Psi_det, local_best_energies
 # Next, we have functions that split the connected space
 
 
-def generate_all_constraints(
-    n_elec: int, n_orb: int, m=3
-) -> List[Tuple[OrbitalIdx, ...]]:
+def generate_all_constraints(n_elec: int, n_orb: int, m=3) -> List[Tuple[OrbitalIdx, ...]]:
     """Generate all `m'-constraints, characterized by m most highly occupied (usually alpha) electrons
     >>> generate_all_constraints(3, 4)
     [(0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3)]
@@ -3418,9 +3275,7 @@ def dispatch_local_constraints(
                     [
                         na_orbs_unocc_lower.popcnt(),
                         n_orb - nb,
-                        na_orbs_unocc_lower.popcnt()
-                        * (na_orbs_unocc_lower.popcnt() - 1)
-                        / 2,
+                        na_orbs_unocc_lower.popcnt() * (na_orbs_unocc_lower.popcnt() - 1) / 2,
                         (n_orb - nb) * (n_orb - nb - 1) / 2,
                         (n_orb - nb) * na_orbs_unocc_lower.popcnt(),
                     ],
@@ -3460,9 +3315,7 @@ def dispatch_local_constraints(
             _, loc = comm.allreduce(
                 (W[rank], rank), MPI.MINLOC
             )  # This is a tuple, so use python command
-            if (
-                loc == rank
-            ):  # Rank with lowest amount of work collects current constraint
+            if loc == rank:  # Rank with lowest amount of work collects current constraint
                 C_loc.append(C)
                 H.append(h)
                 W[rank] += h  # Add h to the amount of `work` rank has

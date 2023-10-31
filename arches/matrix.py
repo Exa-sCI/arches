@@ -135,9 +135,7 @@ class DMatrix(AMatrix):
 
     @property
     def arr(self):
-        return np.reshape(
-            np.frombuffer(self.buffer, dtype=self.dtype), (self.m, self.n)
-        )
+        return np.reshape(np.frombuffer(self.buffer, dtype=self.dtype), (self.m, self.n))
 
     @arr.setter
     def arr(self, v):
@@ -153,9 +151,7 @@ class DMatrix(AMatrix):
 
     @property
     def T(self):
-        return DMatrix(
-            self.p, self.A, self.m, self.n, self.dtype, t=not self.transposed
-        )
+        return DMatrix(self.p, self.A, self.m, self.n, self.dtype, t=not self.transposed)
 
     def __add__(self, B):
         return self.arr + B.arr
@@ -267,7 +263,9 @@ class DistMatrix(AMatrix):
         self.ln = A.n
         self.A = A
         self.comm = comm
-        self.mpi_type = mpi_type  # TODO: perhaps better to automatically set this rather than input it multipe times
+        self.mpi_type = (
+            mpi_type
+        )  # TODO: perhaps better to automatically set this rather than input it multipe times
 
     @property
     def lm(self):

@@ -157,9 +157,7 @@ class JChunkFactory:
             yield compound_idx4(j, i, k, l)
 
     def get_chunks(self):
-        if (
-            self.batched
-        ):  # this batching procedure is a little ugly but it works for now
+        if self.batched:  # this batching procedure is a little ugly but it works for now
             chunks = []
             while self.idx_iter:
                 # TODO: Would really like to be able to tie the count to the chunk size for performance
@@ -212,9 +210,7 @@ if __name__ == "__main__":
             reduce(lambda x, y: set(x).union(set(y)), [chunk.idx for chunk in chunks])
         )
 
-    def test_chunk_batched_dist(
-        N_mo, cat, ref_data, comm_size, src_data=IntegralReader()
-    ):
+    def test_chunk_batched_dist(N_mo, cat, ref_data, comm_size, src_data=IntegralReader()):
         all_ind = set([v["idx"] for k, v in ref_data.items() if v["category"] == cat])
 
         local_chunks = []
@@ -222,14 +218,10 @@ if __name__ == "__main__":
             comm = FakeComm(rank, comm_size)
             fact = JChunkFactory(N_mo, cat, src_data, comm=comm, chunk_size=2048)
             chunks = fact.get_chunks()
-            local_chunk = set(
-                reduce(lambda x, y: x.union(y), [set(chunk.idx) for chunk in chunks])
-            )
+            local_chunk = set(reduce(lambda x, y: x.union(y), [set(chunk.idx) for chunk in chunks]))
             local_chunks.append(local_chunk)
 
-        assert all_ind == set(
-            reduce(lambda x, y: x.union(y), [chunk for chunk in local_chunks])
-        )
+        assert all_ind == set(reduce(lambda x, y: x.union(y), [chunk for chunk in local_chunks]))
 
     def get_canon_order(N_mo):
         orb_list = tuple([x for x in range(N_mo)])
