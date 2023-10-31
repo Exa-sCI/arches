@@ -2,7 +2,7 @@ import numpy as np
 from scipy.linalg import lapack as la
 from scipy.linalg import blas
 from mpi4py import MPI
-from abc import ABC
+from abc import ABC, abstractmethod
 
 
 def diagonalize(X):
@@ -99,7 +99,7 @@ class AMatrix(ABC):
         return self._registry
 
     def register_res(self, B, C):
-        if not B in self._registry.keys():
+        if B not in self._registry.keys():
             self._registry[B] = C
 
 
@@ -135,7 +135,9 @@ class DMatrix(AMatrix):
 
     @property
     def arr(self):
-        return np.reshape(np.frombuffer(self.buffer, dtype=dtype), (self.m, self.n))
+        return np.reshape(
+            np.frombuffer(self.buffer, dtype=self.dtype), (self.m, self.n)
+        )
 
     @arr.setter
     def arr(self, v):
@@ -252,7 +254,7 @@ class SymCSRMatrix(AMatrix):
         else:
             res = DMatrix.allocate_new(out_shape, self.dtype, self._p)
 
-        SymCSRMatrix.SpGEMM(A.transposed, B.transposed, 1.0, self, B, 1.0, res)
+        SymCSRMatrix.SpGEMM(None, B.transposed, 1.0, self, B, 1.0, res)
         return res
 
 
@@ -301,10 +303,10 @@ class DistMatrix(AMatrix):
 
     @A.setter
     def A(self, val):
-        if not isinstance(A, AMatrix):
+        if not isinstance(val, AMatrix):
             raise TypeError
 
-        self._A = A
+        self._A = val
 
 
 class PartialSumMatrix(DistMatrix):
@@ -317,7 +319,7 @@ class PartialSumMatrix(DistMatrix):
 
     def __repr__(self):
         return (
-            f"Partial sum matrix distributed over comm {repr(comm)}\n"
+            f"Partial sum matrix distributed over comm {repr(self.comm)}\n"
             + f"Local {repr(self.A)}"
         )
 
@@ -335,17 +337,14 @@ class PartialSumMatrix(DistMatrix):
 
         return res
 
-    def local_dense_to_dense(self):
-
 
 class RowDistMatrix(DistMatrix):
-
     def __init__(self, comm, A, m, n, dtype, mpi_type):
         super().__init__(comm, A, m, n, dtype, mpi_type)
 
     def __repr__(self):
         return (
-            f"Row distributed matrix distributed over comm {repr(comm)}\n"
+            f"Row distributed matrix distributed over comm {repr(self.comm)}\n"
             + f"Local {repr(self.A)}"
         )
 
@@ -356,18 +355,18 @@ class RowDistMatrix(DistMatrix):
         # if we want these to be composable on multiple levels
         if B in self.registry.keys():
             g_res = self.registry[B]
-        elif isinstance(self.A, SymCSRMatrix): 
+        elif isinstance(self.A, SymCSRMatrix):
             # if local matrix is SymCSR, then will still need to reduce over result
             # if local matrix is GenCSR (not implemented), can return as RowDist
             pass
         elif isinstance(self.A, DMatrix):
             # if local matrix is Dense, can return as RowDist on the same comm
             l_res = DMatrix.allocate_new(self.A.m, B.n, self.dtype, self._p)
-            g_res = RowDistMatrix(comm, l_res, out_shape[0], out_shape[1], self.dtype, self.mpi_type)
+            g_res = RowDistMatrix(
+                self.comm, l_res, out_shape[0], out_shape[1], self.dtype, self.mpi_type
+            )
 
             l_res = self.A @ B
 
             # no reduction needs to be done here
             return g_res
-
-
