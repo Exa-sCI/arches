@@ -1,15 +1,11 @@
-#pragma once
 #include <algorithm>
 /*
 Interface functions for reading and setting values ot managed pointers
 */
 
-typedef long long int idx_t;
+typedef long int idx_t;
 
 extern "C" {
-
-// hopefully this avoids needing a destructor for every linked handle
-void universal_destructor(void *obj) { delete obj; }
 
 // int 32
 int at_i32(int *a, idx_t i) { return a[i]; }
