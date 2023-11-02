@@ -1,9 +1,10 @@
 # ruff : noqa : E741
 import math
+import pathlib
 from ctypes import CDLL, Structure
 from ctypes import c_longlong as idx_t
-from arches.func_decorators import return_tuple, offload
-import pathlib
+
+from arches.func_decorators import offload, return_tuple
 
 run_folder = pathlib.Path(__file__).parent.resolve()
 
@@ -67,31 +68,31 @@ class ijkl_perms(Structure):
 #                                     __/ |
 #                                    |___/
 
-iu_lib = CDLL(run_folder.joinpath("build/libintegral_indexing_utils.so"))
+lib_iu = CDLL(run_folder.joinpath("build/libintegral_indexing_utils.so"))
 
-iu_lib.compound_idx2.restype = idx_t
-iu_lib.compound_idx2.argtypes = [idx_t, idx_t]
+lib_iu.compound_idx2.restype = idx_t
+lib_iu.compound_idx2.argtypes = [idx_t, idx_t]
 
-iu_lib.compound_idx4.restype = idx_t
-iu_lib.compound_idx4.argtypes = [idx_t, idx_t, idx_t, idx_t]
+lib_iu.compound_idx4.restype = idx_t
+lib_iu.compound_idx4.argtypes = [idx_t, idx_t, idx_t, idx_t]
 
-iu_lib.compound_idx2_reverse.restype = ij_tuple
-iu_lib.compound_idx2_reverse.argtypes = [idx_t]
+lib_iu.compound_idx2_reverse.restype = ij_tuple
+lib_iu.compound_idx2_reverse.argtypes = [idx_t]
 
-iu_lib.compound_idx4_reverse.restype = ijkl_tuple
-iu_lib.compound_idx4_reverse.argtypes = [idx_t]
+lib_iu.compound_idx4_reverse.restype = ijkl_tuple
+lib_iu.compound_idx4_reverse.argtypes = [idx_t]
 
-iu_lib.canonical_idx4.restype = ijkl_tuple
-iu_lib.canonical_idx4.argtypes = [idx_t, idx_t, idx_t, idx_t]
+lib_iu.canonical_idx4.restype = ijkl_tuple
+lib_iu.canonical_idx4.argtypes = [idx_t, idx_t, idx_t, idx_t]
 
-iu_lib.compound_idx4_reverse_all.restype = ijkl_perms
-iu_lib.compound_idx4_reverse_all.argtypes = [idx_t]
+lib_iu.compound_idx4_reverse_all.restype = ijkl_perms
+lib_iu.compound_idx4_reverse_all.argtypes = [idx_t]
 
-# iu_lib.get_unique_idx4.restype = c_int
-# iu_lib.get_unique_idx4.argtypes = [POINTER(ijkl_tuple), ijkl_perms]
+# lib_iu.get_unique_idx4.restype = c_int
+# lib_iu.get_unique_idx4.argtypes = [POINTER(ijkl_tuple), ijkl_perms]
 
 
-@offload(iu_lib.compound_idx2)
+@offload(lib_iu.compound_idx2)
 def compound_idx2(i, j):
     """
     get compound (triangular) index from (i,j)
@@ -124,7 +125,7 @@ def compound_idx2(i, j):
     return (q * (q + 1)) // 2 + p
 
 
-@offload(iu_lib.compound_idx4)
+@offload(lib_iu.compound_idx4)
 def compound_idx4(i, j, k, l):
     """
     nested calls to compound_idx2
@@ -142,7 +143,7 @@ def compound_idx4(i, j, k, l):
     return compound_idx2(compound_idx2(i, k), compound_idx2(j, l))
 
 
-@offload(return_tuple(iu_lib.compound_idx2_reverse))
+@offload(return_tuple(lib_iu.compound_idx2_reverse))
 def compound_idx2_reverse(ij):
     """
     inverse of compound_idx2
@@ -162,7 +163,7 @@ def compound_idx2_reverse(ij):
     return i, j
 
 
-@offload(return_tuple(iu_lib.compound_idx4_reverse))
+@offload(return_tuple(lib_iu.compound_idx4_reverse))
 def compound_idx4_reverse(ijkl):
     """
     inverse of compound_idx4
@@ -185,7 +186,7 @@ def compound_idx4_reverse(ijkl):
     return i, j, k, l
 
 
-@offload(return_tuple(iu_lib.compound_idx4_reverse_all))
+@offload(return_tuple(lib_iu.compound_idx4_reverse_all))
 def compound_idx4_reverse_all(ijkl):
     """
     return all 8 permutations that are equivalent for real orbitals
@@ -231,7 +232,7 @@ def compound_idx4_reverse_all_unique(ijkl):
     # return tuple([u_set[i].t for i in range(N)])
 
 
-@offload(return_tuple(iu_lib.canonical_idx4))
+@offload(return_tuple(lib_iu.canonical_idx4))
 def canonical_idx4(i, j, k, l):
     """
     for real orbitals, return same 4-tuple for all equivalent integrals

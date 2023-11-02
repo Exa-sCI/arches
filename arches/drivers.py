@@ -1,36 +1,36 @@
 # ruff : noqa : E741
 # Yes, I like itertools
-from dataclasses import dataclass
-from itertools import chain, product, combinations, permutations
-from functools import cached_property
+import pathlib
 from collections import defaultdict
+from ctypes import CDLL, c_char
+from dataclasses import dataclass
+from functools import cached_property
+from itertools import chain, combinations, permutations, product
+from typing import Dict, Iterator, List, Set, Tuple
+
 import numpy as np
 
 # Import mpi4py and utilities
 from mpi4py import MPI  # Note this initializes and finalizes MPI session automatically
 
+from arches.func_decorators import offload, return_str
 from arches.fundamental_types import (
     Determinant,
-    Psi_det,
-    OrbitalIdx,
     Energy,
-    Psi_coef,
     One_electron_integral,
+    OrbitalIdx,
+    Psi_coef,
+    Psi_det,
     Two_electron_integral,
     Two_electron_integral_index,
     Two_electron_integral_index_phase,
 )
-from typing import Iterator, Set, Tuple, List, Dict
 from arches.integral_indexing_utils import (
-    compound_idx4_reverse,
-    compound_idx4,
     canonical_idx4,
+    compound_idx4,
+    compound_idx4_reverse,
 )
-
-import pathlib
-from ctypes import CDLL, c_char
-from ctypes import c_longlong as idx_t
-from arches.func_decorators import return_str, offload
+from arches.linked_object import idx_t
 
 run_folder = pathlib.Path(__file__).parent.resolve()
 
@@ -43,13 +43,13 @@ run_folder = pathlib.Path(__file__).parent.resolve()
 #                      __/ |                   __/ | |
 #                     |___/                   |___/|_|
 
-it_lib = CDLL(run_folder.joinpath("build/libintegral_types.so"))
+lib_it = CDLL(run_folder.joinpath("build/libintegral_types.so"))
 
-it_lib.integral_category.restype = c_char
-it_lib.integral_category.argtypes = [idx_t, idx_t, idx_t, idx_t]
+lib_it.integral_category.restype = c_char
+lib_it.integral_category.argtypes = [idx_t, idx_t, idx_t, idx_t]
 
 
-@offload(return_str(it_lib.integral_category))
+@offload(return_str(lib_it.integral_category))
 def integral_category(i, j, k, l):
     """
     +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
