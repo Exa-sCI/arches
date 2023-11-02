@@ -13,7 +13,9 @@ idx_t = i64  # alias for idx_t
 handle_t = c_void_p  # void pointers
 
 i32_p, i64_p, ui32_p, ui64_p, f32_p, f64_p = (POINTER(t) for t in all_types)
+idx_t_p = i64_p
 i32_a, i64_a, ui32_a, ui64_a, f32_a, f64_a = (ndpointer(t, flags="C_CONTIGUOUS") for t in all_types)
+idx_t_a = i64_a
 type_dict = {
     i32: ("i32", i32_p, i32_a),
     i64: ("i64", i64_p, i64_a),
@@ -65,12 +67,14 @@ class LinkedHandle(ABC):
 class LinkedArray(ABC):
     """Base class for arrays owned by LinkedHandle."""
 
-    def __init__(self, pointer, size, ctype, dtype, ptype):
+    def __init__(self, pointer, size, ctype, dtype, ptype, data=None):
         self._p = pointer
         self._size = size
         self._dtype = dtype
         self._ctype = ctype
         self._ptype = ptype
+        if data is not None:
+            self[slice(0, size)] = data
 
     @property
     def p(self):
@@ -156,8 +160,7 @@ class LinkedArray_i32(LinkedArray):
     set_strided_range = lib_interface.set_strided_range_i32
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=i32, ptype=i32_p, dtype=np.int32)
-        self[slice(0, size)] = data
+        super().__init__(pointer, size, ctype=i32, ptype=i32_p, dtype=np.int32, data=data)
 
 
 class LinkedArray_i64(LinkedArray):
@@ -167,11 +170,10 @@ class LinkedArray_i64(LinkedArray):
     set_strided_range = lib_interface.set_strided_range_i64
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=i64, ptype=i64_p, dtype=np.int64)
-        self[slice(0, size)] = data
+        super().__init__(pointer, size, ctype=i64, ptype=i64_p, dtype=np.int64, data=data)
 
 
-LinkedArray_idt_t = LinkedArray_i64  # alias for indexing arrays
+LinkedArray_idx_t = LinkedArray_i64  # alias for indexing arrays
 
 
 class LinkedArray_ui32(LinkedArray):
@@ -181,8 +183,7 @@ class LinkedArray_ui32(LinkedArray):
     set_strided_range = lib_interface.set_strided_range_ui32
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=ui32, ptype=ui32_p, dtype=np.uint32)
-        self[slice(0, size)] = data
+        super().__init__(pointer, size, ctype=ui32, ptype=ui32_p, dtype=np.uint32, data=data)
 
 
 class LinkedArray_f32(LinkedArray):
@@ -192,8 +193,7 @@ class LinkedArray_f32(LinkedArray):
     set_strided_range = lib_interface.set_strided_range_f32
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=f32, ptype=f32_p, dtype=np.float32)
-        self[slice(0, size)] = data
+        super().__init__(pointer, size, ctype=f32, ptype=f32_p, dtype=np.float32, data=data)
 
 
 class LinkedArray_f64(LinkedArray):
@@ -203,5 +203,4 @@ class LinkedArray_f64(LinkedArray):
     set_strided_range = lib_interface.set_strided_range_f64
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=f64, ptype=f64_p, dtype=np.float64)
-        self[slice(0, size)] = data
+        super().__init__(pointer, size, ctype=f64, ptype=f64_p, dtype=np.float64, data=data)

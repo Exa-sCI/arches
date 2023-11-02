@@ -10,11 +10,13 @@ from arches.linked_object import (
     LinkedArray,
     LinkedArray_f32,
     LinkedArray_f64,
+    LinkedArray_idx_t,
     LinkedHandle,
     f32,
     f64,
     handle_t,
     idx_t,
+    idx_t_p,
     np_type_map,
     type_dict,
 )
@@ -41,6 +43,33 @@ class AMatrix(LinkedHandle):
 
     def __hash__(self):
         return hash(repr(self))
+
+    @property
+    def _f_ctor(self):
+        match self.dtype:
+            case np.float32:
+                return self._constructor_f32
+            case np.float64:
+                return self._constructor_f64
+            case _:
+                raise NotImplementedError
+
+    def destructor(self):
+        match self.dtype:
+            case np.float32:
+                return self._destructor_f32
+            case np.float64:
+                return self._destructor_f64
+            case _:
+                raise NotImplementedError
+
+    @property
+    def _L_array_type(self):
+        match self.dtype:
+            case np.float32:
+                return LinkedArray_f32
+            case np.float64:
+                return LinkedArray_f64
 
     @abstractmethod
     def __matmul__(self, b):
@@ -208,25 +237,7 @@ class DMatrix(AMatrix):
         self.transposed = t
 
     def __repr__(self):
-        return f"Dense {self.m} by {self.n} matrix with pointer: {self.A}"
-
-    @property
-    def _L_array_type(self):
-        match self.dtype:
-            case np.float32:
-                return LinkedArray_f32
-            case np.float64:
-                return LinkedArray_f64
-
-    @property
-    def _f_ctor(self):
-        match self.dtype:
-            case np.float32:
-                return self._constructor_f32
-            case np.float64:
-                return self._constructor_f64
-            case _:
-                raise NotImplementedError
+        return f"Dense {self.m} by {self.n} matrix with pointer: {self.arr.p}"
 
     def constructor(self, m, n, arr=0.0, **kwargs):
         if isinstance(arr, np.ndarray):
@@ -234,10 +245,10 @@ class DMatrix(AMatrix):
                 raise ValueError
 
             # use copy constructor
-            return self._f_ctor["copy"](m, n, arr)
+            return self._f_ctor["copy"](idx_t(m), idx_t(n), arr)
         else:
             # use constant fill constructor
-            return self._f_ctor["fill"](m, n, self.ctype(arr))
+            return self._f_ctor["fill"](idx_t(m), idx_t(n), self.ctype(arr))
 
     def get_arr_ptr(self):
         match self.dtype:
@@ -245,15 +256,6 @@ class DMatrix(AMatrix):
                 return self._get_arr_ptr_f32
             case np.float64:
                 return self._get_arr_ptr_f64
-            case _:
-                raise NotImplementedError
-
-    def destructor(self):
-        match self.dtype:
-            case np.float32:
-                return self._destructor_f32
-            case np.float64:
-                return self._destructor_f64
             case _:
                 raise NotImplementedError
 
@@ -391,21 +393,66 @@ class DMatrix(AMatrix):
         return C
 
 
+### Register C++ library functions for all SymCSRMatrix utilies
+for k in [f32, f64]:
+    ## Handle management
+    pfix = "SymCSRMatrix_"
+    sfix = "_" + type_dict[k][0]  # key : value is (c_type : (name, pointer, np ndpointer))
+    k_p = type_dict[k][1]
+    ctor = getattr(lib_matrix, pfix + "ctor" + sfix)
+    dtor = getattr(lib_matrix, pfix + "dtor" + sfix)
+    ap_ptr_return = getattr(lib_matrix, pfix + "get_ap_ptr" + sfix)
+    ac_ptr_return = getattr(lib_matrix, pfix + "get_ac_ptr" + sfix)
+    av_ptr_return = getattr(lib_matrix, pfix + "get_av_ptr" + sfix)
+
+    ctor.argtypes = [idx_t, idx_t, idx_t_p, idx_t_p, k_p]
+    dtor.argtypes = [handle_t]
+    ap_ptr_return.argtypes = [handle_t]
+    ac_ptr_return.argtypes = [handle_t]
+    av_ptr_return.argtypes = [handle_t]
+
+    ctor.restype = handle_t
+    dtor.restype = None
+    ap_ptr_return.restype = idx_t_p
+    ac_ptr_return.restype = idx_t_p
+    av_ptr_return.restype = k_p
+
+
 class SymCSRMatrix(AMatrix):
     """Symmetric matrix stored in CSR format."""
 
-    def __init__(self, p, A_p, A_c, A_v, m, n, dtype):
+    _constructor_f32 = lib_matrix.SymCSRMatrix_ctor_f32
+    _constructor_f64 = lib_matrix.SymCSRMatrix_ctor_f64
+    _destructor_f32 = lib_matrix.SymCSRMatrix_dtor_f32
+    _destructor_f64 = lib_matrix.SymCSRMatrix_dtor_f64
+
+    _get_ap_ptr_f32 = lib_matrix.SymCSRMatrix_get_ap_ptr_f32
+    _get_ac_ptr_f32 = lib_matrix.SymCSRMatrix_get_ac_ptr_f32
+    _get_av_ptr_f32 = lib_matrix.SymCSRMatrix_get_av_ptr_f32
+    _get_ap_ptr_f32 = lib_matrix.SymCSRMatrix_get_ap_ptr_f64
+    _get_ac_ptr_f32 = lib_matrix.SymCSRMatrix_get_ac_ptr_f64
+    _get_av_ptr_f32 = lib_matrix.SymCSRMatrix_get_av_ptr_f64
+
+    def __init__(self, m, n, dtype, A_p, A_c, A_v, handle=None):
         """
         Args:
             A_p : row starts s.t. A_i lies in [A_p[i], A_i[i+1])
             A_c : col indices
             A_v : matrix values
         """
-        super().__init__(m, n, dtype)
-        self._p = p
         self.A_p = A_p
         self.A_c = A_c
         self.A_v = A_v
+        super().__init__(
+            handle=handle,
+            m=m,
+            n=n,
+            dtype=dtype,
+            ctype=np_type_map[dtype],
+            A_p=self.A_p,
+            A_c=self.A_c,
+            A_v=self.A_v,
+        )
 
     # Since SymCSR really only applies to the Hamiltonian, and always left-multiplies, don't need nearly as much
     # functionality to create new arrays and manage memory
@@ -413,11 +460,76 @@ class SymCSRMatrix(AMatrix):
     # Just assume that we have access to the underlying buffers somewhere
 
     def __repr__(self):
-        return f"Symmetric sparse {self.m} by {self.n} matrix in CSR format with pointers: {self.A_p, self.A_c, self.A_v}"
+        return f"Symmetric sparse {self.m} by {self.n} matrix in CSR format with pointers: {self.A_p.p, self.A_c.p, self.A_v.p}"
+
+    def constructor(self, m, n, A_p, A_c, A_v, **kwargs):
+        if A_p.size != m + 1:
+            raise ValueError
+
+        if A_c.size != A_v.size != A_p[m]:
+            raise ValueError
+
+        return self._f_ctor(idx_t(m), idx_t(n), A_p.p, A_c.p, A_v.p)
 
     @property
-    def buffers(self):
-        return self._p[self.A_p], self._p[self.A_c], self._p[self.A_v]
+    def A_p(self):
+        return self._A_p
+
+    @A_p.setter
+    def A_p(self, val):
+        if isinstance(val, LinkedArray_idx_t):
+            self._A_p = val
+        else:
+            raise ValueError
+
+    @property
+    def A_c(self):
+        return self._A_c
+
+    @A_c.setter
+    def A_c(self, val):
+        if isinstance(val, LinkedArray_idx_t):
+            self._A_c = val
+        else:
+            raise ValueError
+
+    @property
+    def A_v(self):
+        return self._A_v
+
+    @A_v.setter
+    def A_v(self, val):
+        if isinstance(val, LinkedArray):
+            self._A_v = val
+        else:
+            raise ValueError
+
+    def get_A_p_ptr(self):
+        match self.dtype:
+            case np.float32:
+                return self._get_A_p_ptr_f32
+            case np.float64:
+                return self._get_A_p_ptr_f64
+            case _:
+                raise NotImplementedError
+
+    def get_A_c_ptr(self):
+        match self.dtype:
+            case np.float32:
+                return self._get_A_p_ptr_f32
+            case np.float64:
+                return self._get_A_p_ptr_f64
+            case _:
+                raise NotImplementedError
+
+    def get_A_v_ptr(self):
+        match self.dtype:
+            case np.float32:
+                return self._get_A_p_ptr_f32
+            case np.float64:
+                return self._get_A_p_ptr_f64
+            case _:
+                raise NotImplementedError
 
     @staticmethod
     def SpGEMM(op_A, op_B, alpha, A, B, beta, C):
