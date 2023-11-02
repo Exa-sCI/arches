@@ -1,4 +1,5 @@
-arches.egg-info/*
+arches.egg-info/
+ARCHES.egg-info/
 */__pycache__/
 arches/src/*test*
 */build/
