@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <memory>
 
-typedef long long int idx_t;
+typedef long int idx_t;
 
 // enum s_major { ROW, COL };
 // TODO : figure out interface if we want both row and col major matrices
@@ -80,7 +80,7 @@ template <class T> class SymCSRMatrix {
 
         // allocate col arr
         idx_t n_entries = A_p[m];
-        std::unique_ptr<Y[]> A_c_tmp(new idx_t[n_entries]);
+        std::unique_ptr<idx_t[]> A_c_tmp(new idx_t[n_entries]);
         A_c_ptr = std::move(A_c_tmp);
         A_c = A_c_ptr.get();
         std::copy(arr_c, arr_c + n_entries, A_c);
@@ -90,6 +90,40 @@ template <class T> class SymCSRMatrix {
         A_v_ptr = std::move(A_v_tmp);
         A_v = A_v_ptr.get();
 
-        std::copy(arr, arr + m * n, A);
+        std::copy(arr_v, arr_v + n_entries, A_v);
     };
 };
+
+template <class T>
+void gemm_kernel(char op_a, char op_b, idx_t m, idx_t n, idx_t k, T alpha, T *A, idx_t lda, T *B,
+                 idx_t ldb, T beta, T *C, idx_t ldc) {
+    // Ignore everything for now until I actually interface to blas
+    // Assume row major storage
+    std::unique_ptr<T[]> bT_p(new T[k * n]);
+    T *bT = bT_p.get();
+
+    for (auto i = 0; i < k; i++) {
+        for (auto j = 0; j < n; j++) {
+            bT[j * n + i] = B[i * k + j];
+        }
+    }
+
+    for (auto ii = 0; ii < m; ii++) {
+        for (auto jj = 0; jj < n; jj++) {
+            for (auto kk = 0; kk < k; kk++) {
+                C[ii * m + jj] = alpha * A[ii * m + kk] * bT[jj * k + kk] + beta * C[ii * m + jj];
+            }
+        }
+    }
+};
+
+template <class T> void ApB(T *A, T *B, T *C, idx_t m, idx_t n) {
+    for (auto i = 0; i < m * n; i++)
+        C[i] = A[i] + B[i];
+};
+
+template <class T> void AmB(T *A, T *B, T *C, idx_t m, idx_t n) {
+    for (auto i = 0; i < m * n; i++)
+        C[i] = A[i] + B[i];
+    ;
+}

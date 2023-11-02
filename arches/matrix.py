@@ -1,49 +1,43 @@
+import pathlib
+from abc import abstractmethod
+from ctypes import CDLL, c_char
+
 import numpy as np
-from scipy.linalg import lapack as la
-from scipy.linalg import blas
 from mpi4py import MPI
-from abc import ABC, abstractmethod
+from scipy.linalg import lapack as la
+
+from arches.linked_object import (
+    LinkedArray,
+    LinkedArray_f32,
+    LinkedArray_f64,
+    LinkedHandle,
+    f32,
+    f64,
+    handle_t,
+    idx_t,
+    np_type_map,
+    type_dict,
+)
+
+run_folder = pathlib.Path(__file__).parent.resolve()
+lib_matrix = CDLL(run_folder.joinpath("build/libmatrix.so"))
+
+"""
+Matrix classes
+"""
 
 
-def diagonalize(X):
-    """Diagonalize matrix and return eigenbasis and corresponding eigenvalues
-
-        diagonalize s.t. Z @ L @ Z.T = A
-    Args:
-        X (array) : (symmetric) matrix to be diagonalized
-
-    Returns:
-        L (array) : eigenvalues of X
-        Z (array) : eigenbasis of X
-
-
-    """
-    syevr = la.get_lapack_funcs("syevr", dtype=X.dtype)
-    L, Z, _, _, _ = syevr(X)
-    return L, Z
-
-
-class PointerStorage:
-    """A fake pointer interface."""
-
-    def __init__(self):
-        self.pointers = {}
-
-    def __getitem__(self, k):
-        return self.pointers[k]
-
-    def __setitem__(self, k, v):
-        self.pointers[k] = v
-
-
-class AMatrix(ABC):
+class AMatrix(LinkedHandle):
     """Abstract matrix class."""
 
-    def __init__(self, m, n, dtype):
+    def __init__(self, m, n, dtype, ctype, **kwargs):
+        super().__init__(**kwargs)
         self._registry = {}
         self.m = m
         self.n = n
         self.dtype = dtype
+        # TODO: register ctype/dtype map somewhere
+        self._ctype = ctype
 
     def __hash__(self):
         return hash(repr(self))
@@ -59,6 +53,10 @@ class AMatrix(ABC):
     @dtype.setter
     def dtype(self, val):
         self._dtype = val
+
+    @property
+    def ctype(self):
+        return self._ctype
 
     @property
     def m(self):
@@ -89,10 +87,20 @@ class AMatrix(ABC):
         self._n = val
 
     def MM_shape(self, B):
-        if self.n != B.m:
+        if self.transposed:
+            A_m, A_n = self.n, self.m
+        else:
+            A_m, A_n = self.m, self.n
+
+        if B.transposed:
+            B_m, B_n = B.n, B.m
+        else:
+            B_m, B_n = B.m, B.n
+
+        if A_n != B_m:
             raise ValueError
 
-        return (self.m, B.n)
+        return (A_m, B_m, B_n)
 
     @property
     def registry(self):
@@ -103,88 +111,284 @@ class AMatrix(ABC):
             self._registry[B] = C
 
 
-class DMatrix(AMatrix):
-    """Dense matrix stored in col-major order."""
+### Register C++ library functions for all DMatrix utilies
+# For copy constructor, use direct pointer, to be able to construct with both data as np.array or as managed matrix
+for k in [f32, f64]:
+    ## Handle management
+    pfix = "DMatrix_"
+    sfix = "_" + type_dict[k][0]  # key : value is (c_type : (name, pointer, np ndpointer))
+    k_p = type_dict[k][1]
+    fill_ctor = getattr(lib_matrix, pfix + "ctor_c" + sfix)
+    copy_ctor = getattr(lib_matrix, pfix + "ctor_a" + sfix)
+    ptr_return = getattr(lib_matrix, pfix + "get_arr_ptr" + sfix)
+    dtor = getattr(lib_matrix, pfix + "dtor" + sfix)
 
-    def __init__(self, p, A, m, n, dtype, t=False):
+    fill_ctor.argtypes = [idx_t, idx_t, k]
+    copy_ctor.argtypes = [idx_t, idx_t, k_p]
+    ptr_return.argtypes = [handle_t]
+    dtor.argtypes = [handle_t]
+
+    fill_ctor.restype = handle_t
+    copy_ctor.restype = handle_t
+    ptr_return.restype = k_p
+    dtor.restype = None
+
+    ## Matrix operations
+    sd = {f32: "s", f64: "d"}
+    gemm = getattr(lib_matrix, pfix + sd[k] + "gemm")
+    ApB = getattr(lib_matrix, pfix + sd[k] + "ApB")
+    AmB = getattr(lib_matrix, pfix + sd[k] + "AmB")
+
+    gemm.argtypes = [  # C = alpha * A @ B + beta * C
+        c_char,  # op A
+        c_char,  # op B
+        idx_t,  # m
+        idx_t,  # n
+        idx_t,  # k
+        k,  # alpha
+        k_p,  # *A
+        idx_t,  # lda
+        k_p,  # *B
+        idx_t,  # ldb
+        k,  # beta
+        k_p,  # *C
+        idx_t,  # ldc
+    ]
+
+    ApB.argtypes = [k_p, k_p, k_p, idx_t, idx_t]
+    AmB.argtypes = [k_p, k_p, k_p, idx_t, idx_t]
+
+    gemm.restype = None
+    ApB.restype = None
+    AmB.restype = None
+
+
+class DMatrix(AMatrix):
+    """Dense matrix stored in row-major order."""
+
+    _constructor_f32 = {
+        "fill": lib_matrix.DMatrix_ctor_c_f32,
+        "copy": lib_matrix.DMatrix_ctor_a_f32,
+    }
+    _constructor_f64 = {
+        "fill": lib_matrix.DMatrix_ctor_c_f64,
+        "copy": lib_matrix.DMatrix_ctor_a_f64,
+    }
+    _get_arr_ptr_f32 = lib_matrix.DMatrix_get_arr_ptr_f32
+    _get_arr_ptr_f64 = lib_matrix.DMatrix_get_arr_ptr_f64
+    _destructor_f32 = lib_matrix.DMatrix_dtor_f32
+    _destructor_f64 = lib_matrix.DMatrix_dtor_f64
+
+    _sgemm = lib_matrix.DMatrix_sgemm
+    _dgemm = lib_matrix.DMatrix_dgemm
+    _sApB = lib_matrix.DMatrix_sApB
+    _dApB = lib_matrix.DMatrix_dApB
+    _sAmB = lib_matrix.DMatrix_sAmB
+    _dAmB = lib_matrix.DMatrix_dAmB
+
+    def __init__(self, m, n, A=0.0, dtype=np.float64, t=False, handle=None):
         """
         Args:
-            p : pointer/buffer mapping dictionary (for testing only)
-            A : pointer to buffer
             m : row rank of A
             n : col rank of A
-            dtype : data type
+            A : initializing array or fill value
+            dtype : data type, overrides A if A type does not match and is array
             t : whether or not A is currently transposed
 
         """
-        # TODO: type should be associated with A/buffer
-        super().__init__(m, n, dtype)
-        self._p = p
-        self.A = A
+        if isinstance(A, np.ndarray):
+            A = A.astype(dtype)  # cast type
+
+        # call constructor via super to initialize handles and typing
+        # anything that needs to be passed to the constructor needs to be passed as a kwarg
+        super().__init__(handle=handle, m=m, n=n, dtype=dtype, ctype=np_type_map[dtype], arr=A)
+
+        # data is initialized by constructor, no need to set it here
+        self.arr = self._L_array_type(self.get_arr_ptr(self.handle), self.m * self.n, None)
         self.transposed = t
 
     def __repr__(self):
         return f"Dense {self.m} by {self.n} matrix with pointer: {self.A}"
 
-    @classmethod
-    def allocate_new(cls, shape, dtype, p):
-        m, n = shape
-        buffer = bytearray(m * n * dtype.itemsize)
-        p[id(buffer)] = buffer
-        return cls(p, id(buffer), m, n, dtype)
+    @property
+    def _L_array_type(self):
+        match self.dtype:
+            case np.float32:
+                return LinkedArray_f32
+            case np.float64:
+                return LinkedArray_f64
+
+    @property
+    def _f_ctor(self):
+        match self.dtype:
+            case np.float32:
+                return self._constructor_f32
+            case np.float64:
+                return self._constructor_f64
+            case _:
+                raise NotImplementedError
+
+    def constructor(self, m, n, arr=0.0, **kwargs):
+        if isinstance(arr, np.ndarray):
+            if m * n != arr.size:
+                raise ValueError
+
+            # use copy constructor
+            return self._f_ctor["copy"](m, n, arr)
+        else:
+            # use constant fill constructor
+            return self._f_ctor["fill"](m, n, self.ctype(arr))
+
+    def get_arr_ptr(self):
+        match self.dtype:
+            case np.float32:
+                return self._get_arr_ptr_f32
+            case np.float64:
+                return self._get_arr_ptr_f64
+            case _:
+                raise NotImplementedError
+
+    def destructor(self):
+        match self.dtype:
+            case np.float32:
+                return self._destructor_f32
+            case np.float64:
+                return self._destructor_f64
+            case _:
+                raise NotImplementedError
+
+    def gemm(self):
+        match self.dtype:
+            case np.float32:
+                return self._sgemm
+            case np.float64:
+                return self._dgemm
+            case _:
+                raise NotImplementedError
+
+    def ApB(self):
+        match self.dtype:
+            case np.float32:
+                return self._sApB
+            case np.float64:
+                return self._dApB
+            case _:
+                raise NotImplementedError
+
+    def AmB(self):
+        match self.dtype:
+            case np.float32:
+                return self._sAmB
+            case np.float64:
+                return self._dAmB
+            case _:
+                raise NotImplementedError
 
     @property
     def arr(self):
-        return np.reshape(np.frombuffer(self.buffer, dtype=self.dtype), (self.m, self.n))
+        return self._arr
 
     @arr.setter
-    def arr(self, v):
-        self._p[self.A] = v
+    def arr(self, val):
+        if isinstance(val, LinkedArray):
+            self._arr = val
+        else:
+            raise TypeError
 
     @property
-    def buffer(self):
-        return self._p[self.A]
-
-    @property
-    def p(self):
-        return self._p
+    def np_arr(self):
+        return np.reshape(
+            np.fromiter(self.arr.p, dtype=self.dtype, count=self.arr.size), (self.m, self.n)
+        )
 
     @property
     def T(self):
-        return DMatrix(self.p, self.A, self.m, self.n, self.dtype, t=not self.transposed)
+        # Return a view of the matrix
+        return DMatrix(
+            handle=self.handle, m=self.m, n=self.n, dtype=self.dtype, t=not self.transposed
+        )
 
     def __add__(self, B):
-        return self.arr + B.arr
+        # check shape compatibility
+        # TODO: adding a transposed matrix will break, decide if we want to deal with that
+        if (self.m != B.m) or (self.n != B.n):
+            raise ValueError
 
-    def __sub__(self, B):
-        return self.arr - B.arr
-
-    def __matmul__(self, B):
-        """Left-multiply against a col-major matrix B."""
-        out_shape = self.MM_shape(B)
         if self.dtype != B.dtype:
             raise TypeError
 
-        if B in self.registry.keys():
-            res = self.registry[B]
-            # TODO: implement shape checking - want to be compatible
-            # Likely need good slicing capability to make this work neatly
-        else:
-            res = DMatrix.allocate_new(out_shape, self.dtype, self._p)
+        C = DMatrix(self.m, self.n, dtype=self.dtype)
+        self.ApB(self.arr.p, B.arr.p, C.arr.p, self.m, self.n)
+        return C
 
-        # Scipy's BLAS won't actually overwrite C, even if requested... so this is a very fake pointer illusion
-        res.arr = bytearray(
-            blas.dgemm(
-                1.0,
-                self.arr,
-                B.arr,
-                c=res.arr,
-                trans_a=self.transposed,
-                trans_b=B.transposed,
-            ).tobytes()
+    def __iadd__(self, B):
+        if (self.m != B.m) or (self.n != B.n):
+            raise ValueError
+
+        if self.dtype != B.dtype:
+            raise TypeError
+
+        self.ApB(self.arr.p, B.arr.p, self.arr.p, self.m, self.n)
+        return self
+
+    def __sub__(self, B):
+        if (self.m != B.m) or (self.n != B.n):
+            raise ValueError
+
+        if self.dtype != B.dtype:
+            raise TypeError
+
+        C = DMatrix(self.m, self.n, dtype=self.dtype)
+        self.AmB(self.arr.p, B.arr.p, C.arr.p, self.m, self.n)
+        return C
+
+    def __isub__(self, B):
+        if (self.m != B.m) or (self.n != B.n):
+            raise ValueError
+
+        if self.dtype != B.dtype:
+            raise TypeError
+
+        self.AmB(self.arr.p, B.arr.p, self.arr.p, self.m, self.n)
+        return self
+
+    def __matmul__(self, B):
+        """Left-multiply against matrix B."""
+        # TODO: Handle LDA, LDB, LDC
+
+        if self.dtype != B.dtype:
+            raise TypeError
+
+        # Maybe need good slicing capability to make this work neatly?
+        m, k, n = self.MM_shape(B)
+        if B in self.registry.keys():
+            # TODO: implement better shape checking - want to be compatible with pre-registered result
+            C = self.registry[B]
+        else:
+            C = DMatrix(m, n, dtype=self.dtype)
+
+        op_A = "t" if self.transposed else "n"
+        op_B = "t" if B.transposed else "n"
+        lda = m
+        ldb = k
+        ldc = m
+        self.gemm(
+            c_char(op_A),
+            c_char(op_B),
+            m,
+            n,
+            lda,
+            self.ctype(1.0),
+            self.arr.p,
+            m,
+            B.arr.p,
+            ldb,
+            self.ctype(1.0),
+            C.arr.p,
+            ldc,
         )
 
-        return res
+        return C
 
 
 class SymCSRMatrix(AMatrix):
@@ -324,16 +528,16 @@ class PartialSumMatrix(DistMatrix):
     def __matmul__(self, B):
         ### Direct implementation for DMatrix = PartialSum @ DMatrix
         assert isinstance(B, DMatrix)
-        out_shape = self.MM_shape(B)
+        m, k, n = self.MM_shape(B)
         if B in self.registry.keys():
-            res = self.registry[B]
+            C = self.registry[B]
         else:
-            res = DMatrix.allocate_new(out_shape, self.dtype, self._p)
+            C = DMatrix(m, n, self.dtype, self._p)
 
-        res = self.A @ B
-        self.comm.Allreduce(MPI.IN_PLACE, [res.arr, self.mpi_type])
+        C = self.A @ B
+        self.comm.Allreduce(MPI.IN_PLACE, [C.arr.p, self.mpi_type])
 
-        return res
+        return C
 
 
 class RowDistMatrix(DistMatrix):
@@ -368,3 +572,26 @@ class RowDistMatrix(DistMatrix):
 
             # no reduction needs to be done here
             return g_res
+
+
+"""
+Linear algebra routines
+"""
+
+
+def diagonalize(X):
+    """Diagonalize matrix and return eigenbasis and corresponding eigenvalues
+
+        diagonalize s.t. Z @ L @ Z.T = A
+    Args:
+        X (array) : (symmetric) matrix to be diagonalized
+
+    Returns:
+        L (array) : eigenvalues of X
+        Z (array) : eigenbasis of X
+
+
+    """
+    syevr = la.get_lapack_funcs("syevr", dtype=X.dtype)
+    L, Z, _, _, _ = syevr(X)
+    return L, Z
