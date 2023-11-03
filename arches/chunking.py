@@ -1,13 +1,35 @@
+import pathlib
+from ctypes import CDLL
 from functools import reduce
-from dataclasses import dataclass
-from itertools import islice, combinations, product
+from itertools import combinations, islice, product
+
 import numpy as np
-import numpy.typing as npt
-from arches.integral_indexing_utils import (
-    compound_idx4,
-    canonical_idx4,
-)
+
 from arches.drivers import integral_category
+from arches.integral_indexing_utils import (
+    canonical_idx4,
+    compound_idx4,
+)
+from arches.kernels import dispatch_kernel
+from arches.linked_object import (
+    LinkedArray_f32,
+    LinkedArray_f64,
+    LinkedArray_idx_t,
+    LinkedHandle,
+    det_t_p,
+    f32,
+    f32_p,
+    f64,
+    f64_p,
+    handle_t,
+    idx_t,
+    idx_t_p,
+    np_type_map,
+    type_dict,
+)
+
+run_folder = pathlib.Path(__file__).parent.resolve()
+lib_integrals = CDLL(run_folder.joinpath("build/libintegrals.so"))
 
 
 def batched(iterable, n):
@@ -31,12 +53,127 @@ class IntegralReader:
         return np.float32
 
 
-@dataclass
-class JChunk:
-    chunk_size: int
-    J: npt.NDArray[[np.float32, np.float64]]
-    idx: np.ndarray[[np.int32, np.int64]]
-    category: str
+### Register handles for JChunks
+for k in [f32, f64]:
+    pfix = "JChunk_"
+    sfix = "_" + type_dict[k][0]  # key : value is (c_type : (name, pointer, np ndpointer))
+    k_p = type_dict[k][1]
+
+    ctor = getattr(lib_integrals, pfix + "ctor" + sfix)
+    dtor = getattr(lib_integrals, pfix + "dtor" + sfix)
+    idx_ptr_return = getattr(lib_integrals, pfix + "get_idx_ptr" + sfix)
+    J_ptr_return = getattr(lib_integrals, pfix + "get_J_ptr" + sfix)
+
+    ctor.argtypes = [idx_t, idx_t_p, k_p]
+    dtor.argtypes = [handle_t]
+    idx_ptr_return.argtyps = [handle_t]
+    J_ptr_return.argtyps = [handle_t]
+
+    ctor.restype = handle_t
+    dtor.restype = None
+    idx_ptr_return.restype = idx_t_p
+    J_ptr_return.restype = k_p
+
+
+class JChunk(LinkedHandle):
+    _constructor_f32 = lib_integrals.JChunk_ctor_f32
+    _constructor_f64 = lib_integrals.JChunk_ctor_f64
+    _destructor_f32 = lib_integrals.JChunk_dtor_f32
+    _destructor_f32 = lib_integrals.JChunk_dtor_f64
+
+    _get_idx_ptr_f32 = lib_integrals.JChunk_get_idx_ptr_f32
+    _get_idx_ptr_f64 = lib_integrals.JChunk_get_idx_ptr_f64
+    _get_J_ptr_f32 = lib_integrals.JChunk_get_J_ptr_f32
+    _get_J_ptr_f64 = lib_integrals.JChunk_get_J_ptr_f64
+
+    def __init__(self, category, chunk_size, J_ind, J, dtype=np.float64, handle=None, **kwargs):
+        self.dtype = dtype
+        super().__init__(handle=handle, chunk_size=chunk_size, J_ind=J_ind, J=J)
+        self.category = category
+        self._kernels = dispatch_kernel(category)
+
+    @property
+    def _f_ctor(self):
+        match self.dtype:
+            case np.float32:
+                return self._constructor_f32
+            case np.float64:
+                return self._constructor_f64
+            case _:
+                raise NotImplementedError
+
+    def constructor(self, chunk_size, J_ind, J, **kwargs):
+        # TODO: make this cleaner and reusable
+        if isinstance(J_ind, np.ndarray):
+            J_ind_d = J_ind.ctypes.data_as(idx_t_p)
+        else:
+            J_ind_d = J_ind
+
+        if isinstance(J, np.ndarray):
+            J_d = J.ctypes.data_as(self.ptype)
+        else:
+            J_d = J
+
+        return self._f_ctor(idx_t(chunk_size), J_ind_d, J_d)
+
+    @property
+    def category(self):
+        return self._category
+
+    @category.setter
+    def category(self, val):
+        if (val not in "ABCDEFG") or (len(val) != 1):
+            raise ValueError
+
+        self._category = val
+
+    @property
+    def chunk_size(self):
+        return self.J.size
+
+    @property
+    def idx(self):
+        return self._idx
+
+    @idx.setter
+    def idx(self, val):
+        if isinstance(val, LinkedArray_idx_t):
+            self._idx = val
+        else:
+            raise TypeError
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @dtype.setter
+    def dtype(self, val):
+        self._dtype = val
+        self._ctype = np_type_map[val]
+        self._ptype = type_dict[self.ctype][1]
+
+    @property
+    def ctype(self):
+        return self._ctype
+
+    @property
+    def ptype(self):
+        return self._ptype
+
+    @property
+    def J(self):
+        return self._J
+
+    @J.setter
+    def J(self, val):
+        if isinstance(val, (LinkedArray_f32, LinkedArray_f64)):
+            self._J = val
+        else:
+            raise TypeError
+
+    @property
+    def kernels(self):
+        return self._kernels
 
     def __getitem__(self, idx):
         if idx > 0 and idx < self.chunk_size:
@@ -45,6 +182,11 @@ class JChunk:
             raise ValueError
 
 
+# TODO: Create a paired iter that yields pairs of idx/values conditional on value,
+#  to be able to implement screening on read. Perhaps would be good as a subclass?
+#  Would be useful to be able to provide custom hook f: (idx, val) -> Bool
+#  and/or flexibility to be used in repacking of chunks when using adaptive integral pruning
+# TODO: Let the chunk factory make one electron chunks!
 class JChunkFactory:
     def __init__(self, N_mo, category, src_data, chunk_size=-1, comm=None):
         if comm is None:

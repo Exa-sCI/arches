@@ -19,6 +19,6 @@ void JChunk_dtor_f64(JChunk<double> *chunk) { delete chunk; }
 idx_t *JChunk_get_idx_ptr_f32(JChunk<float> *chunk){return chunk->ind};
 idx_t *JChunk_get_idx_ptr_f64(JChunk<double> *chunk){return chunk->ind};
 
-float *JChunk_get_idx_ptr_f32(JChunk<float> *chunk){return chunk->J};
-double *JChunk_get_idx_ptr_f64(JChunk<double> *chunk){return chunk->J};
+float *JChunk_get_J_ptr_f32(JChunk<float> *chunk){return chunk->J};
+double *JChunk_get_J_ptr_f64(JChunk<double> *chunk){return chunk->J};
 }
