@@ -29,17 +29,19 @@ Matrix classes
 """
 
 
+# TODO: Settle whether or not AMatrix derives from LinkedHandle, or if it is itself
+# an ABC and the derived matrix types use multiple inheritance
+# TODO: Settle whether or not to continue using the match : case or move to singledispatchmethods
 class AMatrix(LinkedHandle):
     """Abstract matrix class."""
 
     def __init__(self, m, n, dtype, ctype, **kwargs):
+        self.dtype = dtype
+        self._ctype = ctype
         super().__init__(**kwargs)
         self._registry = {}
         self.m = m
         self.n = n
-        self.dtype = dtype
-        # TODO: register ctype/dtype map somewhere
-        self._ctype = ctype
 
     def __hash__(self):
         return hash(repr(self))
@@ -250,6 +252,8 @@ class DMatrix(AMatrix):
             # use constant fill constructor
             return self._f_ctor["fill"](idx_t(m), idx_t(n), self.ctype(arr))
 
+    # TODO: decide if @singledispatch might be better suited/cleaner
+    # or, perhaps, these should all be set at initialization instead of being runtime
     def get_arr_ptr(self):
         match self.dtype:
             case np.float32:
