@@ -12,6 +12,11 @@ i32, i64, ui32, ui64, f32, f64 = all_types
 idx_t = i64  # alias for idx_t
 handle_t = c_void_p  # void pointers
 
+# TODO: Update when determinant array interface is implemented, though it's likely that
+# the underlying determinant datatype will be a structured array anyway and it'll be easier
+# to use a void pointer on the python side than creating a proper pointer via ctype structs
+det_t_p = c_void_p
+
 i32_p, i64_p, ui32_p, ui64_p, f32_p, f64_p = (POINTER(t) for t in all_types)
 idx_t_p = i64_p
 i32_a, i64_a, ui32_a, ui64_a, f32_a, f64_a = (ndpointer(t, flags="C_CONTIGUOUS") for t in all_types)
