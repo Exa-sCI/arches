@@ -1,70 +1,30 @@
 #pragma once
-#include <array>
-#include <determinant.h>
-#include <integral_indexing_utils.h>
-#include <tuple>
+#include <algorithm>
+#include <memory>
 
 // Abstract storage object for 1 and 2 electron integrals
 template <class T> class JChunk {
 
-  public:
-    std::vector<T> integrals;           // this will break, how to create constructor?
-    spin_det_t orbital_mask;            // cheap bit mask filter for owned orbitals
-    std::vector<idx_T> active_orbitals; // list of owned orbitals
-    idx_t N_orb;                        // number of orbitals
-    T null_J = 0;
-
-    bool det_in_chunk(const spin_det_t &s) { return (active_orbitals & s).any(); }
-
-    bool owns_index(const idx_t i){return (i >= sidx) && (i < eidx)};
-};
-
-// one electron integrals
-template <class T> JChunk : OEJ{public : T & operator[](idx_t ij){return integrals[ij];
-}
-const T &operator[](const idx_t ij) const { return integrals[ij]; }
-
-T &operator()(idx_t i, idx_t j) {
-    idx_t ij = compound_idx2(i, j);
-    return integrals[ij];
-    // return owns_idx(ij) ? integrals[ij] : null_J;
-}
-const T &operator()(const idx_t i, const idx_t j) const {
-    idx_t ij = compound_idx2(i, j);
-    return integrals[ij];
-    // return owns_idx(ij) ? integrals[ij] : null_J;
-}
-
-// in practice, likely that one electron integrals will be owned by a single worker
-bool owns_index(const idx_t i, const idx_t j) {
-    idx_t ij = compound_idx2(i, j);
-    return owns_index(ij);
-}
-}
-;
-
-// two electron integrals
-// integrals are packaged
-template <class T> JChunk : TEJ {
+  protected:
+    std::unique_ptr<idx_t[]> idx_ptr;
+    std::unique_ptr<T[]> J_ptr;
 
   public:
-    std::tuple<j_category> owned_categories; // identities of chunk for dispatching
+    idx_t size; // size of chunk
+    idx_t *ind; // compound two- or four- indices
+    T *J;       // integrals
 
-    T &operator[](idx_t ijkl) { return integrals[ijkl - internal_offset]; }
-    const T &operator[](const idx_t ijkl) const { return integrals[ijkl - internal_offset]; }
+    template <class Y> JChunk(idx_t N, idx_t *J_ind, Y *J_val) {
+        size = N;
+        std::unique_ptr<idx_t[]> p_ind(new idx_t[size]);
+        std::unique_ptr<Y[]> p_val(new Y[size]);
 
-    T &operator()(idx_t i, idx_t j, idx_t k, idx_t l) {
-        idx_t ijkl = compound_idx4(i, j, k, l);
-        return owns_idx(ijkl) ? integrals[ijkl] : null_J;
+        idx_ptr = std::move(p_ind);
+        J_ptr = std::move(p_val);
+
+        std::copy(J_ind, J_ind + size, ind);
+        std::copy(J_val, J_val + size, J);
     }
-    const T &operator()(const idx_t i, const idx_t j, const idx_t k, const idx_t l) const {
-        idx_t ijkl = compound_idx4(i, j, k, l);
-        return owns_idx(ijkl) ? integrals[ijkl] : null_J;
-    }
 
-    bool owns_index(const idx_t i, const idx_t j, const idx_t k, const idx_t l) {
-        struct ijkl_tuple ijkl = canonical_idx(i, j, k, l);
-
-        return owns_index(compound_idx4(ijkl));
-    }
+    ~JChunk() = default;
 };
