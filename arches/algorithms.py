@@ -1,12 +1,14 @@
 # ruff : noqa : E741
 
+from typing import Iterable
+
 import numpy as np
-from scipy.linalg import lapack
-from arches.matrix import diagonalize, AMatrix
-from arches.chunking import JChunk
-from arches.fundamental_types import Determinant
-from typing import Tuple, Iterable, Callable
 from mpi4py import MPI
+from scipy.linalg import lapack
+
+from arches.fundamental_types import Determinant
+from arches.integrals import JChunk
+from arches.matrix import AMatrix, diagonalize
 
 
 def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
@@ -235,36 +237,6 @@ def davidson_par_0(
         V_k, R_k, T_k = bmgs_h(np.hstack([V_k, V_kk]), l // 2, V_k, R_k, T_k)
 
 
-def dispatch_kernel(
-    chunk: JChunk
-) -> Tuple[
-    Callable[
-        JChunk,
-        Iterable[Determinant],
-        Iterable[float],
-        Iterable[Determinant],
-        Iterable[float],
-    ]
-]:  # TODO: annotate callable types to include denom. kerneland provide kernel interface
-    match chunk.category:
-        case "OE":
-            raise NotImplementedError
-        case "A":
-            raise NotImplementedError
-        case "B":
-            raise NotImplementedError
-        case "C":
-            raise NotImplementedError
-        case "D":
-            raise NotImplementedError
-        case "E":
-            raise NotImplementedError
-        case "F":
-            raise NotImplementedError
-        case "G":
-            raise NotImplementedError
-
-
 def get_connected_dets(int_dets: Iterable[Determinant]) -> Iterable[Determinant]:
     raise NotImplementedError
 
@@ -281,12 +253,12 @@ def cipsi(
 ):
     ext_dets = get_connected_dets(int_dets, exc_constraints)
 
-    e_pt2_n = np.array(len(ext_dets))  # TODO: convert these arrays to pointers
-    e_pt2_d = np.array(len(ext_dets))
+    e_pt2_n = np.array(len(ext_dets))  # TODO: convert these arrays to LinkedArrays
+    e_pt2_d = np.array(len(ext_dets))  # TODO: initialize with E0
 
     for chunk in J_chunks:
-        kernels = dispatch_kernel(
-            chunk
+        kernels = (
+            chunk.pt2_kernels
         )  # kernels[0] is numerator contrib., kernels[1] is denom. contrib.
         match chunk.category:
             case "OE" | "F":  # both num and denominator
@@ -298,8 +270,8 @@ def cipsi(
                 kernels[0](chunk, int_dets, psi_coef, ext_dets, e_pt2_n)
 
     # reduce e_pt2_n,d over processes
-    e_pt2 = e_pt2_n / e_pt2_d
-    pt2_filter = e_pt2 > pt2_threshold
+    e_pt2 = e_pt2_n / e_pt2_d  # TODO: implement +, -, /, * for LinkedArrays
+    pt2_filter = e_pt2 > pt2_threshold  # TODO: pass this off to customizable selection function
     e_pt2_total = np.sum(e_pt2)
 
     # TODO: sort ext dets so that they are in weight order? Or otherwise, pass in information if N_max_dets will be hit
