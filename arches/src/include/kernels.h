@@ -13,25 +13,27 @@
 
 // One electron contributions
 template <class T>
-void e_pt2_ii_OE(T *J, idx_t N_orb, const T E0, det_t *psi_ext, idx_t N_ext, T *res) {
+void e_pt2_ii_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contribution to denominator from one electron integrals
+    for (auto i = 0; i < N; i++) { // loop over integrals
+        idx_t ij = compound_idx2_reverse(J_ind[i]);
+        if (ij.i != ij.j)
+            continue;
 
-    for (auto det_j = 0; det_j < N_ext; det_j++) {
-        res[det_j] = E0;                         // TODO: perhaps initialize denom with E0 outside
-        for (auto orb = 0; orb < N_orb; orb++) { // loop over all active orbitals
+        for (auto det_j = 0; det_j < N_ext; det_j++) {
             auto &ext_det = psi_ext[det_j];
-            idx_t idx = compound_idx2(orb, orb);
-            res[det_j] += (ext_det.alpha[orb] + ext_det.beta[orb]) * J[idx];
+            res[det_j] += (ext_det.alpha[orb] + ext_det.beta[orb]) * J[i];
         }
     }
 };
 
 template <class T>
-void e_pt2_ij_OE(T *J, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext, idx_t N_ext, T *res) {
+void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
+                 idx_t N_ext, T *res) {
     // Contribution to numerator from one electron integrals
     for (auto i = 0; i < N; i++) { // loop over all integrals
 
-        struct ij_tuple ij = compound_idx2_reverse(i);
+        struct ij_tuple ij = compound_idx2_reverse(J_ind[i]);
         // loop over internal determinants and check if orb_i is occupied in either spin
         for (auto det_i = 0; det_i < N_int; det_i++) {
 
@@ -90,7 +92,8 @@ TODO: determine level of const needed
 A: J_qqqq only has one contribution (to the denominator), when q is occupied in both spins
 Contribution is part of product terms
 */
-template <class T> void A_pt2_kernel(T *J, idx_t N, det_t *psi_ext, idx_t N_ext, T *res) {
+template <class T>
+void A_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contributes to denominator of pt2 energy
 
     // iterate over external determinants first since A chunk is almost always smaller
