@@ -130,7 +130,7 @@ class LinkedArray(ABC):
     def __setitem__(self, k, v):
         if isinstance(k, slice):
             if isinstance(v, np.ndarray):
-                d = v.ctypes.data_as(self.p_type)
+                d = v.ctypes.data_as(self.ptype)
             else:
                 d = v
             if k.step:
