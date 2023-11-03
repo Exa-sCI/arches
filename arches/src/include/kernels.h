@@ -9,11 +9,14 @@
  chunk; every other worker distributes G evenly.
 
  root worker will iterate through all of its work and everyone else will just dispatch to G kernel
+
+psi_coef is array of shape [N_int, N_states]
+res are arrays of shape [N_ext, N_states]
 */
 
 // One electron contributions
 template <class T>
-void e_pt2_ii_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *res) {
+void e_pt2_ii_OE(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contribution to denominator from one electron integrals
     for (auto i = 0; i < N; i++) { // loop over integrals
         idx_t ij = compound_idx2_reverse(J_ind[i]);
@@ -22,14 +25,17 @@ void e_pt2_ii_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *re
 
         for (auto det_j = 0; det_j < N_ext; det_j++) {
             auto &ext_det = psi_ext[det_j];
-            res[det_j] += (ext_det.alpha[orb] + ext_det.beta[orb]) * J[i];
+
+            for (auto state = 0; state < N_states; state++) {
+                res[det_j + state] += (ext_det.alpha[orb] + ext_det.beta[orb]) * J[i];
+            }
         }
     }
 };
 
 template <class T>
-void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
-                 idx_t N_ext, T *res) {
+void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
+                 idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contribution to numerator from one electron integrals
     for (auto i = 0; i < N; i++) { // loop over all integrals
 
@@ -56,7 +62,11 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t
                     continue; // integral doesn't apply
 
                 int phase = compute_phase_single_excitation(int_det[exc_degree[1]], ij.i, ij.j);
-                res[det_j] += phase * J[i];
+
+                // loop over states
+                for (auto state = 0; state < N_states; state++) {
+                    res[det_j + state] += phase * psi_coef[det_i + state] * J[i];
+                }
             }
         }
     }
@@ -93,7 +103,8 @@ A: J_qqqq only has one contribution (to the denominator), when q is occupied in 
 Contribution is part of product terms
 */
 template <class T>
-void A_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *res) {
+void A_pt2_kernel(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext,
+                  T *res) {
     // Contributes to denominator of pt2 energy
 
     // iterate over external determinants first since A chunk is almost always smaller
@@ -103,7 +114,9 @@ void A_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *r
         // Iterate over all integrals in chunk (should be N_orb integrals)
         // order of integrals in chunk is known by construction
         for (auto i = 0; i < N; i++) {
-            res[d_e] += ext_det[0][i] * ext_det[1][i] * J[i];
+            for (auto state = 0; state < N_states; state++) {
+                res[d_e + state] += ext_det[0][i] * ext_det[1][i] * J[i];
+            }
         }
     }
 }
@@ -116,7 +129,8 @@ B: J_qqrr has the following contributions (to the denominator):
 Contributions are part of combination terms
 */
 template <class T>
-void B_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *res) {
+void B_pt2_kernel(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext,
+                  T *res) {
     // Contributes to denominator of pt2 energy
     for (auto i = 0; i < N; i++) {
         struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
@@ -129,8 +143,11 @@ void B_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *r
         // iterate over external determinants
         for (auto d_e = 0; d_e < N_ext; d_e++) {
             auto &ext_det = psi_ext[d_e];
-            res[d_e] += ext_det[0][q] * ext_det[0][r] * J[i];
-            res[d_e] += ext_det[1][q] * ext_det[1][r] * J[i];
+
+            for (auto state = 0; state < N_states; state++) {
+                res[d_e + state] += ext_det[0][q] * ext_det[0][r] * J[i];
+                res[d_e + state] += ext_det[1][q] * ext_det[1][r] * J[i];
+            }
         }
     }
 }
@@ -159,8 +176,8 @@ C: J_qrqs has the following contributions, singles of form hipi:
     C4o) s_b -> r_b; q occupied in b
 */
 template <class T>
-void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
-                  idx_t N_ext, T *res) {
+void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
+                  idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
     /*
     J is array of integral values
     J_ind is array of integral compound indices
@@ -213,14 +230,18 @@ void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
                 int phase;
                 if (c13 && exc[0][r] && exc[0][s]) {
                     phase = compute_phase_single_excitation(det_i[0], r, s);
-                    res[d_e] += q_a * J[i] * phase;
-                    res[d_e] += q_b * J[i] * phase;
+                    for (auto state = 0; state < N_states; state++) {
+                        res[d_e + state] += q_a * psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e + state] += q_b * psi_coef[d_i + state] * J[i] * phase;
+                    }
                 }
 
                 if (c24 && exc[1][r] && exc[1][s]) {
                     phase = compute_phase_single_excitation(det_i[1], r, s);
-                    res[d_e] += q_a * J[i] * phase;
-                    res[d_e] += q_b * J[i] * phase;
+                    for (auto state = 0; state < N_states; state++) {
+                        res[d_e + state] += q_a * psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e + state] += q_b * psi_coef[d_i + state] * J[i] * phase;
+                    }
                 }
             }
         }
@@ -247,8 +268,8 @@ D: J_qqqr has the following contributions, singles of form hipi(o):
     D_4) r_b -> q_b; q occupied in a
 */
 template <class T>
-void D_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
-                  idx_t N_ext, T *res) {
+void D_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
+                  idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
 
     // Iterate over all integrals in chunk
     for (auto i = 0; i < N; i++) {
@@ -289,12 +310,16 @@ void D_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
                 // include q_(a/b) in check since there is only one contribution
                 if (d13 && q_b && exc[0][q] && exc[0][r]) {
                     phase = compute_phase_single_excitation(det_i[0], q, r);
-                    res[d_e] += J[i] * phase;
+                    for (auto state = 0; state < N_states; state++) {
+                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                    }
                 }
 
                 if (d24 && q_a && exc[1][q] && exc[1][r]) {
                     phase = compute_phase_single_excitation(det_i[1], q, r);
-                    res[d_e] += J[i] * phase;
+                    for (auto state = 0; state < N_states; state++) {
+                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                    }
                 }
             }
         }
@@ -338,8 +363,8 @@ E: J_qqrs has the following contributions,
 
 */
 template <class T>
-void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
-                  idx_t N_ext, T *res) {
+void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
+                  idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
 
     // Iterate over all integrals in chunk
     for (auto i = 0; i < N; i++) {
@@ -385,12 +410,16 @@ void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
 
                     if (e13 && q_a && exc[0][r] && exc[0][s]) {
                         phase = compute_phase_single_excitation(det_i[0], r, s);
-                        res[d_e] += J[i] * phase * -1;
+                        for (auto state = 0; state < N_states; state++) {
+                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase * -1;
+                        }
                     }
 
                     if (e24 && q_b && exc[1][r] && exc[1][s]) {
                         phase = compute_phase_single_excitation(det_i[0], r, s);
-                        res[d_e] += J[i] * phase * -1;
+                        for (auto state = 0; state < N_states; state++) {
+                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase * -1;
+                        }
                     }
                 } else if (degree == 2) {
 
@@ -403,13 +432,17 @@ void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
                     // adeg
                     if (exc[0][r] && exc[1][s]) {
                         phase = compute_phase_double_excitation(d_int, q, q, r, s);
-                        res[d_e] += J[i] * phase;
+                        for (auto state = 0; state < N_states; state++) {
+                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        }
                     }
 
                     // bcfh
                     if (exc[0][s] && exc[1][r]) {
                         phase = compute_phase_double_excitation(d_int, q, q, s, r);
-                        res[d_e] += J[i] * phase;
+                        for (auto state = 0; state < N_states; state++) {
+                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        }
                     }
                 }
             }
@@ -425,8 +458,8 @@ F: J_qqrr has the following (off diagonal) contributions, all opposite spin doub
     F_4) r_a -> q_a | q_b -> r_b
 */
 template <class T>
-void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
-                  idx_t N_ext, T *res) {
+void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
+                  idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
 
     // Iterate over all integrals in chunk
     for (auto i = 0; i < N; i++) {
@@ -459,7 +492,9 @@ void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
 
                 if (exc[0][q] && exc[0][r] && exc[1][q] && exc[1][r]) {
                     int phase = compute_phase_double_excitation(d_int, q, q, r, r);
-                    res[d_e] += J[i] * phase;
+                    for (auto state = 0; state < N_states; state++) {
+                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                    }
                 }
             }
         }
@@ -467,7 +502,8 @@ void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
 }
 
 template <class T>
-void F_pt2_kernel_denom(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext, T *res) {
+void F_pt2_kernel_denom(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext,
+                        T *res) {
     // Contributions to combination terms in denominator
 
     // Iterate over all integrals in chunk
@@ -484,8 +520,10 @@ void F_pt2_kernel_denom(T *J, idx_t *J_ind, idx_t N, det_t *psi_ext, idx_t N_ext
         // iterate over external determinants
         for (auto d_e = 0; d_e < N_ext; d_e++) {
             det_t &d_ext = psi_ext[d_e];
-            res[d_e] -= d_ext[0][q] * d_ext[0][r] * J[i]; // phase implicit in -=
-            res[d_e] -= d_ext[1][q] * d_ext[1][r] * J[i];
+            for (auto state = 0; state < N_states; state++) {
+                res[d_e + state] -= d_ext[0][q] * d_ext[0][r] * J[i]; // phase implicit in -=
+                res[d_e + state] -= d_ext[1][q] * d_ext[1][r] * J[i];
+            }
         }
     }
 }
@@ -525,8 +563,8 @@ G:
 
 */
 template <class T>
-void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_t *psi_ext,
-                  idx_t N_ext, T *res) {
+void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
+                  idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
 
     // Iterate over all integrals in chunk
     for (auto i = 0; i < N; i++) {
@@ -588,13 +626,17 @@ void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
                     // aceg
                     if (exc[0][q] && exc[0][s] && exc[1][r] && exc[1][t]) {
                         phase = compute_phase_double_excitation(d_int, q, r, s, t);
-                        res[d_e] += J[i] * phase;
+                        for (auto state = 0; state < N_states; state++) {
+                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        }
                     }
 
                     // bdfh
                     if (exc[0][r] && exc[0][t] && exc[1][q] && exc[1][s]) {
                         phase = compute_phase_double_excitation(d_int, r, q, t, s);
-                        res[d_e] += J[i] * phase;
+                        for (auto state = 0; state < N_states; state++) {
+                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        }
                     }
                 } else if (a_degree == 0) {
                     // (0,2) : g_ii >= 2 is criterion for acceptance
@@ -612,7 +654,10 @@ void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
                     } else {
                         phase = compute_phase_double_excitation(d_int[0], r, s, q, t);
                     }
-                    res[d_e] += J[i] * phase;
+
+                    for (auto state = 0; state < N_states; state++) {
+                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                    }
                 } else {
                     // (2,0) : g_ii % 2 is criterion for acceptance
                     bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
@@ -629,7 +674,9 @@ void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, idx_t N_int, det_
                     } else {
                         phase = compute_phase_double_excitation(d_int[1], r, s, q, t);
                     }
-                    res[d_e] += J[i] * phase;
+                    for (auto state = 0; state < N_states; state++) {
+                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                    }
                 }
             }
         }
