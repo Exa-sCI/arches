@@ -70,8 +70,6 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
             }
         }
     }
-
-    return res;
 };
 
 // Two electron contributions
@@ -246,8 +244,6 @@ void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
             }
         }
     }
-
-    return res;
 };
 
 void map_idx_D(const ijkl_tuple idx, idx_t &q, idx_t &r) {
