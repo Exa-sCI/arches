@@ -1,9 +1,10 @@
+#include "integral_indexing_utils.h"
 #include <algorithm>
 /*
 Interface functions for reading and setting values ot managed pointers
 */
 
-typedef long int idx_t;
+// typedef long int idx_t;
 
 extern "C" {
 

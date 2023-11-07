@@ -1,8 +1,9 @@
 #pragma once
+#include "integral_indexing_utils.h"
 #include <algorithm>
 #include <memory>
 
-typedef long int idx_t;
+// typedef long int idx_t;
 
 // enum s_major { ROW, COL };
 // TODO : figure out interface if we want both row and col major matrices

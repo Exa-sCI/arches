@@ -1,4 +1,5 @@
 #pragma once
+#include "integral_indexing_utils.h"
 #include <algorithm>
 #include <memory>
 
