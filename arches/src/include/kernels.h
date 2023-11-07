@@ -19,7 +19,7 @@ template <class T>
 void e_pt2_ii_OE(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contribution to denominator from one electron integrals
     for (auto i = 0; i < N; i++) { // loop over integrals
-        idx_t ij = compound_idx2_reverse(J_ind[i]);
+        struct ij_tuple ij = compound_idx2_reverse(J_ind[i]);
         if (ij.i != ij.j)
             continue;
 
@@ -27,7 +27,7 @@ void e_pt2_ii_OE(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, id
             auto &ext_det = psi_ext[det_j];
 
             for (auto state = 0; state < N_states; state++) {
-                res[det_j + state] += (ext_det.alpha[orb] + ext_det.beta[orb]) * J[i];
+                res[det_j + state] += (ext_det.alpha[ij.i] + ext_det.beta[ij.i]) * J[i];
             }
         }
     }
@@ -41,31 +41,34 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
 
         struct ij_tuple ij = compound_idx2_reverse(J_ind[i]);
         // loop over internal determinants and check if orb_i is occupied in either spin
-        for (auto det_i = 0; det_i < N_int; det_i++) {
-
+        for (auto d_i = 0; d_i < N_int; d_i++) {
+            det_t &d_int = psi_int[d_i];
             // i must be occupied only in int_det; j only in det_j
-            bool i_alpha = int_det.alpha[ij.i] && ~int_det.alpha[ij.j];
-            bool i_beta = int_det.beta[ij.i] && ~int_det.beta[ij.j];
+            bool i_alpha = d_int.alpha[ij.i] && ~d_int.alpha[ij.j];
+            bool i_beta = d_int.beta[ij.i] && ~d_int.beta[ij.j];
             if (!(i_alpha || i_beta))
                 continue;
 
             // loop over external determinants
-            for (auto det_j = 0; det_j < N; det_j++) {
-                auto &ext_det = psi_ext[det_j];
-                std::array<int, N_species> exc_degree = int_det.exc_degree(ext_det);
-                if ((exc_degree[0] + exc_degree[1]) != 1)
+            for (auto d_e = 0; d_e < N; d_e++) {
+                auto &d_ext = psi_ext[d_e];
+
+                det_t exc = exc_det(d_int, d_ext);
+                int degree_alpha = exc[0].count() / 2;
+                int degree_beta = exc[1].count() / 2;
+                if (degree_alpha + degree_beta != 1)
                     continue; // determinants not related by single exc
 
-                bool j_check = exc_degree[0] ? (~ext_det.alpha[ij.i] && ext_det.alpha[ij.j])
-                                             : (~ext_det.beta[ij.i] && ext_det.beta[ij.j]);
-                if (~j_check)
+                bool j_check = degree_alpha ? (~d_ext.alpha[ij.i] && d_ext.alpha[ij.j])
+                                            : (~d_ext.beta[ij.i] && d_ext.beta[ij.j]);
+                if (!j_check)
                     continue; // integral doesn't apply
 
-                int phase = compute_phase_single_excitation(int_det[exc_degree[1]], ij.i, ij.j);
+                int phase = compute_phase_single_excitation(d_int[degree_beta], ij.i, ij.j);
 
                 // loop over states
                 for (auto state = 0; state < N_states; state++) {
-                    res[det_j + state] += phase * psi_coef[det_i + state] * J[i];
+                    res[d_e + state] += phase * psi_coef[d_i + state] * J[i];
                 }
             }
         }
@@ -227,7 +230,7 @@ void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
                 // TODO: consider branchless? Profile and see
                 int phase;
                 if (c13 && exc[0][r] && exc[0][s]) {
-                    phase = compute_phase_single_excitation(det_i[0], r, s);
+                    phase = compute_phase_single_excitation(d_int[0], r, s);
                     for (auto state = 0; state < N_states; state++) {
                         res[d_e + state] += q_a * psi_coef[d_i + state] * J[i] * phase;
                         res[d_e + state] += q_b * psi_coef[d_i + state] * J[i] * phase;
@@ -235,7 +238,7 @@ void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
                 }
 
                 if (c24 && exc[1][r] && exc[1][s]) {
-                    phase = compute_phase_single_excitation(det_i[1], r, s);
+                    phase = compute_phase_single_excitation(d_int[1], r, s);
                     for (auto state = 0; state < N_states; state++) {
                         res[d_e + state] += q_a * psi_coef[d_i + state] * J[i] * phase;
                         res[d_e + state] += q_b * psi_coef[d_i + state] * J[i] * phase;
@@ -305,14 +308,14 @@ void D_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
                 int phase;
                 // include q_(a/b) in check since there is only one contribution
                 if (d13 && q_b && exc[0][q] && exc[0][r]) {
-                    phase = compute_phase_single_excitation(det_i[0], q, r);
+                    phase = compute_phase_single_excitation(d_int[0], q, r);
                     for (auto state = 0; state < N_states; state++) {
                         res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
                     }
                 }
 
                 if (d24 && q_a && exc[1][q] && exc[1][r]) {
-                    phase = compute_phase_single_excitation(det_i[1], q, r);
+                    phase = compute_phase_single_excitation(d_int[1], q, r);
                     for (auto state = 0; state < N_states; state++) {
                         res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
                     }
@@ -375,7 +378,7 @@ void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
         // iterate over internal determinants
         for (auto d_i = 0; d_i < N_int; d_i++) {
             det_t &d_int = psi_int[d_i];
-            bool e13, e24, e_adeg, e_bcfh, q_ai, q_bi;
+            bool e_13, e_24, e_adeg, e_bcfh, q_ai, q_bi;
             q_ai = d_int[0][q];
             q_bi = d_int[1][q];
             e_13 = (d_int[0][r] != d_int[0][s]) && q_ai;
@@ -404,15 +407,15 @@ void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
                     if (!(q_a || q_b)) // q must be occupied in beta/alpha simultaneously
                         continue;
 
-                    if (e13 && q_a && exc[0][r] && exc[0][s]) {
-                        phase = compute_phase_single_excitation(det_i[0], r, s);
+                    if (e_13 && q_a && exc[0][r] && exc[0][s]) {
+                        phase = compute_phase_single_excitation(d_int[0], r, s);
                         for (auto state = 0; state < N_states; state++) {
                             res[d_e + state] += psi_coef[d_i + state] * J[i] * phase * -1;
                         }
                     }
 
-                    if (e24 && q_b && exc[1][r] && exc[1][s]) {
-                        phase = compute_phase_single_excitation(det_i[0], r, s);
+                    if (e_24 && q_b && exc[1][r] && exc[1][s]) {
+                        phase = compute_phase_single_excitation(d_int[1], r, s);
                         for (auto state = 0; state < N_states; state++) {
                             res[d_e + state] += psi_coef[d_i + state] * J[i] * phase * -1;
                         }
@@ -599,7 +602,8 @@ void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
                        ((d_int[spin][r] && d_int[spin][s]) && (!d_int[spin][q] && !d_int[spin][t]));
             }
 
-            if (!(g_aceg || g_bdfh || ((g_11 + g_22 + g_33 + g44) > 0))) // J[i] has no contribution
+            if (!(g_aceg || g_bdfh ||
+                  ((g_11 + g_22 + g_33 + g_44) > 0))) // J[i] has no contribution
                 continue;
 
             // iterate over external determinants

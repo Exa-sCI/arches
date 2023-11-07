@@ -51,6 +51,12 @@ target_include_directories(jchunk PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/inclu
 target_compile_options(jchunk PRIVATE -fPIC -Wall)
 set_target_properties(jchunk PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/arches/build)
 
+add_library(kernels SHARED)
+target_sources(kernels PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/kernels.cpp)
+target_include_directories(kernels PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/include)
+target_compile_options(kernels PRIVATE -fPIC -Wall)
+set_target_properties(kernels PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/arches/build)
+
 if(ARCHES_ENABLE_PYTHON)
     find_package (Python COMPONENTS Interpreter Development)
     add_library(arches_kernels SHARED)

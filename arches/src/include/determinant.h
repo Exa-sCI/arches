@@ -54,9 +54,10 @@ class det_t { // The class
     const spin_det_t &operator[](unsigned i) const { return (*this)[i]; }
 
     // get excitation degree between self and other determinant
+    // TODO: deal with narrowing conversion, and see if this should still be used anyway
     std::array<int, N_SPIN_SPECIES> exc_degree(const det_t &b) {
-        auto ed_alpha = (*this.alpha ^ b.alpha).count() / 2;
-        auto ed_beta = (*this.beta ^ b.beta).count() / 2;
+        auto ed_alpha = (this->alpha ^ b.alpha).count() / 2;
+        auto ed_beta = (this->beta ^ b.beta).count() / 2;
         return std::array<int, N_SPIN_SPECIES>{ed_alpha, ed_beta};
     }
 };
@@ -94,8 +95,8 @@ det_t apply_single_excitation(det_t s, int spin, uint64_t hole, uint64_t particl
 
 spin_det_t apply_spin_single_excitation(spin_det_t s, uint64_t hole, uint64_t particle);
 
-det_t apply_double_excitation(det_t s, std::pair<int> spin, uint64_t h1, uint64_t h2, uint64_t p1,
-                              uint64_t p2);
+det_t apply_double_excitation(det_t s, std::pair<int, int> spin, uint64_t h1, uint64_t h2,
+                              uint64_t p1, uint64_t p2);
 
 typedef std::vector<uint64_t> spin_constraint_t;
 typedef std::pair<spin_constraint_t, spin_constraint_t> exc_constraint_t;
