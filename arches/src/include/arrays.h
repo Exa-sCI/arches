@@ -14,7 +14,7 @@ template <class T> class LArray {
     LArray(idx_t n) { // no initializaiton
         size = n;
 
-        std::unique_ptr<Y[]> p(new Y[n]);
+        std::unique_ptr<T[]> p(new T[n]);
         ptr = std::move(p);
         arr = ptr.get();
     };
@@ -26,4 +26,4 @@ template <class T> class LArray {
     LArray(idx_t n, T *fill) : LArray(n) { std::copy(fill, fill + size, arr); };
 
     ~LArray() = default;
-}
+};

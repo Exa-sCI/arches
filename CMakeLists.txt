@@ -39,11 +39,11 @@ target_include_directories(matrix PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/inclu
 target_compile_options(matrix PRIVATE -fPIC -Wall)
 set_target_properties(matrix PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/arches/build)
 
-add_library(interface SHARED)
-target_sources(interface PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/array_interface.cpp)
-target_include_directories(interface PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/include)
-target_compile_options(interface PRIVATE -fPIC -Wall)
-set_target_properties(interface PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/arches/build)
+add_library(arrays SHARED)
+target_sources(arrays PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/arrays.cpp)
+target_include_directories(arrays PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/include)
+target_compile_options(arrays PRIVATE -fPIC -Wall)
+set_target_properties(arrays PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/arches/build)
 
 add_library(jchunk SHARED)
 target_sources(jchunk PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/integrals.cpp)

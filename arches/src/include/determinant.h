@@ -18,12 +18,21 @@ template <> struct std::hash<spin_det_t> {
 };
 
 #define N_SPIN_SPECIES 2
+#define MIN_BITSET_SIZE 64
 
 class det_t { // The class
 
   public: // Access specifier
     spin_det_t alpha;
     spin_det_t beta;
+
+    // TODO: need a better default constructor than this
+    // Will need to revisit this anyway when offloading comes around, since I think that
+    // it might be tough to move the dynamic bitset class onto the devicce
+    det_t() {
+        alpha = spin_det_t(MIN_BITSET_SIZE, 0);
+        beta = spin_det_t(MIN_BITSET_SIZE, 0);
+    }
 
     det_t(spin_det_t _alpha, spin_det_t _beta) {
         alpha = _alpha;

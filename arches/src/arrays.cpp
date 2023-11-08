@@ -117,39 +117,54 @@ Constructors and destructors for simple arrays for the following types
 extern "C" {
 
 // Empty constructors
-LArray<float> *LArray_ctor_e_f32(idx_t n){return new LArray<float>(n)};
-LArray<double> *LArray_ctor_e_f64(idx_t n){return new LArray<double>(n)};
-LArray<int> *LArray_ctor_e_i32(idx_t n){return new LArray<int>(n)};
-LArray<long int> *LArray_ctor_e_i64(idx_t n){return new LArray<long int>(n)};
-LArray<unsigned int> *LArray_ctor_e_ui32(idx_t n){return new LArray<unsigned int>(n)};
-LArray<unsigned long int> *LArray_ctor_e_ui64(idx_t n){return new LArray<unsigned long int>(n)};
-LArray<idx_t> *LArray_ctor_e_idx_t(idx_t n){return new LArray<idx_t>(n)};
-LArray<det_t> *LArray_ctor_e_f32(idx_t n){return new LArray<det_t>(n)};
+LArray<float> *LArray_ctor_e_f32(idx_t n) { return new LArray<float>(n); }
+LArray<double> *LArray_ctor_e_f64(idx_t n) { return new LArray<double>(n); }
+LArray<int> *LArray_ctor_e_i32(idx_t n) { return new LArray<int>(n); }
+LArray<long int> *LArray_ctor_e_i64(idx_t n) { return new LArray<long int>(n); }
+LArray<unsigned int> *LArray_ctor_e_ui32(idx_t n) { return new LArray<unsigned int>(n); }
+LArray<unsigned long int> *LArray_ctor_e_ui64(idx_t n) { return new LArray<unsigned long int>(n); }
+LArray<idx_t> *LArray_ctor_e_idx_t(idx_t n) { return new LArray<idx_t>(n); }
+LArray<det_t> *LArray_ctor_e_det_t(idx_t n) { return new LArray<det_t>(n); }
 
 // Fill constructors
-LArray<float> *LArray_ctor_c_f32(idx_t n, float fill_val){return new LArray<float>(n, fill_val)};
-LArray<double> *LArray_ctor_c_f64(idx_t n, double fill_val){return new LArray<double>(n, fill_val)};
-LArray<int> *LArray_ctor_c_i32(idx_t n, int fill_val){return new LArray<int>(n, fill_val)};
-LArray<long int> *LArray_ctor_c_i64(idx_t n,
-                                    long int fill_val){return new LArray<long int>(n, fill_val)};
-LArray<unsigned int> *LArray_ctor_c_ui32(idx_t n, unsigned int fill_val){
-    return new LArray<unsigned int>(n, fill_val)};
-LArray<unsigned long int> *LArray_ctor_c_ui64(idx_t n, unsigned long int fill_val){
-    return new LArray<unsigned long int>(n, fill_val)};
-LArray<idx_t> *LArray_ctor_c_idx_t(idx_t n, idx_t fill_val){return new LArray<idx_t>(n, fill_val)};
+LArray<float> *LArray_ctor_c_f32(idx_t n, float fill_val) { return new LArray<float>(n, fill_val); }
+LArray<double> *LArray_ctor_c_f64(idx_t n, double fill_val) {
+    return new LArray<double>(n, fill_val);
+}
+LArray<int> *LArray_ctor_c_i32(idx_t n, int fill_val) { return new LArray<int>(n, fill_val); }
+LArray<long int> *LArray_ctor_c_i64(idx_t n, long int fill_val) {
+    return new LArray<long int>(n, fill_val);
+}
+LArray<unsigned int> *LArray_ctor_c_ui32(idx_t n, unsigned int fill_val) {
+    return new LArray<unsigned int>(n, fill_val);
+}
+LArray<unsigned long int> *LArray_ctor_c_ui64(idx_t n, unsigned long int fill_val) {
+    return new LArray<unsigned long int>(n, fill_val);
+}
+LArray<idx_t> *LArray_ctor_c_idx_t(idx_t n, idx_t fill_val) {
+    return new LArray<idx_t>(n, fill_val);
+}
 
 // Copy constructors
-LArray<float> *LArray_ctor_a_f32(idx_t n, float *fill_val){return new LArray<float>(n, fill_val)};
-LArray<double> *LArray_ctor_a_f64(idx_t n,
-                                  double *fill_val){return new LArray<double>(n, fill_val)};
-LArray<int> *LArray_ctor_a_i32(idx_t n, int *fill_val){return new LArray<int>(n, fill_val)};
-LArray<long int> *LArray_ctor_a_i64(idx_t n,
-                                    long int *fill_val){return new LArray<long int>(n, fill_val)};
-LArray<unsigned int> *LArray_ctor_a_ui32(idx_t n, unsigned int *fill_val){
-    return new LArray<unsigned int>(n, fill_val)};
-LArray<unsigned long int> *LArray_ctor_a_ui64(idx_t n, unsigned long int *fill_val){
-    return new LArray<unsigned long int>(n, fill_val)};
-LArray<idx_t> *LArray_ctor_a_idx_t(idx_t n, idx_t *fill_val){return new LArray<idx_t>(n, fill_val)};
+LArray<float> *LArray_ctor_a_f32(idx_t n, float *fill_val) {
+    return new LArray<float>(n, fill_val);
+}
+LArray<double> *LArray_ctor_a_f64(idx_t n, double *fill_val) {
+    return new LArray<double>(n, fill_val);
+}
+LArray<int> *LArray_ctor_a_i32(idx_t n, int *fill_val) { return new LArray<int>(n, fill_val); }
+LArray<long int> *LArray_ctor_a_i64(idx_t n, long int *fill_val) {
+    return new LArray<long int>(n, fill_val);
+}
+LArray<unsigned int> *LArray_ctor_a_ui32(idx_t n, unsigned int *fill_val) {
+    return new LArray<unsigned int>(n, fill_val);
+}
+LArray<unsigned long int> *LArray_ctor_a_ui64(idx_t n, unsigned long int *fill_val) {
+    return new LArray<unsigned long int>(n, fill_val);
+}
+LArray<idx_t> *LArray_ctor_a_idx_t(idx_t n, idx_t *fill_val) {
+    return new LArray<idx_t>(n, fill_val);
+}
 
 // Destructors
 void LArray_dtor_f32(LArray<float> *X) { delete X; }
