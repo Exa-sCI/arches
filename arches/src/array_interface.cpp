@@ -1,11 +1,10 @@
+#include "arrays.h"
+#include "determinant.h"
 #include "integral_indexing_utils.h"
 #include <algorithm>
 /*
-Interface functions for reading and setting values ot managed pointers
+Interface functions for reading and setting values of managed pointers
 */
-
-// typedef long int idx_t;
-
 extern "C" {
 
 // int 32
@@ -109,4 +108,56 @@ void set_strided_range_f64(double *a, idx_t start, idx_t stop, idx_t step, doubl
 // complex 64
 
 // complex 128
+}
+
+/*
+Constructors and destructors for simple arrays for the following types
+// i32, i64, ui32, ui64, f32, f64, idx_t, det_t
+*/
+extern "C" {
+
+// Empty constructors
+LArray<float> *LArray_ctor_e_f32(idx_t n){return new LArray<float>(n)};
+LArray<double> *LArray_ctor_e_f64(idx_t n){return new LArray<double>(n)};
+LArray<int> *LArray_ctor_e_i32(idx_t n){return new LArray<int>(n)};
+LArray<long int> *LArray_ctor_e_i64(idx_t n){return new LArray<long int>(n)};
+LArray<unsigned int> *LArray_ctor_e_ui32(idx_t n){return new LArray<unsigned int>(n)};
+LArray<unsigned long int> *LArray_ctor_e_ui64(idx_t n){return new LArray<unsigned long int>(n)};
+LArray<idx_t> *LArray_ctor_e_idx_t(idx_t n){return new LArray<idx_t>(n)};
+LArray<det_t> *LArray_ctor_e_f32(idx_t n){return new LArray<det_t>(n)};
+
+// Fill constructors
+LArray<float> *LArray_ctor_c_f32(idx_t n, float fill_val){return new LArray<float>(n, fill_val)};
+LArray<double> *LArray_ctor_c_f64(idx_t n, double fill_val){return new LArray<double>(n, fill_val)};
+LArray<int> *LArray_ctor_c_i32(idx_t n, int fill_val){return new LArray<int>(n, fill_val)};
+LArray<long int> *LArray_ctor_c_i64(idx_t n,
+                                    long int fill_val){return new LArray<long int>(n, fill_val)};
+LArray<unsigned int> *LArray_ctor_c_ui32(idx_t n, unsigned int fill_val){
+    return new LArray<unsigned int>(n, fill_val)};
+LArray<unsigned long int> *LArray_ctor_c_ui64(idx_t n, unsigned long int fill_val){
+    return new LArray<unsigned long int>(n, fill_val)};
+LArray<idx_t> *LArray_ctor_c_idx_t(idx_t n, idx_t fill_val){return new LArray<idx_t>(n, fill_val)};
+
+// Copy constructors
+LArray<float> *LArray_ctor_a_f32(idx_t n, float *fill_val){return new LArray<float>(n, fill_val)};
+LArray<double> *LArray_ctor_a_f64(idx_t n,
+                                  double *fill_val){return new LArray<double>(n, fill_val)};
+LArray<int> *LArray_ctor_a_i32(idx_t n, int *fill_val){return new LArray<int>(n, fill_val)};
+LArray<long int> *LArray_ctor_a_i64(idx_t n,
+                                    long int *fill_val){return new LArray<long int>(n, fill_val)};
+LArray<unsigned int> *LArray_ctor_a_ui32(idx_t n, unsigned int *fill_val){
+    return new LArray<unsigned int>(n, fill_val)};
+LArray<unsigned long int> *LArray_ctor_a_ui64(idx_t n, unsigned long int *fill_val){
+    return new LArray<unsigned long int>(n, fill_val)};
+LArray<idx_t> *LArray_ctor_a_idx_t(idx_t n, idx_t *fill_val){return new LArray<idx_t>(n, fill_val)};
+
+// Destructors
+void LArray_dtor_f32(LArray<float> *X) { delete X; }
+void LArray_dtor_f64(LArray<double> *X) { delete X; }
+void LArray_dtor_i32(LArray<int> *X) { delete X; }
+void LArray_dtor_i64(LArray<long int> *X) { delete X; }
+void LArray_dtor_ui32(LArray<unsigned int> *X) { delete X; }
+void LArray_dtor_ui64(LArray<unsigned long int> *X) { delete X; }
+void LArray_dtor_idx_t(LArray<idx_t> *X) { delete X; }
+void LArray_dtor_det_t(LArray<det_t> *X) { delete X; }
 }
