@@ -15,10 +15,10 @@ template <class T> class JChunk {
     idx_t *ind; // compound two- or four- indices
     T *J;       // integrals
 
-    template <class Y> JChunk(idx_t N, idx_t *J_ind, Y *J_val) {
+    JChunk(idx_t N, idx_t *J_ind, T *J_val) {
         size = N;
         std::unique_ptr<idx_t[]> p_ind(new idx_t[size]);
-        std::unique_ptr<Y[]> p_val(new Y[size]);
+        std::unique_ptr<T[]> p_val(new T[size]);
 
         idx_ptr = std::move(p_ind);
         J_ptr = std::move(p_val);

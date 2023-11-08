@@ -43,7 +43,7 @@ DMatrix<double> *DMatrix_ctor_a_f64(idx_t m, idx_t n, double *fill) {
 float *DMatrix_get_arr_ptr_f32(DMatrix<float> *A) { return A->A; }
 double *DMatrix_get_arr_ptr_f64(DMatrix<double> *A) { return A->A; }
 
-// DMatrix destructors : TODO: test if necessary
+// DMatrix destructors
 void DMatrix_dtor_f32(DMatrix<float> *A) { delete A; }
 void DMatrix_dtor_f64(DMatrix<double> *A) { delete A; }
 

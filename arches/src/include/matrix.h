@@ -22,29 +22,21 @@ template <class T> class DMatrix {
     // 2) In constructor, store device pointer for A
     // 3) In destructor, make sure target is moved back/cleared
 
+    // no initialization of values
+    DMatrix(idx_t M, idx_t N) {
+        m = M;
+        n = N;
+
+        std::unique_ptr<T[]> p(new T[m * n]);
+        A_ptr = std::move(p);
+        A = A_ptr.get();
+    }
+
     // fill constructor
-    template <class Y> DMatrix(idx_t M, idx_t N, Y fill_val) {
-        m = M;
-        n = N;
+    DMatrix(idx_t M, idx_t N, T fill_val) : DMatrix(M, N) { std::fill(A, A + m * n, fill_val); };
 
-        std::unique_ptr<Y[]> p(new Y[m * n]);
-        A_ptr = std::move(p);
-        A = A_ptr.get();
-
-        std::fill(A, A + m * n, fill_val);
-    };
-
-    // copy constructor // Is there a way to delegate the common code?
-    template <class Y> DMatrix(idx_t M, idx_t N, Y *arr) {
-        m = M;
-        n = N;
-
-        std::unique_ptr<Y[]> p(new Y[m * n]);
-        A_ptr = std::move(p);
-        A = A_ptr.get();
-
-        std::copy(arr, arr + m * n, A);
-    };
+    // copy constructor
+    DMatrix(idx_t M, idx_t N, T *arr) : DMatrix(M, N) { std::copy(arr, arr + m * n, A); };
 
     // TODO: some form of slice assignment? In general, utilities for assigning, copying, and
     // returning submatrices
@@ -69,7 +61,7 @@ template <class T> class SymCSRMatrix {
     T *A_v;     // matrix entries
 
     // copy constructor only for now
-    template <class Y> SymCSRMatrix(idx_t M, idx_t N, idx_t *arr_p, idx_t *arr_c, Y *arr_v) {
+    SymCSRMatrix(idx_t M, idx_t N, idx_t *arr_p, idx_t *arr_c, T *arr_v) {
         m = M;
         n = N;
 
@@ -87,7 +79,7 @@ template <class T> class SymCSRMatrix {
         std::copy(arr_c, arr_c + n_entries, A_c);
 
         // allocate values
-        std::unique_ptr<Y[]> A_v_tmp(new Y[n_entries]);
+        std::unique_ptr<T[]> A_v_tmp(new T[n_entries]);
         A_v_ptr = std::move(A_v_tmp);
         A_v = A_v_ptr.get();
 
