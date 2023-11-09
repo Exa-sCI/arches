@@ -124,7 +124,6 @@ LArray<long int> *LArray_ctor_e_i64(idx_t n) { return new LArray<long int>(n); }
 LArray<unsigned int> *LArray_ctor_e_ui32(idx_t n) { return new LArray<unsigned int>(n); }
 LArray<unsigned long int> *LArray_ctor_e_ui64(idx_t n) { return new LArray<unsigned long int>(n); }
 LArray<idx_t> *LArray_ctor_e_idx_t(idx_t n) { return new LArray<idx_t>(n); }
-LArray<det_t> *LArray_ctor_e_det_t(idx_t n) { return new LArray<det_t>(n); }
 
 // Fill constructors
 LArray<float> *LArray_ctor_c_f32(idx_t n, float fill_val) { return new LArray<float>(n, fill_val); }

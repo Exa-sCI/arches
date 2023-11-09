@@ -23,6 +23,9 @@ template <class T> class JChunk {
         idx_ptr = std::move(p_ind);
         J_ptr = std::move(p_val);
 
+        ind = idx_ptr.get();
+        J = J_ptr.get();
+
         std::copy(J_ind, J_ind + size, ind);
         std::copy(J_val, J_val + size, J);
     }

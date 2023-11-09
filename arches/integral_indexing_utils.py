@@ -214,7 +214,7 @@ def compound_idx4_reverse_all(ijkl):
     )
 
 
-# TODO: Stil debugging implementation, but not used anywhere, so moving on for now.
+# TODO: Still debugging implementation, but not used anywhere, so moving on for now.
 def compound_idx4_reverse_all_unique(ijkl):
     """
     return only the unique 4-tuples from compound_idx4_reverse_all
