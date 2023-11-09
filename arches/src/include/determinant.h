@@ -1,6 +1,7 @@
 #pragma once
 
 #include "integral_indexing_utils.h"
+#include "matrix.h"
 #include <array>
 #include <functional>
 #include <iostream>
@@ -377,3 +378,49 @@ std::vector<det_t> get_all_singles(det_t d);
 
 void get_connected_dets(DetArray *dets_int, DetArray *dets_ext, idx_t *hc_alpha, idx_t *hc_beta,
                         idx_t *pc_alpha, idx_t *pc_beta);
+
+// This is way too slow for actual formation of explicit Hamiltonians, but it's easy to write!
+// Should get bilinear mappings so that we can iterate over known determinants and find connections
+// directly. Or, resort to on the fly generation of the Hamiltonian structure, which would need true
+// expandable vectors inside the offloaded kernels
+template <class T>
+void get_H_structure_naive(DetArray *psi_det, SymCSRMatrix<T> *H, idx_t N_det, T dummy) {
+
+    std::vector<std::vector<idx_t>> csr_rows;
+    std::unique_ptr<idx_t[]> H_p(new idx_t[N_det + 1]);
+
+    // find non-zero entries
+    for (auto i = 0; i < N_det; i++) {
+        det_t &d_row = psi_det->arr[i];
+
+        H_p[i + 1] += 1; // add H_ii
+        csr_rows[i].push_back(i);
+        for (auto j = i + 1, j < N_det; j++) {
+            det_t &d_col = psi_det->arr[j];
+
+            det_t exc = exc_det(d_row, d_col);
+            auto degree = (exc[0].count() + exc[1].count) / 2;
+
+            if (degree <= 2) { // add H_ij
+                csr_rows[i].push_back[j];
+                H_p[i + 1] += 1;
+            }
+        }
+
+        H_p[i + 1] += H_p[i]; // adjust global row offset
+    }
+
+    // copy over from vector of vectors into single array
+    std::unique_ptr<idx_t[]> H_c(new idx_t[H_p[N_det]]);
+    idx_t *H_c_p = H_c.get();
+    for (auto i = 0; i < N_det; i++) {
+        std::copy(csr_rows[i].begin(), csr_rows[i].end(), H_c_p + H_p[i]);
+    }
+
+    // initialize values at 0
+    std::unique_ptr<T[]> H_v(new T[H_p[N_det]]);
+    T *H_v_p = H_v.get();
+    std::fill(H_v_p, H_v_p + H_p[m], (T)0.0);
+
+    *H = SymCSRMatrix<T>(N_det, N_det, H_p, H_c, H_v); // use the move constructor + move operator
+}
