@@ -4,6 +4,11 @@
 
 /*
  Kernels for performing integral driven calculations
+*/
+
+/*****************************
+
+Kernel functions for calculating PT2 contributions of generated external determinants
 
  Intended strategy: since G >> (A,B,C,D,E,F, and OE), root worker will get all non-G and small G
  chunk; every other worker distributes G evenly.
@@ -12,7 +17,7 @@
 
 psi_coef is array of shape [N_int, N_states]
 res are arrays of shape [N_ext, N_states]
-*/
+******************************/
 
 // One electron contributions
 template <class T>
@@ -211,6 +216,7 @@ void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
 
             if (!(c13 || c24)) // J[i] has no contribution for this internal det
                 continue;
+
             // iterate over external determinants
             for (auto d_e = 0; d_e < N_ext; d_e++) {
                 det_t &d_ext = psi_ext[d_e];
@@ -396,7 +402,9 @@ void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
 
                 // early exit on exc degree is probably simplest
                 det_t exc = exc_det(d_int, d_ext);
-                auto degree = (exc[0].count() + exc[1].count()) / 2;
+                auto alpha_count = exc[0].count() / 2;
+                auto beta_count = exc[1].count() / 2;
+                auto degree = (alpha_count + beta_count);
                 if (degree > 2) // |d_i> and |d_e> not connnected, assumes d_i != d_e
                     continue;
 
@@ -422,7 +430,7 @@ void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
                     }
                 } else if (degree == 2) {
 
-                    if (exc[0].count() == 0 || exc[1].count() == 0) // must be opp. spin double
+                    if (alpha_count == 0 || beta_count == 0) // must be opp. spin double
                         continue;
 
                     if (!(exc[0][q] && exc[1][q])) // q must be involved in both spins
@@ -622,7 +630,8 @@ void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
 
                 // TODO: profile some form of inlining for phase computations
                 int phase;
-                if (a_degree == 1) {
+                switch (a_degree) {
+                case 1:
                     // aceg
                     if (exc[0][q] && exc[0][s] && exc[1][r] && exc[1][t]) {
                         phase = compute_phase_double_excitation(d_int, q, r, s, t);
@@ -638,7 +647,7 @@ void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
                             res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
                         }
                     }
-                } else if (a_degree == 0) {
+                case 0:
                     // (0,2) : g_ii >= 2 is criterion for acceptance
                     bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
                     if (!aa_check)
@@ -658,7 +667,7 @@ void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
                     for (auto state = 0; state < N_states; state++) {
                         res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
                     }
-                } else {
+                case 2:
                     // (2,0) : g_ii % 2 is criterion for acceptance
                     bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
                     if (!bb_check)
@@ -677,6 +686,477 @@ void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
                     for (auto state = 0; state < N_states; state++) {
                         res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
                     }
+                }
+            }
+        }
+    }
+}
+
+/*****************************
+
+Kernel functions for calculating entries of H, explicit matrix structure.
+
+In these kernels, we know |I> and |J> are connected, and since H is so sparse
+and thus relatively few entries per row, it is probably much faster to just add zeroes
+and be truly branchless instead of trying to figure out the exact excitation conditions expliclitly,
+where possible. Especially since we're already filtering the integral on |I>.
+
+For now, the addition logic follow exactly as the pt2 kernels.
+
+Improving performance on this end depends on how expensive the phase calculations are.
+
+******************************/
+
+// One electron
+template <class T>
+void H_OE_ii(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
+
+    for (auto i = 0; i < N; i++) { // loop over integrals
+        struct ij_tuple ij = compound_idx2_reverse(J_ind[i]);
+        if (ij.i != ij.j)
+            continue;
+
+        for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
+            auto idx = H_p[j];
+            auto &det = psi_det[det_j];
+
+            H_v[idx] += (det.alpha[ij.i] + det.beta[ij.i]) * J[i];
+        }
+    }
+}
+
+template <class T>
+void H_OE_ij(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
+             T *H_v) {
+
+    for (auto i = 0; i < N; i++) { // loop over all integrals
+
+        struct ij_tuple ij = compound_idx2_reverse(J_ind[i]);
+
+        // iterate over entries of H, excluding diagonal entries
+        for (auto row = 0; row < N_det; row++) {
+            det_t &d_row = psi_det[row];
+
+            // i must be occupied only in d_i; j only in d_j
+            bool i_alpha = d_row.alpha[ij.i] && ~d_row.alpha[ij.j];
+            bool i_beta = d_row.beta[ij.i] && ~d_row.beta[ij.j];
+            if (!(i_alpha || i_beta))
+                continue;
+
+            for (auto idx = H_p[row] + 1; idx < H_p[row + 1]; idx++) {
+                auto col = H_c[idx];
+                det_t &d_col = psi_det[col];
+
+                det_t exc = exc_det(d_row, d_col);
+                int degree_alpha = exc[0].count() / 2;
+                int degree_beta = exc[1].count() / 2;
+                if (degree_alpha + degree_beta != 1)
+                    continue; // determinants not related by single exc
+
+                bool j_check = degree_alpha ? (~d_col.alpha[ij.i] && d_col.alpha[ij.j])
+                                            : (~d_col.beta[ij.i] && d_col.beta[ij.j]);
+
+                if (!j_check)
+                    continue;
+
+                int phase = compute_phase_single_excitation(d_row[degree_beta], ij.i, ij.j);
+                H_v[idx] += phase * J[i];
+            }
+        }
+    }
+}
+
+// Two electron
+template <class T>
+void H_A_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
+
+    for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
+        auto &det = psi_det[det_j];
+        auto idx = H_p[j];
+
+        for (auto i = 0; i < N; i++) { // loop over integrals
+
+            H_v[idx] += det[0][i] * det[1][i] * J[i];
+        }
+    }
+}
+
+template <class T>
+void H_B_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
+
+    for (auto i = 0; i < N; i++) { // loop over integrals
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // index already in standard form: J_ijij -> J_qrqr
+        idx_t q, r;
+        q = c_idx.i;
+        r = c_idx.j;
+
+        for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
+            auto &det = psi_det[det_j];
+            auto idx = H_p[j];
+
+            H_v[idx] += det[0][q] * det[0][r] * J[i];
+            H_v[idx] += det[1][q] * det[1][r] * J[i];
+        }
+    }
+}
+
+template <class T>
+void H_C_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
+                T *H_v) {
+
+    for (auto i = 0; i < N; i++) { // loop over integrals
+
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // map index to standard form: J_ijil, J_ijkj -> J_qrqs
+        idx_t q, r, s;
+        map_idx_C(c_idx, q, r, s);
+
+        // iterate over entries of H, excluding diagonal entries
+        for (auto row = 0; row < N_det; row++) {
+            det_t &d_row = psi_det[row];
+
+            bool c13, c24, q_ai, q_bi;
+            q_ai = d_row[0][q];
+            q_bi = d_row[1][q];
+            c13 = (d_row[0][r] != d_row[0][s]) && (q_ai || q_bi);
+            c24 = (d_row[1][r] != d_row[1][s]) && (q_ai || q_bi);
+
+            if (!(c13 || c24)) // J[i] has no contribution for this row
+                continue;
+
+            for (auto idx = H_p[row] + 1; idx < H_p[row + 1]; idx++) {
+                auto col = H_c[idx];
+                det_t &d_col = psi_det[col];
+
+                bool q_a = d_col[0][q] && q_ai;
+                bool q_b = d_col[1][q] && q_bi;
+                if (!(q_a || q_b)) // q must be occupied in beta/alpha simultaneously
+                    continue;
+
+                det_t exc = exc_det(d_row, d_col);
+                auto degree = (exc[0].count() + exc[1].count()) / 2;
+                if (degree != 1) // |d_i> and |d_e> not related by a single excitation
+                    continue;
+
+                int phase;
+                if (c13 && exc[0][r] && exc[0][s]) {
+                    phase = compute_phase_single_excitation(d_row[0], r, s);
+                    H_v[idx] += q_a * J[i] * phase;
+                    H_v[idx] += q_b * J[i] * phase;
+                }
+
+                if (c24 && exc[1][r] && exc[1][s]) {
+                    phase = compute_phase_single_excitation(d_row[1], r, s);
+                    H_v[idx] += q_a * J[i] * phase;
+                    H_v[idx] += q_b * J[i] * phase;
+                }
+            }
+        }
+    }
+}
+
+template <class T>
+void H_D_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
+                T *H_v) {
+
+    for (auto i = 0; i < N; i++) { // loop over integrals
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // map index to standard form: J_iiil, J_ijjj -> J_qqqr
+        idx_t q, r;
+        map_idx_D(c_idx, q, r);
+
+        // iterate over entries of H, excluding diagonal entries
+        for (auto row = 0; row < N_det; row++) {
+            det_t &d_row = psi_det[row];
+
+            bool d13, d24, q_ai, q_bi;
+            q_ai = d_row[0][q];
+            q_bi = d_row[1][q];
+            d13 = (d_row[0][q] != d_row[0][r]) && q_bi;
+            d24 = (d_row[1][q] != d_row[1][r]) && q_ai;
+
+            if (!(d13 || d24)) // J[i] has no contribution
+                continue;
+
+            for (auto idx = H_p[row] + 1; idx < H_p[row + 1]; idx++) {
+                auto col = H_c[idx];
+                det_t &d_col = psi_det[col];
+
+                bool q_a = d_col[0][q] && q_ai;
+                bool q_b = d_col[1][q] && q_bi;
+                if (!(q_a || q_b)) // q must be occupied in beta/alpha simultaneously
+                    continue;
+
+                det_t exc = exc_det(d_row, d_col);
+                auto degree = (exc[0].count() + exc[1].count()) / 2;
+                if (degree != 1) // |d_i> and |d_e> not related by a single excitation
+                    continue;
+
+                int phase;
+                // include q_(a/b) in check since there is only one contribution
+                if (d13 && q_b && exc[0][q] && exc[0][r]) {
+                    phase = compute_phase_single_excitation(d_row[0], q, r);
+                    H_v[idx] += J[i] * phase;
+                }
+
+                if (d24 && q_a && exc[1][q] && exc[1][r]) {
+                    phase = compute_phase_single_excitation(d_row[1], q, r);
+                    H_v[idx] += J[i] * phase;
+                }
+            }
+        }
+    }
+}
+
+template <class T>
+void H_E_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
+                T *H_v) {
+
+    for (auto i = 0; i < N; i++) { // loop over integrals
+
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // map index to standard form: J_iikl, J_ijjl, J_ijkk -> J_qqrs
+        idx_t q, r, s;
+        map_idx_E(c_idx, q, r, s);
+
+        // iterate over entries of H, excluding diagonal entries
+        for (auto row = 0; row < N_det; row++) {
+            det_t &d_row = psi_det[row];
+            bool e_13, e_24, e_adeg, e_bcfh, q_ai, q_bi;
+            q_ai = d_row[0][q];
+            q_bi = d_row[1][q];
+            e_13 = (d_row[0][r] != d_row[0][s]) && q_ai;
+            e_24 = (d_row[1][r] != d_row[1][s]) && q_bi;
+
+            e_adeg = (d_row[0][q] != d_row[0][r]) && (d_row[1][q] != d_row[1][s]);
+            e_bcfh = (d_row[0][q] != d_row[0][r]) && (d_row[1][q] != d_row[1][s]);
+
+            if (!(e_13 || e_24 || e_adeg || e_bcfh)) // J[i] has no contribution
+                continue;
+
+            for (auto idx = H_p[row] + 1; idx < H_p[row + 1]; idx++) {
+                auto col = H_c[idx];
+                det_t &d_col = psi_det[col];
+
+                // early exit on exc degree is probably simplest
+                det_t exc = exc_det(d_int, d_ext);
+                auto alpha_count = exc[0].count() / 2;
+                auto beta_count = exc[1].count() / 2;
+                auto degree = (alpha_count + beta_count);
+
+                // we know they are connected, this saves a check down the line
+                if (alpha_count == 2 || beta_count == 2)
+                    continue;
+
+                int phase;
+                if (degree == 1) {
+                    bool q_a = d_col[0][q] && q_ai;
+                    bool q_b = d_col[1][q] && q_bi;
+                    if (!(q_a || q_b)) // q must be occupied in beta/alpha simultaneously
+                        continue;
+
+                    if (e_13 && q_a && exc[0][r] && exc[0][s]) {
+                        phase = compute_phase_single_excitation(d_row[0], r, s);
+                        H_v[idx] += J[i] * phase * -1;
+                    }
+
+                    if (e_24 && q_b && exc[1][r] && exc[1][s]) {
+                        phase = compute_phase_single_excitation(d_row[1], r, s);
+                        H_v[idx] += J[i] * phase * -1;
+                    }
+                } else if (degree == 2) {
+
+                    if (!(exc[0][q] && exc[1][q])) // q must be involved in both spins
+                        continue;
+
+                    // adeg
+                    if (exc[0][r] && exc[1][s]) {
+                        phase = compute_phase_double_excitation(d_row, q, q, r, s);
+                        H_v[idx] += J[i] * phase;
+                    }
+
+                    // bcfh
+                    if (exc[0][s] && exc[1][r]) {
+                        phase = compute_phase_double_excitation(d_row, q, q, s, r);
+                        H_v[idx] += J[i] * phase;
+                    }
+                }
+            }
+        }
+    }
+}
+
+template <class T>
+void H_F_ii_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
+
+    for (auto i = 0; i < N; i++) { // loop over integrals
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // index already in standard form: J_iikk -> J_qqrr
+        idx_t q, r;
+        q = c_idx.i;
+        r = c_idx.k;
+
+        for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
+            auto &det = psi_det[det_j];
+            auto idx = H_p[j];
+
+            H_v[idx] -= det[0][q] * det[0][r] * J[i]; // phase implicit in -=
+            H_v[idx] -= det[1][q] * det[1][r] * J[i];
+        }
+    }
+}
+
+template <class T>
+void H_F_ij_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
+                   T *H_v) {
+
+    for (auto i = 0; i < N; i++) { // loop over integrals
+        // by construction of the chunks, this should be the canonical index
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // index already in standard form: J_iikk -> J_qqrr
+        idx_t q, r;
+        q = c_idx.i;
+        r = c_idx.k;
+
+        // iterate over entries of H, excluding diagonal entries
+        for (auto row = 0; row < N_det; row++) {
+            det_t &d_row = psi_det[row];
+
+            bool i_check = (d_row[0][q] != d_row[0][r]) && (d_row[1][q] != d_row[1][r]);
+
+            if (!i_check) // J[i] has no contribution
+                continue;
+
+            for (auto idx = H_p[row] + 1; idx < H_p[row + 1]; idx++) {
+                auto col = H_c[idx];
+                det_t &d_col = psi_det[col];
+
+                det_t exc = exc_det(d_row, d_col);
+                auto a_degree = exc[1].count() / 2;
+                auto b_degree = exc[0].count() / 2;
+                if (!((a_degree == 1) && (b_degree == 1))) // must be opp. spin double
+                    continue;
+
+                if (exc[0][q] && exc[0][r] && exc[1][q] && exc[1][r]) {
+                    int phase = compute_phase_double_excitation(d_row, q, q, r, r);
+                    H_v[idx] += J[i] * phase;
+                }
+            }
+        }
+    }
+}
+
+template <class T>
+void H_G_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
+                T *H_v) {
+    for (auto i = 0; i < N; i++) { // loop over integrals
+
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+
+        // index already in standard form: J_ijkl -> J_qrst
+        idx_t q, r, s, t;
+        q = c_idx.i;
+        r = c_idx.j;
+        s = c_idx.k;
+        t = c_idx.l;
+
+        // iterate over entries of H, excluding diagonal entries
+        for (auto row = 0; row < N_det; row++) {
+            det_t &d_row = psi_det[row];
+
+            // checks for opposite spin doubles
+            bool g_aceg, g_bdfh;
+            g_aceg = (d_row[0][q] != d_row[0][s]) && (d_row[1][r] != d_row[1][t]);
+            g_bdfh = (d_row[0][r] != d_row[0][t]) && (d_row[1][q] != d_row[1][s]);
+
+            // checks for same spin doubles
+            // g_ii in (0,1,2,3) :
+            // 0 - none, 1 - only alpha 2- only beta 3 - both alpha and beta
+            int g_11, g_22, g_33, g_44 = 0;
+            for (auto spin = 0; spin < N_SPIN_SPECIES; spin++) {
+                g_11 = (spin + 1) *
+                       ((d_row[spin][q] && d_row[spin][r]) && (!d_row[spin][s] && !d_row[spin][t]));
+                g_22 = (spin + 1) *
+                       ((d_row[spin][s] && d_row[spin][t]) && (!d_row[spin][q] && !d_row[spin][r]));
+                g_33 = (spin + 1) *
+                       ((d_row[spin][q] && d_row[spin][t]) && (!d_row[spin][s] && !d_row[spin][r]));
+                g_44 = (spin + 1) *
+                       ((d_row[spin][r] && d_row[spin][s]) && (!d_row[spin][q] && !d_row[spin][t]));
+            }
+
+            if (!(g_aceg || g_bdfh ||
+                  ((g_11 + g_22 + g_33 + g_44) > 0))) // J[i] has no contribution
+                continue;
+
+            for (auto idx = H_p[row] + 1; idx < H_p[row + 1]; idx++) {
+                auto col = H_c[idx];
+                det_t &d_col = psi_det[col];
+
+                det_t exc = exc_det(d_row, d_col);
+                auto a_degree = exc[0].count() / 2;
+                auto degree = a_degree + exc[1].count() / 2;
+                if (degree != 2) // |d_i> and |d_e> not connnected by double exc.
+                    continue;
+
+                int phase;
+                switch (a_degree) {
+                case 1:
+                    // aceg
+                    if (exc[0][q] && exc[0][s] && exc[1][r] && exc[1][t]) {
+                        phase = compute_phase_double_excitation(d_row, q, r, s, t);
+
+                        H_v[idx] += J[i] * phase;
+                    }
+
+                    // bdfh
+                    if (exc[0][r] && exc[0][t] && exc[1][q] && exc[1][s]) {
+                        phase = compute_phase_double_excitation(d_row, r, q, t, s);
+
+                        H_v[idx] += J[i] * phase;
+                    }
+                case 0:
+                    // (0,2) : g_ii >= 2 is criterion for acceptance
+                    bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
+                    if (!aa_check)
+                        continue;
+
+                    // now must be one of g_11, g_22, g_33, g_44
+                    if (g_11 >= 2) {
+                        phase = compute_phase_double_excitation(d_row[0], q, r, s, t);
+                    } else if (g_22 >= 2) {
+                        phase = compute_phase_double_excitation(d_row[0], s, t, q, r);
+                    } else if (g_33 >= 2) {
+                        phase = compute_phase_double_excitation(d_row[0], q, t, s, r);
+                    } else {
+                        phase = compute_phase_double_excitation(d_row[0], r, s, q, t);
+                    }
+
+                    H_v[idx] += J[i] * phase;
+                case 2:
+                    // (2,0) : g_ii % 2 is criterion for acceptance
+                    bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
+                    if (!bb_check)
+                        continue;
+
+                    // now must be one of g_11, g_22, g_33, g_44
+                    if (g_11 % 2) {
+                        phase = compute_phase_double_excitation(d_row[1], q, r, s, t);
+                    } else if (g_22 % 2) {
+                        phase = compute_phase_double_excitation(d_row[1], s, t, q, r);
+                    } else if (g_33 % 2) {
+                        phase = compute_phase_double_excitation(d_row[1], q, t, s, r);
+                    } else {
+                        phase = compute_phase_double_excitation(d_row[1], r, s, q, t);
+                    }
+
+                    H_v[idx] += J[i] * phase;
                 }
             }
         }
