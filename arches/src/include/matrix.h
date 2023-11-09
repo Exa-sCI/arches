@@ -60,7 +60,10 @@ template <class T> class SymCSRMatrix {
     idx_t *A_c; // col indices
     T *A_v;     // matrix entries
 
-    // copy constructor only for now
+    // empty default constructor, to be able to get a handle
+    SymCSRMatrix(){};
+
+    // copy constructor
     SymCSRMatrix(idx_t M, idx_t N, idx_t *arr_p, idx_t *arr_c, T *arr_v) {
         m = M;
         n = N;
@@ -84,6 +87,35 @@ template <class T> class SymCSRMatrix {
         A_v = A_v_ptr.get();
 
         std::copy(arr_v, arr_v + n_entries, A_v);
+    };
+
+    // copy constructor from unique ptr, using move semantics
+    SymCSRMatrix(idx_t M, idx_t N, std::unique_ptr<idx_t[]> arr_p, std::unique_ptr<idx_t[]> arr_c,
+                 std::unique_ptr<T[]> arr_v) {
+        m = M;
+        n = N;
+
+        A_p_ptr = std::move(A_p_ptr);
+        A_c_ptr = std::move(A_c_ptr);
+        A_v_ptr = std::move(A_v_ptr);
+
+        A_p = A_p_ptr.get();
+        A_c = A_c_ptr.get();
+        A_v = A_v_ptr.get();
+    }
+
+    // full move operator
+    SymCSRMatrix &operator=(SymCSRMatrix &&other) {
+        m = other.m;
+        n = other.n;
+
+        A_p_ptr = std::move(other.A_p_ptr);
+        A_c_ptr = std::move(other.A_c_ptr);
+        A_v_ptr = std::move(other.A_v_ptr);
+
+        A_p = A_p_ptr.get();
+        A_c = A_c_ptr.get();
+        A_v = A_v_ptr.get();
     };
 };
 
