@@ -1,44 +1,236 @@
 #pragma once
 
+#include "integral_indexing_utils.h"
 #include <array>
 #include <functional>
 #include <iostream>
 #include <string>
-#include <sul/dynamic_bitset.hpp>
 #include <tuple>
 #include <utility>
 #include <vector>
 
-typedef sul::dynamic_bitset<> spin_det_t;
+// We could change this to short or long or whatever--but it should be fixed.
+typedef unsigned int mo_block_t;
 
-template <> struct std::hash<spin_det_t> {
-    std::size_t operator()(spin_det_t const &s) const noexcept {
-        return std::hash<std::string>()(s.to_string());
+int popcount(unsigned int x) { return __builtin_popcount(x); }
+
+int popcount(unsigned long x) { return __builtin_popcountl(x); }
+
+int popcount(unsigned long long x) { return __builtin_popcountll(x); }
+
+// define left most bit in 0th block to be the ground state
+
+class spin_det_t {
+  protected:
+    std::unique_ptr<mo_block_t[]> block_arr_ptr;
+
+  public:
+    idx_t N_mos;
+    idx_t N_blocks;
+    mo_block_t *block_arr;
+    mo_block_t read_mask;
+    mo_block_t block_size;
+
+    // needed for det_t to compile
+    spin_det_t(){};
+
+    // empty initialization
+    spin_det_t(idx_t min_mos) {
+        block_size = sizeof(mo_block_t) * 8;
+        read_mask = 1 << (block_size - 1);
+        N_mos = min_mos;
+        N_blocks = N_mos / (block_size) + (N_mos % (block_size) != 0);
+
+        std::unique_ptr<mo_block_t[]> p(new mo_block_t[N_blocks]);
+        block_arr_ptr = std::move(p);
+        block_arr = block_arr_ptr.get();
+    }
+
+    // lvalue assignment
+    spin_det_t &operator=(const spin_det_t &other) {
+        N_mos = other.N_mos;
+        N_blocks = other.N_blocks;
+
+        std::unique_ptr<mo_block_t[]> p(new mo_block_t[N_blocks]);
+        block_arr_ptr = std::move(p);
+        block_arr = block_arr_ptr.get();
+        std::copy(other.block_arr, other.block_arr + N_blocks, block_arr);
+        return *this;
+    }
+
+    // move operator for rvalue assignment, for temps
+    spin_det_t &operator=(spin_det_t &&other) {
+        N_mos = other.N_mos;
+        N_blocks = other.N_blocks;
+
+        block_arr_ptr = std::move(other.block_arr_ptr);
+        block_arr = block_arr_ptr.get();
+        return *this;
+    }
+
+    // copy constructors, which were implicitly deleted via move operator
+    spin_det_t(spin_det_t &other) { *this = other; }
+    spin_det_t(const spin_det_t &other) { *this = other; }
+
+    // default destructor
+    ~spin_det_t() = default;
+
+    /*
+    Usage operators and methods
+    */
+    bool operator[](idx_t orb) {
+        // assert(orb >= 0);
+        // assert(orb < N_mos);
+        idx_t block = orb / block_size;
+        idx_t offset = orb % block_size;
+
+        return (block_arr[block] << offset) & read_mask;
+    }
+
+    void set(idx_t orb, bool val) {
+        // assert(orb >= 0);
+        // assert(orb < N_mos);
+        idx_t block = orb / block_size;
+        idx_t offset = orb % block_size;
+
+        mo_block_t mask;
+        switch (val) {
+        case true: // Turning on bit at orb
+            mask = 1 << (block_size - offset);
+            block_arr[block] |= mask;
+        case false: // Turning off bit at orb
+            mask = ~(1 << (block_size - offset));
+            block_arr[block] &= mask;
+        }
+    };
+
+    void set(idx_t start_orb, idx_t end_orb, bool val) {
+        // assert(start_orb >= 0 && start_orb <= end_orb);
+        // assert(end_orb < N_mos);
+
+        idx_t s_block = start_orb / block_size;
+        idx_t e_block = end_orb / block_size;
+
+        // for all blocks prior to end block, can handle whole block
+        mo_block_t mask = val ? ~0 : 0;
+        for (auto i = s_block; i < e_block; i++) {
+            block_arr[i] = mask;
+        }
+
+        // handle last block
+        idx_t max_offset = end_orb % block_size;
+        mask =
+            mask << (block_size - max_offset); // if val, trailing orbs after end_orb should be zero
+        mask = val ? mask : ~mask; // else, up to offset should be zero and after should be ones
+
+        switch (val) {
+        case true:
+            block_arr[e_block] |= mask;
+        case false:
+            block_arr[e_block] &= mask;
+        }
+    };
+
+    // TODO: is it worth checking that this and other have the same size MO basis?
+    bool operator<(const spin_det_t &other) const {
+        // assert(N_blocks = other.N_blocks);
+        idx_t i = 0;
+        bool success;
+        while ((success = this->block_arr[i] < other.block_arr[i]) && (i < N_blocks))
+            i++;
+        return success;
+    }
+
+    bool operator==(const spin_det_t &other) const {
+        // assert(N_blocks = other.N_blocks);
+        idx_t i = 0;
+        bool success;
+        while ((success = block_arr[i] == other.block_arr[i]) && (i < N_blocks))
+            i++;
+        return success;
+    }
+
+    spin_det_t operator~() {
+        spin_det_t res(N_mos);
+        for (auto i = 0; i < N_blocks; i++) {
+            res.block_arr[i] = ~block_arr[i];
+        }
+        res.set(N_mos, N_blocks * block_size, 0); // clear out excess orbitals
+        return res;
+    }
+
+    spin_det_t operator^(const spin_det_t &other) {
+        spin_det_t res(N_mos);
+        for (auto i = 0; i < N_blocks; i++) {
+            res.block_arr[i] = block_arr[i] ^ other.block_arr[i];
+        }
+        return res; // no need to clear out excess orbitals
+    }
+
+    spin_det_t operator&(const spin_det_t &other) {
+        spin_det_t res(N_mos);
+        for (auto i = 0; i < N_blocks; i++) {
+            res.block_arr[i] = block_arr[i] & other.block_arr[i];
+        }
+        return res; // no need to clear out excess orbitals
+    }
+
+    int count() {
+        // both Clang and GCC have __builtin_popcount support, but I have no idea how this would
+        // port to device
+        int res = 0;
+        for (auto i = 0; i < N_blocks; i++) {
+            // use a wrapper for overloading against the builtins, in case mo_block_t is adjusted
+            res += popcount(block_arr[i]);
+        }
+        return res;
     }
 };
 
-#define N_SPIN_SPECIES 2
-#define MIN_BITSET_SIZE 64
-
-class det_t { // The class
-
-  public: // Access specifier
+class det_t {
+  public:
     spin_det_t alpha;
     spin_det_t beta;
+    idx_t N_mos;
 
-    // TODO: need a better default constructor than this
-    // Will need to revisit this anyway when offloading comes around, since I think that
-    // it might be tough to move the dynamic bitset class onto the devicce
-    det_t() {
-        alpha = spin_det_t(MIN_BITSET_SIZE, 0);
-        beta = spin_det_t(MIN_BITSET_SIZE, 0);
+    det_t(){};
+
+    det_t(idx_t min_mos) {
+        N_mos = min_mos;
+        alpha = spin_det_t(min_mos);
+        beta = spin_det_t(min_mos);
     }
 
     det_t(spin_det_t _alpha, spin_det_t _beta) {
+        // TODO: throw an exception if _alpha, _beta have different number of MOs
+        N_mos = _alpha.N_mos;
         alpha = _alpha;
         beta = _beta;
     }
 
+    det_t &operator=(const det_t &other) {
+        N_mos = other.N_mos;
+        alpha = other.alpha;
+        beta = other.beta;
+        return *this;
+    }
+
+    det_t &operator=(det_t &&other) {
+        N_mos = other.N_mos;
+        alpha = other.alpha;
+        beta = other.beta;
+        return *this;
+    }
+
+    // copy constructors
+    det_t(det_t &other) { *this = other; }
+    det_t(const det_t &other) { *this = other; }
+
+    ~det_t() = default;
+
+    /*
+    Usage operators and methods
+    */
     bool operator<(const det_t &b) const {
         if (alpha == b.alpha)
             return (beta < b.beta);
@@ -47,8 +239,8 @@ class det_t { // The class
 
     bool operator==(const det_t &b) const { return (alpha == b.alpha) && (beta == b.beta); }
 
-    spin_det_t &operator[](unsigned i) {
-        assert(i < N_SPIN_SPECIES);
+    spin_det_t &operator[](idx_t i) {
+        // assert(i < N_SPIN_SPECIES);
         switch (i) {
         case 0:
             return alpha;
@@ -58,59 +250,93 @@ class det_t { // The class
             return beta;
         }
     }
+
     // https://stackoverflow.com/a/27830679/7674852 seem to recommand doing the
     // other way arround
-    const spin_det_t &operator[](unsigned i) const { return (*this)[i]; }
+    const spin_det_t &operator[](idx_t i) const { return (*this)[i]; }
+};
 
-    // get excitation degree between self and other determinant
-    // TODO: deal with narrowing conversion, and see if this should still be used anyway
-    std::array<int, N_SPIN_SPECIES> exc_degree(const det_t &b) {
-        auto ed_alpha = (this->alpha ^ b.alpha).count() / 2;
-        auto ed_beta = (this->beta ^ b.beta).count() / 2;
-        return std::array<int, N_SPIN_SPECIES>{ed_alpha, ed_beta};
+class DetArray {
+  protected:
+    // det_t cannot be default constructed, since we need to know the size of the MO basis at run
+    // time therefore, it is easier to store in a vector here instead of wrapping the storage with a
+    // unique ptr
+    std::vector<det_t> storage;
+
+  public:
+    det_t *arr;
+    idx_t size;
+    idx_t N_mos;
+
+    DetArray(idx_t N_dets, idx_t min_mos) {
+        size = N_dets;
+        N_mos = min_mos;
+
+        std::vector<det_t> _temp(size);
+        // storage.reserve(size);
+        for (auto i = 0; i < size; i++) {
+            _temp.emplace_back(N_mos);
+        }
+
+        storage = std::move(_temp);
+        arr = &storage[0];
+    }
+
+    ~DetArray() = default;
+};
+
+std::hash<mo_block_t> block_hash;
+
+template <> struct std::hash<spin_det_t> {
+    // Implementing something quick a dirty for now along the lines of:
+    // https://math.stackexchange.com/a/4146931
+    // TODO: Profile this in particular! Or come up with another algorithm that is unique and fast
+    // and has good dispersion.
+    std::size_t operator()(spin_det_t const &s) const noexcept {
+        std::size_t m = ~0 >> (sizeof(std::size_t) * 8 - 19); // should be the Mersenne prime 2^19-1
+        std::size_t res = 0x402df854;                         // e
+        for (auto i = 0; i < s.N_blocks; i++) {
+            res = (block_hash(s.block_arr[i]) ^ res) * m;
+        }
+        return res;
     }
 };
 
+std::hash<spin_det_t> spin_det_hash;
+
 template <> struct std::hash<det_t> {
     std::size_t operator()(det_t const &s) const noexcept {
-        std::size_t h1 = std::hash<spin_det_t>{}(s.alpha);
-        std::size_t h2 = std::hash<spin_det_t>{}(s.beta);
+        std::size_t h1 = spin_det_hash(s.alpha);
+        std::size_t h2 = spin_det_hash(s.beta);
         return h1 ^ (h2 << 1);
     }
 };
 
-// Should be moved in the cpp of det
-inline std::ostream &operator<<(std::ostream &os, const det_t &obj) {
-    return os << "(" << obj.alpha << "," << obj.beta << ")";
-}
+std::hash<det_t> det_hash;
 
-typedef sul::dynamic_bitset<> spin_occupancy_mask_t;
-typedef std::array<spin_occupancy_mask_t, N_SPIN_SPECIES> occupancy_mask_t;
-
-typedef sul::dynamic_bitset<> spin_unoccupancy_mask_t;
-typedef std::array<spin_unoccupancy_mask_t, N_SPIN_SPECIES> unoccupancy_mask_t;
-
-typedef std::array<uint64_t, 4> eri_4idx_t;
+// // Should be moved in the cpp of det
+// inline std::ostream &operator<<(std::ostream &os, const det_t &obj) {
+//     return os << "(" << obj.alpha << "," << obj.beta << ")";
+// }
 
 det_t exc_det(det_t &a, det_t &b);
 
-int compute_phase_single_excitation(spin_det_t d, uint64_t h, uint64_t p);
-int compute_phase_double_excitation(spin_det_t d, uint64_t h1, uint64_t h2, uint64_t p1,
-                                    uint64_t p2);
-int compute_phase_double_excitation(det_t d, uint64_t h1, uint64_t h2, uint64_t p1, uint64_t p2);
+int compute_phase_single_excitation(spin_det_t d, idx_t h, idx_t p);
+int compute_phase_double_excitation(spin_det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
+int compute_phase_double_excitation(det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
 
 // overload phase compute for (1,1) excitations
-det_t apply_single_excitation(det_t s, int spin, uint64_t hole, uint64_t particle);
+det_t apply_single_excitation(det_t s, int spin, idx_t hole, idx_t particle);
 
-spin_det_t apply_spin_single_excitation(spin_det_t s, uint64_t hole, uint64_t particle);
+spin_det_t apply_spin_single_excitation(spin_det_t s, idx_t hole, idx_t particle);
 
-det_t apply_double_excitation(det_t s, std::pair<int, int> spin, uint64_t h1, uint64_t h2,
-                              uint64_t p1, uint64_t p2);
+det_t apply_double_excitation(det_t s, std::pair<int, int> spin, idx_t h1, idx_t h2, idx_t p1,
+                              idx_t p2);
 
-typedef std::vector<uint64_t> spin_constraint_t;
+typedef std::vector<idx_t> spin_constraint_t;
 typedef std::pair<spin_constraint_t, spin_constraint_t> exc_constraint_t;
 
-std::string to_string(const spin_constraint_t &c, uint64_t max_orb) {
+std::string to_string(const spin_constraint_t &c, idx_t max_orb) {
     std::string s(max_orb, '0');
 
     for (const auto &i : c)
@@ -130,15 +356,13 @@ spin_constraint_t to_constraint(const spin_det_t &c) {
 }
 
 std::vector<det_t> get_constrained_determinants(det_t d, exc_constraint_t constraint,
-                                                uint64_t max_orb);
+                                                idx_t max_orb);
 
-std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t constraint, uint64_t max_orb);
+std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t constraint, idx_t max_orb);
 
-std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constraint,
-                                              uint64_t max_orb);
+std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb);
 
-std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t constraint,
-                                              uint64_t max_orb);
+std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb);
 
 std::vector<det_t> get_singles_by_exc_mask(det_t d, int spin, spin_constraint_t h,
                                            spin_constraint_t p);
@@ -150,3 +374,6 @@ std::vector<det_t> get_ss_doubles_by_exc_mask(det_t d, int spin, spin_constraint
                                               spin_constraint_t p);
 
 std::vector<det_t> get_all_singles(det_t d);
+
+void get_connected_dets(DetArray *dets_int, DetArray *dets_ext, idx_t *hc_alpha, idx_t *hc_beta,
+                        idx_t *pc_alpha, idx_t *pc_beta);

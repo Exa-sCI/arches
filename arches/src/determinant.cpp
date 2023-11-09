@@ -4,7 +4,7 @@
 #include <determinant.h>
 #include <doctest/doctest.h>
 
-int compute_phase_single_excitation(spin_det_t d, uint64_t h, uint64_t p) {
+int compute_phase_single_excitation(spin_det_t d, idx_t h, idx_t p) {
     const auto &[i, j] = std::minmax(h, p);
     spin_det_t hpmask(d.size());
     hpmask.set(i + 1, j - i - 1, 1);
@@ -19,8 +19,7 @@ TEST_CASE("testing get_phase_single") {
     CHECK(compute_phase_single_excitation(spin_det_t{"00100"}, 2, 4) == 1);
 }
 
-int compute_phase_double_excitation(spin_det_t d, uint64_t h1, uint64_t h2, uint_64_t p1,
-                                    uint_64_t p2) {
+int compute_phase_double_excitation(spin_det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
     // Single spin channel excitations, i.e., (2,0) or (0,2)
     int phase =
         compute_phase_single_excitation(d, h1, p1) * compute_phase_single_excitation(d, h2, p2);
@@ -29,7 +28,7 @@ int compute_phase_double_excitation(spin_det_t d, uint64_t h1, uint64_t h2, uint
     return phase;
 }
 
-int compute_phase_double_excitation(det_t d, uint64_t h1, uint64_t h2, uint_64_t p1, uint_64_t p2) {
+int compute_phase_double_excitation(det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
 
     // Cross channel excitations, i.e., (1,1)
     // Assumes alpha are h1-p1, beta are h2-p2
@@ -39,12 +38,14 @@ int compute_phase_double_excitation(det_t d, uint64_t h1, uint64_t h2, uint_64_t
 }
 
 det_t exc_det(det_t &a, det_t &b) {
-    spin_det_t alpha = a[0] ^ b[0];
-    spin_det_t beta = a[1] ^ b[1];
-    return det_t(alpha, beta);
+    // spin_det_t alpha = a[0] ^ b[0];
+    // spin_det_t beta = a[1] ^ b[1];
+    // return det_t(alpha, beta);
+
+    return det_t(a[0] ^ b[0], a[1] ^ b[1]); // Does this work since I have the move defined?
 }
 
-det_t apply_single_excitation(det_t s, int spin, uint64_t h, uint64_t p) {
+det_t apply_single_excitation(det_t s, int spin, idx_t h, idx_t p) {
     assert(s[spin][h] == 1);
     assert(s[spin][p] == 0);
 
@@ -54,7 +55,7 @@ det_t apply_single_excitation(det_t s, int spin, uint64_t h, uint64_t p) {
     return s2;
 }
 
-spin_det_t apply_single_excitation(spin_det_t s, int spin, uint64_t h, uint64_t p) {
+spin_det_t apply_single_excitation(spin_det_t s, int spin, idx_t h, idx_t p) {
     assert(s[h] == 1);
     assert(s[p] == 0);
 
@@ -70,8 +71,8 @@ TEST_CASE("testing apply_single_excitation") {
     CHECK(apply_single_excitation(s, 1, 0, 1) == det_t{spin_det_t{"11000"}, spin_det_t{"00010"}});
 }
 
-det_t apply_double_excitation(det_t s, std::pair<int> spin, uint64_t h1, uint64_t h2, uint64_t p1,
-                              uint64_t p2) {
+det_t apply_double_excitation(det_t s, std::pair<int> spin, idx_t h1, idx_t h2, idx_t p1,
+                              idx_t p2) {
     // Check if valid
     assert(s[spin.first][h1] == 1);
     assert(s[spin.second][h2] == 1);
@@ -136,7 +137,7 @@ std::vector<det_t> get_ss_doubles_by_exc_mask(det_t d, int spin, spin_constraint
     return res;
 }
 
-std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t constraint, uint64_t max_orb) {
+std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t constraint, idx_t max_orb) {
     std::vector<det_t> singles;
 
     // convert constraints to bit masks
@@ -181,8 +182,7 @@ std::vector<det_t> get_all_singles(det_t d) {
 }
 
 // TODO: refactor, a lot of code re-use
-std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t constraint,
-                                              uint64_t max_orb) {
+std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb) {
     std::vector<det_t> os_doubles;
 
     // convert constraints to bit masks
@@ -218,8 +218,7 @@ std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t constrai
     return os_doubles;
 }
 
-std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constraint,
-                                              uint64_t max_orb) {
+std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb) {
     std::vector<det_t> ss_doubles;
 
     // convert constraints to bit masks
