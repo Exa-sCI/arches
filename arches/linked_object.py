@@ -69,7 +69,7 @@ class LinkedHandle(ABC):
         pass
 
 
-class LinkedArray(ABC):
+class ManagedArray(ABC):
     """Base class for arrays owned by LinkedHandle."""
 
     def __init__(self, pointer, size, ctype, dtype, ptype, data=None):
@@ -158,7 +158,7 @@ for k, v in type_dict.items():
     f_set_strided_range.restype = None
 
 
-class LinkedArray_i32(LinkedArray):
+class ManagedArray_i32(ManagedArray):
     at = lib_interface.at_i32
     set_val = lib_interface.set_i32
     set_range = lib_interface.set_range_i32
@@ -168,7 +168,7 @@ class LinkedArray_i32(LinkedArray):
         super().__init__(pointer, size, ctype=i32, ptype=i32_p, dtype=np.int32, data=data)
 
 
-class LinkedArray_i64(LinkedArray):
+class ManagedArray_i64(ManagedArray):
     at = lib_interface.at_i64
     set_val = lib_interface.set_i64
     set_range = lib_interface.set_range_i64
@@ -178,10 +178,10 @@ class LinkedArray_i64(LinkedArray):
         super().__init__(pointer, size, ctype=i64, ptype=i64_p, dtype=np.int64, data=data)
 
 
-LinkedArray_idx_t = LinkedArray_i64  # alias for indexing arrays
+ManagedArray_idx_t = ManagedArray_i64  # alias for indexing arrays
 
 
-class LinkedArray_ui32(LinkedArray):
+class ManagedArray_ui32(ManagedArray):
     at = lib_interface.at_ui32
     set_val = lib_interface.set_ui32
     set_range = lib_interface.set_range_ui32
@@ -191,7 +191,7 @@ class LinkedArray_ui32(LinkedArray):
         super().__init__(pointer, size, ctype=ui32, ptype=ui32_p, dtype=np.uint32, data=data)
 
 
-class LinkedArray_f32(LinkedArray):
+class ManagedArray_f32(ManagedArray):
     at = lib_interface.at_f32
     set_val = lib_interface.set_f32
     set_range = lib_interface.set_range_f32
@@ -201,7 +201,7 @@ class LinkedArray_f32(LinkedArray):
         super().__init__(pointer, size, ctype=f32, ptype=f32_p, dtype=np.float32, data=data)
 
 
-class LinkedArray_f64(LinkedArray):
+class ManagedArray_f64(ManagedArray):
     at = lib_interface.at_f64
     set_val = lib_interface.set_f64
     set_range = lib_interface.set_range_f64
@@ -209,3 +209,54 @@ class LinkedArray_f64(LinkedArray):
 
     def __init__(self, pointer, size, data):
         super().__init__(pointer, size, ctype=f64, ptype=f64_p, dtype=np.float64, data=data)
+
+
+class LinkedArray(LinkedHandle):
+    """Base class for loose, singular arrays not part of a larger structured object."""
+
+    def __init__(self, N, fill=None, handle=None, **kwargs):
+        super().__init__(handle=handle, N=N, fill=None)
+        self.arr = self.M_array_type(self.get_arr_ptr(self.handle))
+
+    def constructor(self, N, fill=None, **kwargs):
+        if fill is None:
+            return self._empty_ctor(idx_t(N))
+        elif hasattr(fill, "__iter__"):
+            if isinstance(fill, np.ndarray):
+                d = fill.ctypes.data_as(self.ptype)
+            else:
+                d = fill  # Assume fill is an appropriate pointer type
+            return self._copy_ctor(idx_t(N), d)
+        else:
+            return self._fill_ctor(idx_t(N), self.ctype(fill))
+
+    def destructor(self):
+        return self._dtor
+
+    @property
+    def M_array_type(self):
+        return self._M_array_type
+
+    @abstractmethod
+    def __add__(self, b):
+        pass
+
+    @abstractmethod
+    def __iadd__(self, b):
+        pass
+
+    @abstractmethod
+    def __sub__(self, b):
+        pass
+
+    @abstractmethod
+    def __isub__(self, b):
+        pass
+
+    @abstractmethod
+    def __truediv__(self, b):
+        pass
+
+    @abstractmethod
+    def __mul__(self, b):
+        pass

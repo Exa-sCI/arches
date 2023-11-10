@@ -7,11 +7,11 @@ from mpi4py import MPI
 from scipy.linalg import lapack as la
 
 from arches.linked_object import (
-    LinkedArray,
-    LinkedArray_f32,
-    LinkedArray_f64,
-    LinkedArray_idx_t,
     LinkedHandle,
+    ManagedArray,
+    ManagedArray_f32,
+    ManagedArray_f64,
+    ManagedArray_idx_t,
     f32,
     f64,
     handle_t,
@@ -66,12 +66,12 @@ class AMatrix(LinkedHandle):
                 raise NotImplementedError
 
     @property
-    def _L_array_type(self):
+    def _M_array_type(self):
         match self.dtype:
             case np.float32:
-                return LinkedArray_f32
+                return ManagedArray_f32
             case np.float64:
-                return LinkedArray_f64
+                return ManagedArray_f64
 
     @abstractmethod
     def __matmul__(self, b):
@@ -235,7 +235,7 @@ class DMatrix(AMatrix):
         super().__init__(handle=handle, m=m, n=n, dtype=dtype, ctype=np_type_map[dtype], arr=A)
 
         # data is initialized by constructor, no need to set it here
-        self.arr = self._L_array_type(self.get_arr_ptr(self.handle), self.m * self.n, None)
+        self.arr = self._M_array_type(self.get_arr_ptr(self.handle), self.m * self.n, None)
         self.transposed = t
 
     def __repr__(self):
@@ -296,7 +296,7 @@ class DMatrix(AMatrix):
 
     @arr.setter
     def arr(self, val):
-        if isinstance(val, LinkedArray):
+        if isinstance(val, ManagedArray):
             self._arr = val
         else:
             raise TypeError
@@ -481,7 +481,7 @@ class SymCSRMatrix(AMatrix):
 
     @A_p.setter
     def A_p(self, val):
-        if isinstance(val, LinkedArray_idx_t):
+        if isinstance(val, ManagedArray_idx_t):
             self._A_p = val
         else:
             raise ValueError
@@ -492,7 +492,7 @@ class SymCSRMatrix(AMatrix):
 
     @A_c.setter
     def A_c(self, val):
-        if isinstance(val, LinkedArray_idx_t):
+        if isinstance(val, ManagedArray_idx_t):
             self._A_c = val
         else:
             raise ValueError
@@ -503,7 +503,7 @@ class SymCSRMatrix(AMatrix):
 
     @A_v.setter
     def A_v(self, val):
-        if isinstance(val, LinkedArray):
+        if isinstance(val, ManagedArray):
             self._A_v = val
         else:
             raise ValueError
@@ -583,9 +583,7 @@ class DistMatrix(AMatrix):
         self.ln = A.n
         self.A = A
         self.comm = comm
-        self.mpi_type = (
-            mpi_type
-        )  # TODO: perhaps better to automatically set this rather than input it multipe times
+        self.mpi_type = mpi_type  # TODO: perhaps better to automatically set this rather than input it multipe times
 
     @property
     def lm(self):

@@ -12,10 +12,10 @@ from arches.integral_indexing_utils import (
 )
 from arches.kernels import dispatch_kernel
 from arches.linked_object import (
-    LinkedArray_f32,
-    LinkedArray_f64,
-    LinkedArray_idx_t,
     LinkedHandle,
+    ManagedArray_f32,
+    ManagedArray_f64,
+    ManagedArray_idx_t,
     f32,
     f64,
     handle_t,
@@ -134,7 +134,7 @@ class JChunk(LinkedHandle):
 
     @idx.setter
     def idx(self, val):
-        if isinstance(val, LinkedArray_idx_t):
+        if isinstance(val, ManagedArray_idx_t):
             self._idx = val
         else:
             raise TypeError
@@ -163,7 +163,7 @@ class JChunk(LinkedHandle):
 
     @J.setter
     def J(self, val):
-        if isinstance(val, (LinkedArray_f32, LinkedArray_f64)):
+        if isinstance(val, (ManagedArray_f32, ManagedArray_f64)):
             self._J = val
         else:
             raise TypeError
