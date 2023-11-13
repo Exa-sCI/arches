@@ -1,13 +1,14 @@
 import pathlib
 from ctypes import CDLL
 from functools import reduce
-from itertools import combinations, islice, product
+from itertools import combinations, combinations_with_replacement, islice, product
 
 import numpy as np
 
 from arches.drivers import integral_category
 from arches.integral_indexing_utils import (
     canonical_idx4,
+    compound_idx2,
     compound_idx4,
 )
 from arches.kernels import dispatch_kernel
@@ -204,7 +205,7 @@ class JChunkFactory:
 
     @category.setter
     def category(self, val):
-        if val not in "ABCDEFG":
+        if val not in ("OE", "A", "B", "C", "D", "E", "F", "G"):
             raise ValueError
         if len(val) != 1:
             raise ValueError
@@ -212,6 +213,8 @@ class JChunkFactory:
         self._category = val
 
         match val:
+            case "OE":
+                f = JChunkFactory.oe_idx_iter
             case "A":
                 f = JChunkFactory.A_idx_iter
             case "B":
@@ -252,6 +255,11 @@ class JChunkFactory:
             return self._batch_iter
         else:
             return self._idx_iter
+
+    @staticmethod
+    def oe_idx_iter(N_mo):
+        for i, j in combinations_with_replacement(range(N_mo), 2):
+            yield compound_idx2(i, j)
 
     @staticmethod
     def A_idx_iter(N_mo):
