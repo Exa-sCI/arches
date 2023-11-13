@@ -27,3 +27,110 @@ template <class T> class LArray {
 
     ~LArray() = default;
 };
+
+// no const array, in case *a=*b=*c; for implementing ipow2
+template <class T> void mul_LArray(T *a, T *b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] * b[i];
+    }
+};
+
+// *a != *b, *c != *b
+template <class T> void add_LArray(T *a, const T *b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] + b[i];
+    }
+};
+
+template <class T> void sub_LArray(T *a, const T *b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] - b[i];
+    }
+};
+
+template <class T> void mul_LArray(T *a, const T *b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] * b[i];
+    }
+};
+
+template <class T> void div_LArray(T *a, const T *b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] / b[i];
+    }
+};
+
+// *c !=  *a, *b
+template <class T> void add_LArray(const T *a, const T *b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] + b[i];
+    }
+};
+
+template <class T> void sub_LArray(const T *a, const T *b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] - b[i];
+    }
+};
+
+template <class T> void mul_LArray(const T *a, const T *b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] * b[i];
+    }
+};
+
+template <class T> void div_LArray(const T *a, const T *b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] / b[i];
+    }
+};
+
+// op(A, constant)
+template <class T> void add_LArray(T *a, const T b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] + b;
+    }
+};
+
+template <class T> void sub_LArray(T *a, const T b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] - b;
+    }
+};
+
+template <class T> void mul_LArray(T *a, const T b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] * b;
+    }
+};
+
+template <class T> void div_LArray(T *a, const T b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] / b;
+    }
+};
+
+// op(A, constant), *a != *c
+template <class T> void add_LArray(const T *a, const T b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] + b;
+    }
+};
+
+template <class T> void sub_LArray(const T *a, const T b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] - b;
+    }
+};
+
+template <class T> void mul_LArray(const T *a, const T b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] * b;
+    }
+};
+
+template <class T> void div_LArray(const T *a, const T b, T *c, const idx_t N) {
+    for (auto i = 0; i < N; i++) {
+        c[i] = a[i] / b;
+    }
+};

@@ -175,3 +175,300 @@ void LArray_dtor_ui64(LArray<unsigned long int> *X) { delete X; }
 void LArray_dtor_idx_t(LArray<idx_t> *X) { delete X; }
 void LArray_dtor_det_t(LArray<det_t> *X) { delete X; }
 }
+
+/*
+Array operation utilities
+*/
+
+extern "C" {
+
+// int 32
+void LArray_ipow2_i32(int *a, const idx_t N) { mul_LArray(a, a, a, N); }
+
+void LArray_add_i32(const int *a, const int *b, int *c, const idx_t N) { add_LArray(a, b, c, N); }
+void LArray_add_c_i32(const int *a, const int b, int *c, const idx_t N) { add_LArray(a, b, c, N); }
+
+void LArray_iadd_i32(int *a, const int *b, const idx_t N) { add_LArray(a, b, a, N); }
+void LArray_iadd_c_i32(int *a, const int b, const idx_t N) { add_LArray(a, b, a, N); }
+
+void LArray_sub_i32(const int *a, const int *b, int *c, const idx_t N) { sub_LArray(a, b, c, N); }
+void LArray_sub_c_i32(const int *a, const int b, int *c, const idx_t N) { sub_LArray(a, b, c, N); }
+
+void LArray_isub_i32(int *a, const int *b, const idx_t N) { sub_LArray(a, b, a, N); }
+void LArray_isub_c_i32(int *a, const int b, const idx_t N) { sub_LArray(a, b, a, N); }
+
+void LArray_mul_i32(const int *a, const int *b, int *c, const idx_t N) { mul_LArray(a, b, c, N); }
+void LArray_mul_c_i32(const int *a, const int b, int *c, const idx_t N) { mul_LArray(a, b, c, N); }
+
+void LArray_imul_i32(int *a, const int *b, const idx_t N) { mul_LArray(a, b, a, N); }
+void LArray_imul_c_i32(int *a, const int b, const idx_t N) { mul_LArray(a, b, a, N); }
+
+void LArray_div_i32(const int *a, const int *b, int *c, const idx_t N) { div_LArray(a, b, c, N); }
+void LArray_div_c_i32(const int *a, const int b, int *c, const idx_t N) { div_LArray(a, b, c, N); }
+
+void LArray_idiv_i32(int *a, const int *b, const idx_t N) { div_LArray(a, b, a, N); }
+void LArray_idiv_c_i32(int *a, const int b, const idx_t N) { div_LArray(a, b, a, N); }
+
+// int 64
+void LArray_ipow2_i64(long *a, const idx_t N) { mul_LArray(a, a, a, N); }
+
+void LArray_add_i64(const long *a, const long *b, long *c, const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+void LArray_add_c_i64(const long *a, const long b, long *c, const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+
+void LArray_iadd_i64(long *a, const long *b, const idx_t N) { add_LArray(a, b, a, N); }
+void LArray_iadd_c_i64(long *a, const long b, const idx_t N) { add_LArray(a, b, a, N); }
+
+void LArray_sub_i64(const long *a, const long *b, long *c, const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+void LArray_sub_c_i64(const long *a, const long b, long *c, const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+
+void LArray_isub_i64(long *a, const long *b, const idx_t N) { sub_LArray(a, b, a, N); }
+void LArray_isub_c_i64(long *a, const long b, const idx_t N) { sub_LArray(a, b, a, N); }
+
+void LArray_mul_i64(const long *a, const long *b, long *c, const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+void LArray_mul_c_i64(const long *a, const long b, long *c, const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+
+void LArray_imul_i64(long *a, const long *b, const idx_t N) { mul_LArray(a, b, a, N); }
+void LArray_imul_c_i64(long *a, const long b, const idx_t N) { mul_LArray(a, b, a, N); }
+
+void LArray_div_i64(const long *a, const long *b, long *c, const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+void LArray_div_c_i64(const long *a, const long b, long *c, const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+
+void LArray_idiv_i64(long *a, const long *b, const idx_t N) { div_LArray(a, b, a, N); }
+void LArray_idiv_c_i64(long *a, const long b, const idx_t N) { div_LArray(a, b, a, N); }
+
+// uint 32
+void LArray_ipow2_ui32(unsigned int *a, const idx_t N) { mul_LArray(a, a, a, N); }
+
+void LArray_add_ui32(const unsigned int *a, const unsigned int *b, unsigned int *c, const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+void LArray_add_c_ui32(const unsigned int *a, const unsigned int b, unsigned int *c,
+                       const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+
+void LArray_iadd_ui32(unsigned int *a, const unsigned int *b, const idx_t N) {
+    add_LArray(a, b, a, N);
+}
+void LArray_iadd_c_ui32(unsigned int *a, const unsigned int b, const idx_t N) {
+    add_LArray(a, b, a, N);
+}
+
+void LArray_sub_ui32(const unsigned int *a, const unsigned int *b, unsigned int *c, const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+void LArray_sub_c_ui32(const unsigned int *a, const unsigned int b, unsigned int *c,
+                       const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+
+void LArray_isub_ui32(unsigned int *a, const unsigned int *b, const idx_t N) {
+    sub_LArray(a, b, a, N);
+}
+void LArray_isub_c_ui32(unsigned int *a, const unsigned int b, const idx_t N) {
+    sub_LArray(a, b, a, N);
+}
+
+void LArray_mul_ui32(const unsigned int *a, const unsigned int *b, unsigned int *c, const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+void LArray_mul_c_ui32(const unsigned int *a, const unsigned int b, unsigned int *c,
+                       const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+
+void LArray_imul_ui32(unsigned int *a, const unsigned int *b, const idx_t N) {
+    mul_LArray(a, b, a, N);
+}
+void LArray_imul_c_ui32(unsigned int *a, const unsigned int b, const idx_t N) {
+    mul_LArray(a, b, a, N);
+}
+
+void LArray_div_ui32(const unsigned int *a, const unsigned int *b, unsigned int *c, const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+void LArray_div_c_ui32(const unsigned int *a, const unsigned int b, unsigned int *c,
+                       const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+
+void LArray_idiv_ui32(unsigned int *a, const unsigned int *b, const idx_t N) {
+    div_LArray(a, b, a, N);
+}
+void LArray_idiv_c_ui32(unsigned int *a, const unsigned int b, const idx_t N) {
+    div_LArray(a, b, a, N);
+}
+
+// uint 64
+void LArray_ipow2_ui64(unsigned long *a, const idx_t N) { mul_LArray(a, a, a, N); }
+
+void LArray_add_ui64(const unsigned long *a, const unsigned long *b, unsigned long *c,
+                     const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+void LArray_add_c_ui64(const unsigned long *a, const unsigned long b, unsigned long *c,
+                       const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+
+void LArray_iadd_ui64(unsigned long *a, const unsigned long *b, const idx_t N) {
+    add_LArray(a, b, a, N);
+}
+void LArray_iadd_c_ui64(unsigned long *a, const unsigned long b, const idx_t N) {
+    add_LArray(a, b, a, N);
+}
+
+void LArray_sub_ui64(const unsigned long *a, const unsigned long *b, unsigned long *c,
+                     const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+void LArray_sub_c_ui64(const unsigned long *a, const unsigned long b, unsigned long *c,
+                       const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+
+void LArray_isub_ui64(unsigned long *a, const unsigned long *b, const idx_t N) {
+    sub_LArray(a, b, a, N);
+}
+void LArray_isub_c_ui64(unsigned long *a, const unsigned long b, const idx_t N) {
+    sub_LArray(a, b, a, N);
+}
+
+void LArray_mul_ui64(const unsigned long *a, const unsigned long *b, unsigned long *c,
+                     const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+void LArray_mul_c_ui64(const unsigned long *a, const unsigned long b, unsigned long *c,
+                       const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+
+void LArray_imul_ui64(unsigned long *a, const unsigned long *b, const idx_t N) {
+    mul_LArray(a, b, a, N);
+}
+void LArray_imul_c_ui64(unsigned long *a, const unsigned long b, const idx_t N) {
+    mul_LArray(a, b, a, N);
+}
+
+void LArray_div_ui64(const unsigned long *a, const unsigned long *b, unsigned long *c,
+                     const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+void LArray_div_c_ui64(const unsigned long *a, const unsigned long b, unsigned long *c,
+                       const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+
+void LArray_idiv_ui64(unsigned long *a, const unsigned long *b, const idx_t N) {
+    div_LArray(a, b, a, N);
+}
+void LArray_idiv_c_ui64(unsigned long *a, const unsigned long b, const idx_t N) {
+    div_LArray(a, b, a, N);
+}
+
+// float 32
+void LArray_ipow2_f32(float *a, const idx_t N) { mul_LArray(a, a, a, N); }
+
+void LArray_add_f32(const float *a, const float *b, float *c, const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+void LArray_add_c_f32(const float *a, const float b, float *c, const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+
+void LArray_iadd_f32(float *a, const float *b, const idx_t N) { add_LArray(a, b, a, N); }
+void LArray_iadd_c_f32(float *a, const float b, const idx_t N) { add_LArray(a, b, a, N); }
+
+void LArray_sub_f32(const float *a, const float *b, float *c, const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+void LArray_sub_c_f32(const float *a, const float b, float *c, const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+
+void LArray_isub_f32(float *a, const float *b, const idx_t N) { sub_LArray(a, b, a, N); }
+void LArray_isub_c_f32(float *a, const float b, const idx_t N) { sub_LArray(a, b, a, N); }
+
+void LArray_mul_f32(const float *a, const float *b, float *c, const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+void LArray_mul_c_f32(const float *a, const float b, float *c, const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+
+void LArray_imul_f32(float *a, const float *b, const idx_t N) { mul_LArray(a, b, a, N); }
+void LArray_imul_c_f32(float *a, const float b, const idx_t N) { mul_LArray(a, b, a, N); }
+
+void LArray_div_f32(const float *a, const float *b, float *c, const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+void LArray_div_c_f32(const float *a, const float b, float *c, const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+
+void LArray_idiv_f32(float *a, const float *b, const idx_t N) { div_LArray(a, b, a, N); }
+void LArray_idiv_c_f32(float *a, const float b, const idx_t N) { div_LArray(a, b, a, N); }
+
+// float 64
+void LArray_ipow2_f64(double *a, const idx_t N) { mul_LArray(a, a, a, N); }
+
+void LArray_add_f64(const double *a, const double *b, double *c, const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+void LArray_add_c_f64(const double *a, const double b, double *c, const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+
+void LArray_iadd_f64(double *a, const double *b, const idx_t N) { add_LArray(a, b, a, N); }
+void LArray_iadd_c_f64(double *a, const double b, const idx_t N) { add_LArray(a, b, a, N); }
+
+void LArray_sub_f64(const double *a, const double *b, double *c, const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+void LArray_sub_c_f64(const double *a, const double b, double *c, const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+
+void LArray_isub_f64(double *a, const double *b, const idx_t N) { sub_LArray(a, b, a, N); }
+void LArray_isub_c_f64(double *a, const double b, const idx_t N) { sub_LArray(a, b, a, N); }
+
+void LArray_mul_f64(const double *a, const double *b, double *c, const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+void LArray_mul_c_f64(const double *a, const double b, double *c, const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+
+void LArray_imul_f64(double *a, const double *b, const idx_t N) { mul_LArray(a, b, a, N); }
+void LArray_imul_c_f64(double *a, const double b, const idx_t N) { mul_LArray(a, b, a, N); }
+
+void LArray_div_f64(const double *a, const double *b, double *c, const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+void LArray_div_c_f64(const double *a, const double b, double *c, const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+
+void LArray_idiv_f64(double *a, const double *b, const idx_t N) { div_LArray(a, b, a, N); }
+void LArray_idiv_c_f64(double *a, const double b, const idx_t N) { div_LArray(a, b, a, N); }
+
+// complex 64
+
+// complex 128
+}
