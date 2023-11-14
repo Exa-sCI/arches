@@ -11,7 +11,7 @@ from arches.integral_indexing_utils import (
     compound_idx2,
     compound_idx4,
 )
-from arches.kernels import dispatch_kernel
+from arches.kernels import dispatch_H_kernel, dispatch_pt2_kernel
 from arches.linked_object import (
     LinkedHandle,
     ManagedArray_f32,
@@ -88,7 +88,8 @@ class JChunk(LinkedHandle):
         self.dtype = dtype
         super().__init__(handle=handle, chunk_size=chunk_size, J_ind=J_ind, J=J)
         self.category = category
-        self._kernels = dispatch_kernel(category)
+        self._pt2_kernels = dispatch_pt2_kernel(category)
+        self._H_kernels = dispatch_H_kernel(category)
 
     @property
     def _f_ctor(self):
@@ -170,8 +171,12 @@ class JChunk(LinkedHandle):
             raise TypeError
 
     @property
-    def kernels(self):
-        return self._kernels
+    def pt2_kernels(self):
+        return self._pt2_kernels
+
+    @property
+    def H_kernels(self):
+        return self._H_kernels
 
     def __getitem__(self, idx):
         if idx > 0 and idx < self.chunk_size:
@@ -184,7 +189,6 @@ class JChunk(LinkedHandle):
 #  to be able to implement screening on read. Perhaps would be good as a subclass?
 #  Would be useful to be able to provide custom hook f: (idx, val) -> Bool
 #  and/or flexibility to be used in repacking of chunks when using adaptive integral pruning
-# TODO: Let the chunk factory make one electron chunks!
 class JChunkFactory:
     def __init__(self, N_mo, category, src_data, chunk_size=-1, comm=None):
         if comm is None:

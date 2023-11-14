@@ -247,14 +247,17 @@ def cipsi(
     psi_coef,
     J_chunks: Iterable[JChunk],
     *args,
+    N_states=1,
     pt2_threshold=1e-8,
     exc_constraints=None,
     **kwargs,
 ):
     ext_dets = get_connected_dets(int_dets, exc_constraints)
 
-    e_pt2_n = np.array(len(ext_dets))  # TODO: convert these arrays to LinkedArrays
-    e_pt2_d = np.array(len(ext_dets))  # TODO: initialize with E0
+    e_pt2_n = np.array(
+        len(ext_dets)
+    )  # TODO: convert these arrays to LinkedArrays and expand over states
+    e_pt2_d = np.array(len(ext_dets))  # TODO: initialize with E_0/E_i
 
     for chunk in J_chunks:
         kernels = (
@@ -262,15 +265,53 @@ def cipsi(
         )  # kernels[0] is numerator contrib., kernels[1] is denom. contrib.
         match chunk.category:
             case "OE" | "F":  # both num and denominator
-                kernels[0](chunk, int_dets, psi_coef, ext_dets, e_pt2_n)
-                kernels[1](chunk, ext_dets, e_pt2_d, E0)
+                kernels[0](
+                    chunk.J.p,
+                    chunk.idx.p,
+                    chunk.chunk_size,
+                    int_dets.p,
+                    psi_coef.p,
+                    int_dets.size,
+                    N_states,
+                    ext_dets.p,
+                    ext_dets.size,
+                    e_pt2_n.p,
+                )
+                kernels[1](
+                    chunk.J.p,
+                    chunk.idx.p,
+                    chunk.chunk_size,
+                    N_states,
+                    ext_dets.p,
+                    ext_dets.size,
+                    e_pt2_n.p,
+                )
             case "A" | "B":  # only denominator
-                kernels[1](chunk, ext_dets, e_pt2_d, E0)
+                kernels[1](
+                    chunk.J.p,
+                    chunk.idx.p,
+                    chunk.chunk_size,
+                    N_states,
+                    ext_dets.p,
+                    ext_dets.size,
+                    e_pt2_n.p,
+                )
             case _:  # only numerator
-                kernels[0](chunk, int_dets, psi_coef, ext_dets, e_pt2_n)
+                kernels[0](
+                    chunk.J.p,
+                    chunk.idx.p,
+                    chunk.chunk_size,
+                    int_dets.p,
+                    psi_coef.p,
+                    int_dets.size,
+                    N_states,
+                    ext_dets.p,
+                    ext_dets.size,
+                    e_pt2_n.p,
+                )
 
     # reduce e_pt2_n,d over processes
-    e_pt2 = e_pt2_n / e_pt2_d  # TODO: implement +, -, /, * for LinkedArrays
+    e_pt2 = e_pt2_n / e_pt2_d
     pt2_filter = e_pt2 > pt2_threshold  # TODO: pass this off to customizable selection function
     e_pt2_total = np.sum(e_pt2)
 

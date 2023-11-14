@@ -36,7 +36,7 @@ void e_pt2_ii_OE(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, id
             }
         }
     }
-};
+}
 
 template <class T>
 void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
@@ -78,7 +78,7 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
             }
         }
     }
-};
+}
 
 // Two electron contributions
 /*
@@ -109,8 +109,7 @@ A: J_qqqq only has one contribution (to the denominator), when q is occupied in 
 Contribution is part of product terms
 */
 template <class T>
-void A_pt2_kernel(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext,
-                  T *res) {
+void A_pt2(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contributes to denominator of pt2 energy
 
     // iterate over external determinants first since A chunk is almost always smaller
@@ -135,8 +134,7 @@ B: J_qqrr has the following contributions (to the denominator):
 Contributions are part of combination terms
 */
 template <class T>
-void B_pt2_kernel(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext,
-                  T *res) {
+void B_pt2(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contributes to denominator of pt2 energy
     for (auto i = 0; i < N; i++) {
         struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
@@ -182,8 +180,8 @@ C: J_qrqs has the following contributions, singles of form hipi:
     C4o) s_b -> r_b; q occupied in b
 */
 template <class T>
-void C_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
-                  idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
+void C_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int, idx_t N_states,
+           det_t *psi_ext, idx_t N_ext, T *res) {
     /*
     J is array of integral values
     J_ind is array of integral compound indices
@@ -273,8 +271,8 @@ D: J_qqqr has the following contributions, singles of form hipi(o):
     D_4) r_b -> q_b; q occupied in a
 */
 template <class T>
-void D_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
-                  idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
+void D_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int, idx_t N_states,
+           det_t *psi_ext, idx_t N_ext, T *res) {
 
     // Iterate over all integrals in chunk
     for (auto i = 0; i < N; i++) {
@@ -368,8 +366,8 @@ E: J_qqrs has the following contributions,
 
 */
 template <class T>
-void E_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
-                  idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
+void E_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int, idx_t N_states,
+           det_t *psi_ext, idx_t N_ext, T *res) {
 
     // Iterate over all integrals in chunk
     for (auto i = 0; i < N; i++) {
@@ -465,8 +463,8 @@ F: J_qqrr has the following (off diagonal) contributions, all opposite spin doub
     F_4) r_a -> q_a | q_b -> r_b
 */
 template <class T>
-void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
-                  idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
+void F_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int, idx_t N_states,
+           det_t *psi_ext, idx_t N_ext, T *res) {
 
     // Iterate over all integrals in chunk
     for (auto i = 0; i < N; i++) {
@@ -509,8 +507,7 @@ void F_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_
 }
 
 template <class T>
-void F_pt2_kernel_denom(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext,
-                        T *res) {
+void F_pt2_denom(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contributions to combination terms in denominator
 
     // Iterate over all integrals in chunk
@@ -570,8 +567,8 @@ G:
 
 */
 template <class T>
-void G_pt2_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int,
-                  idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
+void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int, idx_t N_states,
+           det_t *psi_ext, idx_t N_ext, T *res) {
 
     // Iterate over all integrals in chunk
     for (auto i = 0; i < N; i++) {
@@ -768,7 +765,7 @@ void H_OE_ij(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_
 
 // Two electron
 template <class T>
-void H_A_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
+void H_A(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
 
     for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
         auto &det = psi_det[det_j];
@@ -782,7 +779,7 @@ void H_A_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t 
 }
 
 template <class T>
-void H_B_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
+void H_B(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
 
     for (auto i = 0; i < N; i++) { // loop over integrals
         struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
@@ -803,8 +800,7 @@ void H_B_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t 
 }
 
 template <class T>
-void H_C_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
-                T *H_v) {
+void H_C(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c, T *H_v) {
 
     for (auto i = 0; i < N; i++) { // loop over integrals
 
@@ -859,8 +855,7 @@ void H_C_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t 
 }
 
 template <class T>
-void H_D_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
-                T *H_v) {
+void H_D(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c, T *H_v) {
 
     for (auto i = 0; i < N; i++) { // loop over integrals
         struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
@@ -913,8 +908,7 @@ void H_D_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t 
 }
 
 template <class T>
-void H_E_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
-                T *H_v) {
+void H_E(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c, T *H_v) {
 
     for (auto i = 0; i < N; i++) { // loop over integrals
 
@@ -992,7 +986,7 @@ void H_E_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t 
 }
 
 template <class T>
-void H_F_ii_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
+void H_F_ii(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
 
     for (auto i = 0; i < N; i++) { // loop over integrals
         struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
@@ -1013,8 +1007,8 @@ void H_F_ii_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx
 }
 
 template <class T>
-void H_F_ij_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
-                   T *H_v) {
+void H_F_ij(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
+            T *H_v) {
 
     for (auto i = 0; i < N; i++) { // loop over integrals
         // by construction of the chunks, this should be the canonical index
@@ -1054,8 +1048,7 @@ void H_F_ij_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx
 }
 
 template <class T>
-void H_G_kernel(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c,
-                T *H_v) {
+void H_G(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, idx_t *H_c, T *H_v) {
     for (auto i = 0; i < N; i++) { // loop over integrals
 
         struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
