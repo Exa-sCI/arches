@@ -166,32 +166,47 @@ for k in [f32, f64]:
 
     ## Matrix operations
     sd = {f32: "s", f64: "d"}
-    gemm = getattr(lib_matrix, pfix + sd[k] + "gemm")
     ApB = getattr(lib_matrix, pfix + sd[k] + "ApB")
     AmB = getattr(lib_matrix, pfix + sd[k] + "AmB")
-
-    gemm.argtypes = [  # C = alpha * A @ B + beta * C
-        c_char,  # op A
-        c_char,  # op B
-        idx_t,  # m
-        idx_t,  # n
-        idx_t,  # k
-        k,  # alpha
-        k_p,  # *A
-        idx_t,  # lda
-        k_p,  # *B
-        idx_t,  # ldb
-        k,  # beta
-        k_p,  # *C
-        idx_t,  # ldc
-    ]
-
     ApB.argtypes = [k_p, k_p, k_p, idx_t, idx_t]
     AmB.argtypes = [k_p, k_p, k_p, idx_t, idx_t]
-
-    gemm.restype = None
     ApB.restype = None
     AmB.restype = None
+
+    for cfig in ["mkl"]:
+        gemm = getattr(lib_matrix, sd[k] + "gemm_" + cfig)
+        gemm.argtypes = [  # C = alpha * A @ B + beta * C
+            c_char,  # op A
+            c_char,  # op B
+            idx_t,  # m
+            idx_t,  # n
+            idx_t,  # k
+            k,  # alpha
+            k_p,  # *A
+            idx_t,  # lda
+            k_p,  # *B
+            idx_t,  # ldb
+            k,  # beta
+            k_p,  # *C
+            idx_t,  # ldc
+        ]
+
+        gemm.restype = None
+
+        spgemm = getattr(lib_matrix, "sym_csr_" + sd[k] + "_" + cfig)
+        spgemm.argtypes = [
+            k,  # alpha
+            idx_t_p,  # A_rows
+            idx_t_p,  # A_cols
+            k_p,  # A_vals
+            k_p,  # B
+            k,  # beta
+            k_p,  # C
+            idx_t,  # M
+            idx_t,  # K
+            idx_t,  # N
+        ]
+        spgemm.restype = None
 
 
 class DMatrix(AMatrix):
@@ -210,8 +225,8 @@ class DMatrix(AMatrix):
     _destructor_f32 = lib_matrix.DMatrix_dtor_f32
     _destructor_f64 = lib_matrix.DMatrix_dtor_f64
 
-    _sgemm = lib_matrix.DMatrix_sgemm
-    _dgemm = lib_matrix.DMatrix_dgemm
+    _sgemm = lib_matrix.sgemm_mkl
+    _dgemm = lib_matrix.dgemm_mkl
     _sApB = lib_matrix.DMatrix_sApB
     _dApB = lib_matrix.DMatrix_dApB
     _sAmB = lib_matrix.DMatrix_sAmB
@@ -437,6 +452,9 @@ class SymCSRMatrix(AMatrix):
     _get_ac_ptr_f32 = lib_matrix.SymCSRMatrix_get_ac_ptr_f64
     _get_av_ptr_f32 = lib_matrix.SymCSRMatrix_get_av_ptr_f64
 
+    _s_spgemm = lib_matrix.sym_csr_s_MM_mkl
+    _d_spgemm = lib_matrix.sym_csr_d_MM_mkl
+
     def __init__(self, m, n, dtype, A_p, A_c, A_v, handle=None):
         """
         Args:
@@ -535,42 +553,43 @@ class SymCSRMatrix(AMatrix):
             case _:
                 raise NotImplementedError
 
-    @staticmethod
-    def SpGEMM(op_A, op_B, alpha, A, B, beta, C):
-        # For testing purposes
-        # This is obviously slow but I want to loosely mimic the call interface of cuSPARSE SpMM /mkl SpGEMM
-
-        # since this is Sym, op_A is ignored
-        bA_p, bA_c, bA_v = A.buffers
-        A_p = np.frombuffer(bA_p, dtype=np.int32)
-        A_c = np.frombuffer(bA_c, dtype=np.int32)
-        A_v = np.frombuffer(bA_v, dtype=A.dtype)
-
-        # Iterate over rows of A
-        for i in range(A.m):
-            # Iterate over cols of B
-            for j in range(B.n):
-                # Iterate over cols of A
-                for idx in range(A_p[i], A_p[i + 1]):
-                    k = A_c[idx]
-                    b_idx = (j, k) if op_B else (k, j)
-                    # Calculate A[i, k] * B[k, j]
-                    C.arr[i, j] += A_v[idx] * B.arr[b_idx]
-
-                    if k > i:
-                        # Calculate A[k, i] * B[i, j]
-                        b_idx = (j, i) if op_B else (i, j)
-                        C.arr[k, j] += A_v[idx] * B.arr[b_idx]
+    def spgemm(self, op_A, op_B, alpha, A, B, beta, C):
+        match self.dtype:
+            case np.float32:
+                return self._s_spgemm
+            case np.float64:
+                return self._d_spgemm
+            case _:
+                raise NotImplementedError
 
     def __matmul__(self, B):
         """Implementation of DMatrix = SymCSRMatrix @ DMatrix"""
-        out_shape = self.MM_shape(B)
+        m, k, n = self.MM_shape(B)
         if B in self.registry.keys():
             res = self.registry[B]
         else:
-            res = DMatrix.allocate_new(out_shape, self.dtype, self._p)
+            res = DMatrix(m, n, dtype=self.dtype)
 
-        SymCSRMatrix.SpGEMM(None, B.transposed, 1.0, self, B, 1.0, res)
+        # TODO: consider interface for op B? op A is not so useful since A is symmetric
+        # and/or consider passing arguments for B storage being col. major instead
+        op_A = "t" if self.transposed else "n"
+        op_B = "t" if B.transpose else "n"
+        lda = m
+        ldb = k
+        ldc = m
+        self.spgemm(
+            self.ctype(1.0),
+            self.A_p.p,
+            self.A_c.p,
+            self.A_v.p,
+            B.arr.p,
+            self.ctype(1.0),
+            res.arr.p,
+            m,
+            k,
+            n,
+        )
+
         return res
 
 
@@ -646,7 +665,7 @@ class PartialSumMatrix(DistMatrix):
         if B in self.registry.keys():
             C = self.registry[B]
         else:
-            C = DMatrix(m, n, self.dtype, self._p)
+            C = DMatrix(m, n, dtype=self.dtype)
 
         C = self.A @ B
         self.comm.Allreduce(MPI.IN_PLACE, [C.arr.p, self.mpi_type])
@@ -677,7 +696,7 @@ class RowDistMatrix(DistMatrix):
             pass
         elif isinstance(self.A, DMatrix):
             # if local matrix is Dense, can return as RowDist on the same comm
-            l_res = DMatrix.allocate_new(self.A.m, B.n, self.dtype, self._p)
+            l_res = DMatrix(self.A.m, B.n, dtype=self.dtype)
             g_res = RowDistMatrix(
                 self.comm, l_res, out_shape[0], out_shape[1], self.dtype, self.mpi_type
             )
