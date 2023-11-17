@@ -1,7 +1,7 @@
 #pragma once
 #include <cmath>
 
-typedef long int idx_t;
+typedef long long idx_t;
 
 enum j_category { IC_A, IC_B, IC_C, IC_D, IC_E, IC_F, IC_G };
 
