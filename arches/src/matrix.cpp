@@ -5,24 +5,23 @@
 // ctypes matrix routine interfaces
 extern "C" {
 
-void sgemm_mkl(const char op_a, const char op_b, const idx_t m, const idx_t n, const idx_t k,
-               const float alpha, const float *A, const idx_t lda, const float *B, const idx_t ldb,
-               const float beta, float *C, const idx_t ldc) {
+void sgemm_mkl( char op_a,  char op_b,  idx_t m,  idx_t n,  idx_t k,
+                float alpha, const float *A,  idx_t lda, const float *B,  idx_t ldb,
+                float beta, float *C,  idx_t ldc) {
 
-    const CBLAS_LAYOUT layout = CblasRowMajor;
-    const CBLAS_TRANSPOSE trans_A = op_a == 't' ? CblasTrans : CblasNoTrans;
-    const CBLAS_TRANSPOSE trans_B = op_b == 't' ? CblasTrans : CblasNoTrans;
+    CBLAS_LAYOUT layout = CblasRowMajor;
+    CBLAS_TRANSPOSE trans_A = op_a == 't' ? CblasTrans : CblasNoTrans;
+    CBLAS_TRANSPOSE trans_B = op_b == 't' ? CblasTrans : CblasNoTrans;
 
     cblas_sgemm(layout, trans_A, trans_B, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
 }
 
-void dgemm_mkl(const char op_a, const char op_b, const idx_t m, const idx_t n, const idx_t k,
-               const double alpha, const double *A, const idx_t lda, const double *B,
-               const idx_t ldb, const double beta, double *C, const idx_t ldc) {
+void dgemm_mkl(char op_a, char op_b, idx_t m, idx_t n, idx_t k, double alpha, const double *A,
+               idx_t lda, const double *B, idx_t ldb, double beta, double *C, idx_t ldc) {
 
-    const CBLAS_LAYOUT layout = CblasRowMajor;
-    const CBLAS_TRANSPOSE trans_A = op_a == 't' ? CblasTrans : CblasNoTrans;
-    const CBLAS_TRANSPOSE trans_B = op_b == 't' ? CblasTrans : CblasNoTrans;
+    CBLAS_LAYOUT layout = CblasRowMajor;
+    CBLAS_TRANSPOSE trans_A = op_a == 't' ? CblasTrans : CblasNoTrans;
+    CBLAS_TRANSPOSE trans_B = op_b == 't' ? CblasTrans : CblasNoTrans;
 
     cblas_dgemm(layout, trans_A, trans_B, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
 }
@@ -64,10 +63,10 @@ void sym_csr_d_MM_mkl(const double alpha, idx_t *A_rows, idx_t *A_cols, double *
     mkl_sparse_destroy(csrA);
 }
 
-void sApB(float *A, float *B, float *C, idx_t m, idx_t n) { ApB(A, B, C, m, n); }
-void dApB(double *A, double *B, double *C, idx_t m, idx_t n) { ApB(A, B, C, m, n); }
-void sAmB(float *A, float *B, float *C, idx_t m, idx_t n) { AmB(A, B, C, m, n); }
-void dAmB(double *A, double *B, double *C, idx_t m, idx_t n) { AmB(A, B, C, m, n); }
+void DMatrix_sApB(float *A, float *B, float *C, idx_t m, idx_t n) { ApB(A, B, C, m, n); }
+void DMatrix_dApB(double *A, double *B, double *C, idx_t m, idx_t n) { ApB(A, B, C, m, n); }
+void DMatrix_sAmB(float *A, float *B, float *C, idx_t m, idx_t n) { AmB(A, B, C, m, n); }
+void DMatrix_dAmB(double *A, double *B, double *C, idx_t m, idx_t n) { AmB(A, B, C, m, n); }
 }
 
 // ctypes handler interfacing
@@ -91,8 +90,12 @@ DMatrix<double> *DMatrix_ctor_a_f64(idx_t m, idx_t n, double *fill) {
 }
 
 // DMatrix pointer returns
-float *DMatrix_get_arr_ptr_f32(DMatrix<float> *A) { return A->A; }
-double *DMatrix_get_arr_ptr_f64(DMatrix<double> *A) { return A->A; }
+float *DMatrix_get_arr_ptr_f32(DMatrix<float> *A, idx_t m_start, idx_t n_start) {
+    return A->A + (A->m * m_start + n_start);
+}
+double *DMatrix_get_arr_ptr_f64(DMatrix<double> *A, idx_t m_start, idx_t n_start) {
+    return A->A + (A->m * m_start + n_start);
+}
 
 // DMatrix destructors
 void DMatrix_dtor_f32(DMatrix<float> *A) { delete A; }

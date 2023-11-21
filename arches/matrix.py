@@ -3,7 +3,8 @@ from abc import abstractmethod
 from ctypes import CDLL, c_char
 
 import numpy as np
-from mpi4py import MPI
+
+# from mpi4py import MPI
 from scipy.linalg import lapack as la
 
 from arches.linked_object import (
@@ -38,7 +39,7 @@ class AMatrix(LinkedHandle):
     def __init__(self, m, n, dtype, ctype, **kwargs):
         self.dtype = dtype
         self._ctype = ctype
-        super().__init__(**kwargs)
+        super().__init__(m=m, n=n, **kwargs)  # m, n get eaten by init args
         self._registry = {}
         self.m = m
         self.n = n
@@ -56,7 +57,8 @@ class AMatrix(LinkedHandle):
             case _:
                 raise NotImplementedError
 
-    def destructor(self):
+    @property
+    def _d_tor(self):
         match self.dtype:
             case np.float32:
                 return self._destructor_f32
@@ -64,6 +66,9 @@ class AMatrix(LinkedHandle):
                 return self._destructor_f64
             case _:
                 raise NotImplementedError
+
+    def destructor(self, handle):
+        self._d_tor(handle)
 
     @property
     def _M_array_type(self):
@@ -96,7 +101,7 @@ class AMatrix(LinkedHandle):
 
     @m.setter
     def m(self, val):
-        if not isinstance(val, int):
+        if not np.issubdtype(type(val), np.integer):
             raise TypeError
         if val < 0:
             raise ValueError
@@ -110,7 +115,7 @@ class AMatrix(LinkedHandle):
 
     @n.setter
     def n(self, val):
-        if not isinstance(val, int):
+        if not np.issubdtype(type(val), np.integer):
             raise TypeError
         if val < 0:
             raise ValueError
@@ -118,15 +123,8 @@ class AMatrix(LinkedHandle):
         self._n = val
 
     def MM_shape(self, B):
-        if self.transposed:
-            A_m, A_n = self.n, self.m
-        else:
-            A_m, A_n = self.m, self.n
-
-        if B.transposed:
-            B_m, B_n = B.n, B.m
-        else:
-            B_m, B_n = B.m, B.n
+        A_m, A_n = self.m, self.n
+        B_m, B_n = B.m, B.n
 
         if A_n != B_m:
             raise ValueError
@@ -156,7 +154,7 @@ for k in [f32, f64]:
 
     fill_ctor.argtypes = [idx_t, idx_t, k]
     copy_ctor.argtypes = [idx_t, idx_t, k_p]
-    ptr_return.argtypes = [handle_t]
+    ptr_return.argtypes = [handle_t, idx_t, idx_t]
     dtor.argtypes = [handle_t]
 
     fill_ctor.restype = handle_t
@@ -193,7 +191,7 @@ for k in [f32, f64]:
 
         gemm.restype = None
 
-        spgemm = getattr(lib_matrix, "sym_csr_" + sd[k] + "_" + cfig)
+        spgemm = getattr(lib_matrix, "sym_csr_" + sd[k] + "_MM_" + cfig)
         spgemm.argtypes = [
             k,  # alpha
             idx_t_p,  # A_rows
@@ -232,7 +230,19 @@ class DMatrix(AMatrix):
     _sAmB = lib_matrix.DMatrix_sAmB
     _dAmB = lib_matrix.DMatrix_dAmB
 
-    def __init__(self, m, n, A=0.0, dtype=np.float64, t=False, handle=None):
+    def __init__(
+        self,
+        m,
+        n,
+        arr=0.0,
+        dtype=np.float64,
+        t=False,
+        handle=None,
+        max_row_rank=None,  # The following are used for subslice handling
+        max_col_rank=None,
+        row_offset=0,
+        col_offset=0,
+    ):
         """
         Args:
             m : row rank of A
@@ -242,15 +252,34 @@ class DMatrix(AMatrix):
             t : whether or not A is currently transposed
 
         """
-        if isinstance(A, np.ndarray):
-            A = A.astype(dtype)  # cast type
+        if isinstance(arr, np.ndarray):
+            arr = arr.astype(dtype)  # cast type
 
         # call constructor via super to initialize handles and typing
         # anything that needs to be passed to the constructor needs to be passed as a kwarg
-        super().__init__(handle=handle, m=m, n=n, dtype=dtype, ctype=np_type_map[dtype], arr=A)
+        super().__init__(handle=handle, m=m, n=n, dtype=dtype, ctype=np_type_map[dtype], arr=arr)
+
+        if max_row_rank is None:
+            self.max_row_rank = m
+        else:
+            self.max_row_rank = max_row_rank
+
+        if max_col_rank is None:
+            self.max_col_rank = n
+        else:
+            self.max_col_rank = max_col_rank
+
+        # TODO: when an offset is provided, all of the array access operations break on the composed ManagedArray
+        # This can cause unexpected behavior and possibly seg faults if an object is assigned to a subslice of a DMatrix,
+        # and the managed array of said object is then directly modified,
+        # neither of which are currently used in the ARCHES code.
 
         # data is initialized by constructor, no need to set it here
-        self.arr = self._M_array_type(self.get_arr_ptr(self.handle), self.m * self.n, None)
+        self.row_offset = row_offset
+        self.col_offset = col_offset
+        self.arr = self._M_array_type(
+            self.get_arr_ptr(self.handle, row_offset, col_offset), self.m * self.n, None
+        )
         self.transposed = t
 
     def __repr__(self):
@@ -262,13 +291,44 @@ class DMatrix(AMatrix):
                 raise ValueError
 
             # use copy constructor
-            return self._f_ctor["copy"](idx_t(m), idx_t(n), arr)
+            return self._f_ctor["copy"](
+                idx_t(m), idx_t(n), arr.ctypes.data_as(type_dict[self.ctype][1])
+            )
         else:
             # use constant fill constructor
             return self._f_ctor["fill"](idx_t(m), idx_t(n), self.ctype(arr))
 
+    @property
+    def max_row_rank(self):
+        return self._max_row_rank
+
+    @max_row_rank.setter
+    def max_row_rank(self, val):
+        if not np.issubdtype(type(val), np.integer):
+            raise TypeError
+
+        if val < self.m:
+            raise ValueError
+
+        self._max_row_rank = val
+
+    @property
+    def max_col_rank(self):
+        return self._max_col_rank
+
+    @max_col_rank.setter
+    def max_col_rank(self, val):
+        if not np.issubdtype(type(val), np.integer):
+            raise TypeError
+
+        if val < self.n:
+            raise ValueError
+
+        self._max_col_rank = val
+
     # TODO: decide if @singledispatch might be better suited/cleaner
     # or, perhaps, these should all be set at initialization instead of being runtime
+    @property
     def get_arr_ptr(self):
         match self.dtype:
             case np.float32:
@@ -278,6 +338,7 @@ class DMatrix(AMatrix):
             case _:
                 raise NotImplementedError
 
+    @property
     def gemm(self):
         match self.dtype:
             case np.float32:
@@ -287,6 +348,7 @@ class DMatrix(AMatrix):
             case _:
                 raise NotImplementedError
 
+    @property
     def ApB(self):
         match self.dtype:
             case np.float32:
@@ -296,6 +358,7 @@ class DMatrix(AMatrix):
             case _:
                 raise NotImplementedError
 
+    @property
     def AmB(self):
         match self.dtype:
             case np.float32:
@@ -318,20 +381,63 @@ class DMatrix(AMatrix):
 
     @property
     def np_arr(self):
-        return np.reshape(
+        # TODO: returns the wrong thing if matrix is transposed
+        arr = np.reshape(
             np.fromiter(self.arr.p, dtype=self.dtype, count=self.arr.size), (self.m, self.n)
         )
+        return arr
 
     @property
     def T(self):
         # Return a view of the matrix
         return DMatrix(
-            handle=self.handle, m=self.m, n=self.n, dtype=self.dtype, t=not self.transposed
+            handle=self.handle, m=self.n, n=self.m, dtype=self.dtype, t=not self.transposed
+        )
+
+    def __getitem__(self, t):
+        # Return submatrix
+        if len(t) != 2:
+            raise ValueError("Wrong number of dimensions indexed.")
+
+        if t[0].step is not None or t[1].step is not None:
+            raise NotImplementedError("Strided slicing of matrices not supported.")
+
+        row_start = 0 if t[0].start is None else t[0].start
+        row_stop = self.m if t[0].stop is None else t[0].stop
+
+        col_start = 0 if t[1].start is None else t[1].start
+        col_stop = self.m if t[1].stop is None else t[1].stop
+
+        if row_start < 0 or row_stop > self.m:
+            raise ValueError(
+                f"Requested slice ({row_start}, {row_stop}) extends beyond row rank {self.m}."
+            )
+
+        if col_start < 0 or col_stop > self.m:
+            raise ValueError(
+                f"Requested slice ({col_start}, {col_stop}) extends beyond col rank {self.n}."
+            )
+
+        # TODO: What happens if this is tranposed?
+        # TODO: What happens with nested subslices?
+        return DMatrix(
+            handle=self.handle,
+            m=row_stop - row_start,
+            n=col_stop - col_start,
+            dtype=self.dtype,
+            t=self.transposed,
+            max_row_rank=self.max_row_rank,
+            max_col_rank=self.max_col_rank,
+            row_offset=self.row_offset + row_start,
+            col_offset=self.col_offset + col_start,
         )
 
     def __add__(self, B):
+        # should work okay if they're both tranposed but do not rely on that
+        if self.transposed or B.transposed:
+            raise NotImplementedError
+
         # check shape compatibility
-        # TODO: adding a transposed matrix will break, decide if we want to deal with that
         if (self.m != B.m) or (self.n != B.n):
             raise ValueError
 
@@ -343,6 +449,9 @@ class DMatrix(AMatrix):
         return C
 
     def __iadd__(self, B):
+        if self.transposed or B.transposed:
+            raise NotImplementedError
+
         if (self.m != B.m) or (self.n != B.n):
             raise ValueError
 
@@ -353,6 +462,9 @@ class DMatrix(AMatrix):
         return self
 
     def __sub__(self, B):
+        if self.transposed or B.transposed:
+            raise NotImplementedError
+
         if (self.m != B.m) or (self.n != B.n):
             raise ValueError
 
@@ -364,6 +476,9 @@ class DMatrix(AMatrix):
         return C
 
     def __isub__(self, B):
+        if self.transposed or B.transposed:
+            raise NotImplementedError
+
         if (self.m != B.m) or (self.n != B.n):
             raise ValueError
 
@@ -375,8 +490,6 @@ class DMatrix(AMatrix):
 
     def __matmul__(self, B):
         """Left-multiply against matrix B."""
-        # TODO: Handle LDA, LDB, LDC
-
         if self.dtype != B.dtype:
             raise TypeError
 
@@ -384,24 +497,26 @@ class DMatrix(AMatrix):
         m, k, n = self.MM_shape(B)
         if B in self.registry.keys():
             # TODO: implement better shape checking - want to be compatible with pre-registered result
+            # TODO: enforce that C is never transposed
             C = self.registry[B]
         else:
             C = DMatrix(m, n, dtype=self.dtype)
 
         op_A = "t" if self.transposed else "n"
         op_B = "t" if B.transposed else "n"
-        lda = m
-        ldb = k
-        ldc = m
+        # TODO: switch to m, k, m for col-ordered
+        lda = self.max_row_rank if self.transposed else self.max_col_rank
+        ldb = B.max_row_rank if B.transposed else B.max_col_rank
+        ldc = C.max_col_rank  # if C in registry is transposed, this breaks
         self.gemm(
-            c_char(op_A),
-            c_char(op_B),
+            c_char(op_A.encode("utf-8")),
+            c_char(op_B.encode("utf-8")),
             m,
             n,
-            lda,
+            k,
             self.ctype(1.0),
             self.arr.p,
-            m,
+            lda,
             B.arr.p,
             ldb,
             self.ctype(1.0),
@@ -668,7 +783,7 @@ class PartialSumMatrix(DistMatrix):
             C = DMatrix(m, n, dtype=self.dtype)
 
         C = self.A @ B
-        self.comm.Allreduce(MPI.IN_PLACE, [C.arr.p, self.mpi_type])
+        # self.comm.Allreduce(MPI.IN_PLACE, [C.arr.p, self.mpi_type])
 
         return C
 

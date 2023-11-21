@@ -95,9 +95,9 @@ template <class T> class SymCSRMatrix {
         m = M;
         n = N;
 
-        A_p_ptr = std::move(A_p_ptr);
-        A_c_ptr = std::move(A_c_ptr);
-        A_v_ptr = std::move(A_v_ptr);
+        A_p_ptr = std::move(arr_p);
+        A_c_ptr = std::move(arr_c);
+        A_v_ptr = std::move(arr_v);
 
         A_p = A_p_ptr.get();
         A_c = A_c_ptr.get();
@@ -149,6 +149,6 @@ template <class T> void ApB(T *A, T *B, T *C, idx_t m, idx_t n) {
 
 template <class T> void AmB(T *A, T *B, T *C, idx_t m, idx_t n) {
     for (auto i = 0; i < m * n; i++)
-        C[i] = A[i] + B[i];
+        C[i] = A[i] - B[i];
     ;
 }

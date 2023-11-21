@@ -28,7 +28,7 @@ type_dict = {
     ui32: ("ui32", ui32_p, ui32_a),
     ui64: ("ui64", ui64_p, ui64_a),
     f32: ("f32", f32_p, f32_a),
-    f64: ("f32", f64_p, f64_a),
+    f64: ("f64", f64_p, f64_a),
 }
 
 np_type_map = {
@@ -41,7 +41,7 @@ np_type_map = {
 }
 
 run_folder = pathlib.Path(__file__).parent.resolve()
-lib_interface = CDLL(run_folder.joinpath("build/libinterface.so"))
+lib_interface = CDLL(run_folder.joinpath("build/libarrays.so"))
 
 
 class LinkedHandle(ABC):
@@ -62,7 +62,7 @@ class LinkedHandle(ABC):
             self.destructor(self.handle)
 
     @abstractmethod
-    def destructor(handle):
+    def destructor(self, handle):
         pass
 
     @abstractmethod
@@ -73,12 +73,9 @@ class LinkedHandle(ABC):
 class ManagedArray(ABC):
     """Base class for arrays owned by LinkedHandle."""
 
-    def __init__(self, pointer, size, ctype, dtype, ptype, data=None):
+    def __init__(self, pointer, size, data=None):
         self._p = pointer
         self._size = size
-        self._dtype = dtype
-        self._ctype = ctype
-        self._ptype = ptype
         if data is not None:
             self[slice(0, size)] = data
 
@@ -164,9 +161,12 @@ class ManagedArray_i32(ManagedArray):
     set_val = lib_interface.set_i32
     set_range = lib_interface.set_range_i32
     set_strided_range = lib_interface.set_strided_range_i32
+    _ctype = i32
+    _ptype = i32_p
+    _dtype = np.dtype(np.int32)
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=i32, ptype=i32_p, dtype=np.int32, data=data)
+        super().__init__(pointer, size, data=data)
 
 
 class ManagedArray_i64(ManagedArray):
@@ -174,9 +174,12 @@ class ManagedArray_i64(ManagedArray):
     set_val = lib_interface.set_i64
     set_range = lib_interface.set_range_i64
     set_strided_range = lib_interface.set_strided_range_i64
+    _ctype = i64
+    _ptype = i64_p
+    _dtype = np.dtype(np.int64)
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=i64, ptype=i64_p, dtype=np.int64, data=data)
+        super().__init__(pointer, size, data=data)
 
 
 ManagedArray_idx_t = ManagedArray_i64  # alias for indexing arrays
@@ -187,9 +190,12 @@ class ManagedArray_ui32(ManagedArray):
     set_val = lib_interface.set_ui32
     set_range = lib_interface.set_range_ui32
     set_strided_range = lib_interface.set_strided_range_ui32
+    _ctype = ui32
+    _ptype = ui32_p
+    _dtype = np.dtype(np.uint32)
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=ui32, ptype=ui32_p, dtype=np.uint32, data=data)
+        super().__init__(pointer, size, data=data)
 
 
 class ManagedArray_ui64(ManagedArray):
@@ -197,9 +203,12 @@ class ManagedArray_ui64(ManagedArray):
     set_val = lib_interface.set_ui64
     set_range = lib_interface.set_range_ui64
     set_strided_range = lib_interface.set_strided_range_ui64
+    _ctype = ui64
+    _ptype = ui64_p
+    _dtype = np.dtype(np.uint64)
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=ui64, ptype=ui64_p, dtype=np.uint64, data=data)
+        super().__init__(pointer, size, data=data)
 
 
 class ManagedArray_f32(ManagedArray):
@@ -207,9 +216,12 @@ class ManagedArray_f32(ManagedArray):
     set_val = lib_interface.set_f32
     set_range = lib_interface.set_range_f32
     set_strided_range = lib_interface.set_strided_range_f32
+    _ctype = f32
+    _ptype = f32_p
+    _dtype = np.dtype(np.float32)
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=f32, ptype=f32_p, dtype=np.float32, data=data)
+        super().__init__(pointer, size, data=data)
 
 
 class ManagedArray_f64(ManagedArray):
@@ -217,9 +229,12 @@ class ManagedArray_f64(ManagedArray):
     set_val = lib_interface.set_f64
     set_range = lib_interface.set_range_f64
     set_strided_range = lib_interface.set_strided_range_f64
+    _ctype = f64
+    _ptype = f64_p
+    _dtype = np.dtype(np.float64)
 
     def __init__(self, pointer, size, data):
-        super().__init__(pointer, size, ctype=f64, ptype=f64_p, dtype=np.float64, data=data)
+        super().__init__(pointer, size, data=data)
 
 
 class LinkedArray(LinkedHandle):
@@ -250,49 +265,41 @@ class LinkedArray(LinkedHandle):
         return self._M_array_type
 
     @singledispatchmethod
-    @abstractmethod
     @staticmethod
     def _add(b, a, c, N):  # b needs to be first arg to single dispatch over constant vs arr
         raise NotImplementedError
 
     @singledispatchmethod
-    @abstractmethod
     @staticmethod
     def _iadd(b, a, N):
         raise NotImplementedError
 
     @singledispatchmethod
-    @abstractmethod
     @staticmethod
     def _sub(b, a, c, N):
         raise NotImplementedError
 
     @singledispatchmethod
-    @abstractmethod
     @staticmethod
     def _isub(b, a, N):
         raise NotImplementedError
 
     @singledispatchmethod
-    @abstractmethod
     @staticmethod
     def _mul(b, a, c, N):
         raise NotImplementedError
 
     @singledispatchmethod
-    @abstractmethod
     @staticmethod
     def _imul(b, a, N):
         raise NotImplementedError
 
     @singledispatchmethod
-    @abstractmethod
     @staticmethod
     def _div(b, a, c, N):
         raise NotImplementedError
 
     @singledispatchmethod
-    @abstractmethod
     @staticmethod
     def _idiv(b, a, N):
         raise NotImplementedError
@@ -397,40 +404,6 @@ class LinkedArray(LinkedHandle):
         return cls(N)
 
 
-class LinkedArray_f32(LinkedArray):
-    _M_array_type = ManagedArray_f32
-    _empty_ctor = lib_interface.LArray_ctor_e_f32
-    _copy_ctor = lib_interface.LArray_ctor_a_f32
-    _fill_ctor = lib_interface.LArray_ctor_c_f32
-    _ipow2 = lib_interface.LArray_ipow2_f32
-
-    # TODO: will all of these derived types conflict with eachother?
-    for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
-        _method = getattr(LinkedArray, "_" + op)
-        _method.register(_M_array_type.pytpe, getattr(lib_interface, "LArray_" + op + "_f32"))
-        _method.register(_M_array_type.ctype, getattr(lib_interface, "LArray_" + op + "_c_f32"))
-
-    def __init__(self, N, fill=None, handle=None, **kwargs):
-        super().__init__(N=N, fill=fill, handle=handle)
-
-
-class LinkedArray_f64(LinkedArray):
-    _M_array_type = ManagedArray_f64
-    _empty_ctor = lib_interface.LArray_ctor_e_f64
-    _copy_ctor = lib_interface.LArray_ctor_a_f64
-    _fill_ctor = lib_interface.LArray_ctor_c_f64
-    _ipow2 = lib_interface.LArray_ipow2_f64
-
-    # TODO: will all of these derived types conflict with eachother?
-    for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
-        _method = getattr(LinkedArray, "_" + op)
-        _method.register(_M_array_type.pytpe, getattr(lib_interface, "LArray_" + op + "_f64"))
-        _method.register(_M_array_type.ctype, getattr(lib_interface, "LArray_" + op + "_c_f64"))
-
-    def __init__(self, N, fill=None, handle=None, **kwargs):
-        super().__init__(N=N, fill=fill, handle=handle)
-
-
 class LinkedArray_i32(LinkedArray):
     _M_array_type = ManagedArray_i32
     _empty_ctor = lib_interface.LArray_ctor_e_i32
@@ -441,8 +414,8 @@ class LinkedArray_i32(LinkedArray):
     # TODO: will all of these derived types conflict with eachother?
     for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
         _method = getattr(LinkedArray, "_" + op)
-        _method.register(_M_array_type.pytpe, getattr(lib_interface, "LArray_" + op + "_i32"))
-        _method.register(_M_array_type.ctype, getattr(lib_interface, "LArray_" + op + "_c_i32"))
+        _method.register(i32_p, getattr(lib_interface, "LArray_" + op + "_i32"))
+        _method.register(i32, getattr(lib_interface, "LArray_" + op + "_c_i32"))
 
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
@@ -458,8 +431,8 @@ class LinkedArray_i64(LinkedArray):
     # TODO: will all of these derived types conflict with eachother?
     for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
         _method = getattr(LinkedArray, "_" + op)
-        _method.register(_M_array_type.pytpe, getattr(lib_interface, "LArray_" + op + "_i64"))
-        _method.register(_M_array_type.ctype, getattr(lib_interface, "LArray_" + op + "_c_i64"))
+        _method.register(i64_p, getattr(lib_interface, "LArray_" + op + "_i64"))
+        _method.register(i64, getattr(lib_interface, "LArray_" + op + "_c_i64"))
 
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
@@ -475,8 +448,8 @@ class LinkedArray_ui32(LinkedArray):
     # TODO: will all of these derived types conflict with eachother?
     for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
         _method = getattr(LinkedArray, "_" + op)
-        _method.register(_M_array_type.pytpe, getattr(lib_interface, "LArray_" + op + "_ui32"))
-        _method.register(_M_array_type.ctype, getattr(lib_interface, "LArray_" + op + "_c_ui32"))
+        _method.register(ui32_p, getattr(lib_interface, "LArray_" + op + "_ui32"))
+        _method.register(ui32, getattr(lib_interface, "LArray_" + op + "_c_ui32"))
 
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
@@ -492,8 +465,42 @@ class LinkedArray_ui64(LinkedArray):
     # TODO: will all of these derived types conflict with eachother?
     for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
         _method = getattr(LinkedArray, "_" + op)
-        _method.register(_M_array_type.pytpe, getattr(lib_interface, "LArray_" + op + "_ui64"))
-        _method.register(_M_array_type.ctype, getattr(lib_interface, "LArray_" + op + "_c_ui64"))
+        _method.register(ui64_p, getattr(lib_interface, "LArray_" + op + "_ui64"))
+        _method.register(ui64, getattr(lib_interface, "LArray_" + op + "_c_ui64"))
+
+    def __init__(self, N, fill=None, handle=None, **kwargs):
+        super().__init__(N=N, fill=fill, handle=handle)
+
+
+class LinkedArray_f32(LinkedArray):
+    _M_array_type = ManagedArray_f32
+    _empty_ctor = lib_interface.LArray_ctor_e_f32
+    _copy_ctor = lib_interface.LArray_ctor_a_f32
+    _fill_ctor = lib_interface.LArray_ctor_c_f32
+    _ipow2 = lib_interface.LArray_ipow2_f32
+
+    # TODO: will all of these derived types conflict with eachother?
+    for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
+        _method = getattr(LinkedArray, "_" + op)
+        _method.register(f32_p, getattr(lib_interface, "LArray_" + op + "_f32"))
+        _method.register(f32, getattr(lib_interface, "LArray_" + op + "_c_f32"))
+
+    def __init__(self, N, fill=None, handle=None, **kwargs):
+        super().__init__(N=N, fill=fill, handle=handle)
+
+
+class LinkedArray_f64(LinkedArray):
+    _M_array_type = ManagedArray_f64
+    _empty_ctor = lib_interface.LArray_ctor_e_f64
+    _copy_ctor = lib_interface.LArray_ctor_a_f64
+    _fill_ctor = lib_interface.LArray_ctor_c_f64
+    _ipow2 = lib_interface.LArray_ipow2_f64
+
+    # TODO: will all of these derived types conflict with eachother?
+    for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
+        _method = getattr(LinkedArray, "_" + op)
+        _method.register(f64_p, getattr(lib_interface, "LArray_" + op + "_f64"))
+        _method.register(f64, getattr(lib_interface, "LArray_" + op + "_c_f64"))
 
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
