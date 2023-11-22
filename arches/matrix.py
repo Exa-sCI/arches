@@ -30,8 +30,6 @@ Matrix classes
 """
 
 
-# TODO: Settle whether or not AMatrix derives from LinkedHandle, or if it is itself
-# an ABC and the derived matrix types use multiple inheritance
 # TODO: Settle whether or not to continue using the match : case or move to singledispatchmethods
 class AMatrix(LinkedHandle):
     """Abstract matrix class."""
@@ -403,21 +401,22 @@ class DMatrix(AMatrix):
                 np.fromiter(self.arr.p, dtype=self.dtype, count=self.arr.size), (self.m, self.n)
             )
         elif self.transposed:
-            temp = DMatrix(self.m, self.n)
-            ro, co = self.row_offset, self.col_offset
-            # TODO: something gets switched around twice, so swapping the offsets
-            # on the pass off to the temp matrix is necessary when the assignnee
-            # matrix is a transposed view. Figure out if that's okay? Tests pass for now.
+            temp = DMatrix(self.m, self.n, dtype=self.dtype)
 
+            # TODO: something gets switched around twice, so swapping the offsets
+            # on the pass off to the temp matrix is necessary when the assignee
+            # matrix is a transposed view. Figure out if that's okay? Tests pass for now.
+            ro, co = self.row_offset, self.col_offset
             self.row_offset, self.col_offset = co, ro
+
             temp[:, :] = self[:, :]
-            self.row_offset = ro
-            self.col_offset = co
             arr = temp.np_arr
+
+            self.row_offset, self.col_offset = ro, co
         else:  # Matrix is subsliced
             # TODO: Consider making a faster option. For now, copy into a dense DMatrix
             # and return its np arr
-            temp = DMatrix(self.m, self.n)
+            temp = DMatrix(self.m, self.n, dtype=self.dtype)
             temp[:, :] = self[:, :]
             arr = temp.np_arr
 
@@ -485,7 +484,6 @@ class DMatrix(AMatrix):
         row_offset = self.col_offset + col_start if self.transposed else self.row_offset + row_start
         col_offset = self.row_offset + row_start if self.transposed else self.col_offset + col_start
 
-        print(row_offset, col_offset)
         return row_start, row_stop, col_start, col_stop, row_offset, col_offset
 
     def __getitem__(self, t):

@@ -8,18 +8,32 @@ seed = 21872
 rng = np.random.default_rng(seed=seed)
 
 
+class Test_f32:
+    dtype = np.float32
+    rtol = 1e-4
+    atol = 1e-6
+
+
+class Test_f64:
+    dtype = np.float64
+    rtol = 1e-8
+    atol = 1e-10
+
+
 class Test_DMatrix(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         self.N_trials = 50
         self.rng = rng
 
     def test_square_matmul(self):
         def check_square_matmul(rank):
-            A_ref = self.rng.normal(size=(rank, rank))
-            B_ref = self.rng.normal(size=(rank, rank))
+            A_ref = self.rng.normal(size=(rank, rank)).astype(self.dtype)
+            B_ref = self.rng.normal(size=(rank, rank)).astype(self.dtype)
 
-            A_test = DMatrix(rank, rank, A_ref)
-            B_test = DMatrix(rank, rank, B_ref)
+            A_test = DMatrix(rank, rank, A_ref, dtype=self.dtype)
+            B_test = DMatrix(rank, rank, B_ref, dtype=self.dtype)
 
             self.assertTrue(np.allclose(A_ref @ B_ref, (A_test @ B_test).np_arr))
 
@@ -29,19 +43,19 @@ class Test_DMatrix(unittest.TestCase):
 
     def test_matmul_shape_error(self):
         def check_mamtul_shape_error():
-            A = DMatrix(4, 4)
-            B = DMatrix(3, 4)
+            A = DMatrix(4, 4, dtype=self.dtype)
+            B = DMatrix(3, 4, dtype=self.dtype)
             A @ B
 
         self.assertRaises(ValueError, check_mamtul_shape_error)
 
     def test_rect_matmul(self):
         def check_rect_matmul(shape_A, shape_B):
-            A_ref = self.rng.normal(size=shape_A)
-            B_ref = self.rng.normal(size=shape_B)
+            A_ref = self.rng.normal(size=shape_A).astype(self.dtype)
+            B_ref = self.rng.normal(size=shape_B).astype(self.dtype)
 
-            A_test = DMatrix(shape_A[0], shape_A[1], A_ref)
-            B_test = DMatrix(shape_B[0], shape_B[1], B_ref)
+            A_test = DMatrix(shape_A[0], shape_A[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape_B[0], shape_B[1], B_ref, dtype=self.dtype)
 
             self.assertTrue(np.allclose(A_ref @ B_ref, (A_test @ B_test).np_arr))
 
@@ -53,32 +67,51 @@ class Test_DMatrix(unittest.TestCase):
 
     def test_transpose_matmul(self):
         def check_transpose_matmul_lt(shape_A, shape_B):
-            A_ref = self.rng.normal(size=shape_A)
-            B_ref = self.rng.normal(size=shape_B)
+            A_ref = self.rng.normal(size=shape_A).astype(self.dtype)
+            B_ref = self.rng.normal(size=shape_B).astype(self.dtype)
 
             A_test = DMatrix(shape_A[0], shape_A[1], A_ref)
             B_test = DMatrix(shape_B[0], shape_B[1], B_ref)
 
-            self.assertTrue(np.allclose(A_ref.T @ B_ref, (A_test.T @ B_test).np_arr))
+            self.assertTrue(
+                np.allclose(
+                    A_ref.T @ B_ref, (A_test.T @ B_test).np_arr, rtol=self.rtol, atol=self.atol
+                )
+            )
 
         def check_transpose_matmul_rt(shape_A, shape_B):
-            A_ref = self.rng.normal(size=shape_A)
-            B_ref = self.rng.normal(size=shape_B)
+            A_ref = self.rng.normal(size=shape_A).astype(self.dtype)
+            B_ref = self.rng.normal(size=shape_B).astype(self.dtype)
 
             A_test = DMatrix(shape_A[0], shape_A[1], A_ref)
             B_test = DMatrix(shape_B[0], shape_B[1], B_ref)
 
-            self.assertTrue(np.allclose(A_ref @ B_ref.T, (A_test @ B_test.T).np_arr))
+            self.assertTrue(
+                np.allclose(
+                    A_ref @ B_ref.T, (A_test @ B_test.T).np_arr, rtol=self.rtol, atol=self.atol
+                )
+            )
 
         def check_transpose_matmul_bt(shape_A, shape_B):
-            A_ref = self.rng.normal(size=shape_A)
-            B_ref = self.rng.normal(size=shape_B)
+            A_ref = self.rng.normal(size=shape_A).astype(self.dtype)
+            B_ref = self.rng.normal(size=shape_B).astype(self.dtype)
 
-            A_test = DMatrix(shape_A[0], shape_A[1], A_ref)
-            B_test = DMatrix(shape_B[0], shape_B[1], B_ref)
+            A_test = DMatrix(shape_A[0], shape_A[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape_B[0], shape_B[1], B_ref, dtype=self.dtype)
 
-            self.assertTrue(np.allclose(B_ref.T @ A_ref.T, (B_test.T @ A_test.T).np_arr))
-            self.assertTrue(np.allclose((B_test.T @ A_test.T).np_arr, (A_test @ B_test).np_arr.T))
+            self.assertTrue(
+                np.allclose(
+                    B_ref.T @ A_ref.T, (B_test.T @ A_test.T).np_arr, rtol=self.rtol, atol=self.atol
+                )
+            )
+            self.assertTrue(
+                np.allclose(
+                    (B_test.T @ A_test.T).np_arr,
+                    (A_test @ B_test).np_arr.T,
+                    rtol=self.rtol,
+                    atol=self.atol,
+                )
+            )
 
         for _ in range(self.N_trials):
             ranks_lt = self.rng.integers(8, 32, 3)
@@ -97,9 +130,9 @@ class Test_DMatrix(unittest.TestCase):
             check_transpose_matmul_bt(shape_A_bt, shape_B_bt)
 
     def test_elementwise_shape_error(self):
-        A = DMatrix(10, 7)
-        B = DMatrix(10, 8)
-        C = DMatrix(9, 7)
+        A = DMatrix(10, 7, dtype=self.dtype)
+        B = DMatrix(10, 8, dtype=self.dtype)
+        C = DMatrix(9, 7, dtype=self.dtype)
 
         def _iadd_AB(A=A):
             A += B
@@ -124,11 +157,11 @@ class Test_DMatrix(unittest.TestCase):
 
     def test_add(self):
         def check_add(shape):
-            A_ref = rng.normal(size=shape)
-            B_ref = rng.normal(size=shape)
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
 
-            A_test = DMatrix(shape[0], shape[1], A_ref)
-            B_test = DMatrix(shape[0], shape[1], B_ref)
+            A_test = DMatrix(shape[0], shape[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape[0], shape[1], B_ref, dtype=self.dtype)
 
             self.assertTrue(np.allclose(A_ref + B_ref, (A_test + B_test).np_arr))
 
@@ -138,11 +171,11 @@ class Test_DMatrix(unittest.TestCase):
 
     def test_iadd(self):
         def check_iadd(shape):
-            A_ref = rng.normal(size=shape)
-            B_ref = rng.normal(size=shape)
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
 
-            A_test = DMatrix(shape[0], shape[1], A_ref)
-            B_test = DMatrix(shape[0], shape[1], B_ref)
+            A_test = DMatrix(shape[0], shape[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape[0], shape[1], B_ref, dtype=self.dtype)
 
             A_ref += B_ref
             A_test += B_test
@@ -155,8 +188,8 @@ class Test_DMatrix(unittest.TestCase):
 
     def test_sub(self):
         def check_sub(shape):
-            A_ref = rng.normal(size=shape)
-            B_ref = rng.normal(size=shape)
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
 
             A_test = DMatrix(shape[0], shape[1], A_ref)
             B_test = DMatrix(shape[0], shape[1], B_ref)
@@ -169,11 +202,11 @@ class Test_DMatrix(unittest.TestCase):
 
     def test_isub(self):
         def check_isub(shape):
-            A_ref = rng.normal(size=shape)
-            B_ref = rng.normal(size=shape)
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
 
-            A_test = DMatrix(shape[0], shape[1], A_ref)
-            B_test = DMatrix(shape[0], shape[1], B_ref)
+            A_test = DMatrix(shape[0], shape[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape[0], shape[1], B_ref, dtype=self.dtype)
 
             A_ref -= B_ref
             A_test -= B_test
@@ -187,9 +220,9 @@ class Test_DMatrix(unittest.TestCase):
     def test_subslice_get_shape_error(self):
         row_rank = 64
         col_rank = 32
-        A = DMatrix(row_rank, col_rank)
-        B = DMatrix(row_rank, 1)
-        C = DMatrix(1, col_rank)
+        A = DMatrix(row_rank, col_rank, dtype=self.dtype)
+        B = DMatrix(row_rank, 1, dtype=self.dtype)
+        C = DMatrix(1, col_rank, dtype=self.dtype)
 
         # invalid ranges
         self.assertRaises(ValueError, lambda: A[slice(-1, 7), slice(0, 8)])
@@ -214,10 +247,10 @@ class Test_DMatrix(unittest.TestCase):
     def test_subslice_matmul(self):
         row_rank = 64
         col_rank = 32
-        A_ref = rng.normal(size=(row_rank, col_rank))
-        B_ref = rng.normal(size=(row_rank, col_rank))
-        A_test = DMatrix(row_rank, col_rank, A_ref)
-        B_test = DMatrix(row_rank, col_rank, B_ref)
+        A_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+        B_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+        A_test = DMatrix(row_rank, col_rank, A_ref, dtype=self.dtype)
+        B_test = DMatrix(row_rank, col_rank, B_ref, dtype=self.dtype)
 
         def check_subslice_matmul(slice_A, slice_B):
             self.assertTrue(
@@ -270,10 +303,10 @@ class Test_DMatrix(unittest.TestCase):
     def test_subslice_transpose_matmul(self):
         row_rank = 64
         col_rank = 32
-        A_ref = rng.normal(size=(row_rank, col_rank))
-        B_ref = rng.normal(size=(row_rank, col_rank))
-        A_test = DMatrix(row_rank, col_rank, A_ref)
-        B_test = DMatrix(row_rank, col_rank, B_ref)
+        A_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+        B_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+        A_test = DMatrix(row_rank, col_rank, A_ref, dtype=self.dtype)
+        B_test = DMatrix(row_rank, col_rank, B_ref, dtype=self.dtype)
 
         def check_subslice_transpose_matmul_lt(slice_A, slice_B):
             #  check A[s].T @ B[s]
@@ -336,10 +369,10 @@ class Test_DMatrix(unittest.TestCase):
     def test_transpose_subslice_matmul(self):
         row_rank = 64
         col_rank = 32
-        A_ref = rng.normal(size=(row_rank, col_rank))
-        B_ref = rng.normal(size=(row_rank, col_rank))
-        A_test = DMatrix(row_rank, col_rank, A_ref)
-        B_test = DMatrix(row_rank, col_rank, B_ref)
+        A_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+        B_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+        A_test = DMatrix(row_rank, col_rank, A_ref, dtype=self.dtype)
+        B_test = DMatrix(row_rank, col_rank, B_ref, dtype=self.dtype)
 
         def check_transpose_subslice_matmul_lt(slice_A, slice_B):
             #  check A.T[s] @ B[s]
@@ -385,10 +418,10 @@ class Test_DMatrix(unittest.TestCase):
     def test_mixed_transpose_subslice_matmul(self):
         row_rank = 64
         col_rank = 32
-        A_ref = rng.normal(size=(row_rank, col_rank))
-        B_ref = rng.normal(size=(row_rank, col_rank))
-        A_test = DMatrix(row_rank, col_rank, A_ref)
-        B_test = DMatrix(row_rank, col_rank, B_ref)
+        A_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+        B_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+        A_test = DMatrix(row_rank, col_rank, A_ref, dtype=self.dtype)
+        B_test = DMatrix(row_rank, col_rank, B_ref, dtype=self.dtype)
 
         def check_ts_by_st(slice_A, slice_B):
             # check A.T[s] @ B[s].T
@@ -435,10 +468,10 @@ class Test_DMatrix(unittest.TestCase):
     def test_subslice_set_shape_error(self):
         row_rank = 64
         col_rank = 32
-        A = DMatrix(row_rank, col_rank)
-        B = DMatrix(row_rank, col_rank)
-        C = DMatrix(row_rank, 1)
-        D = DMatrix(1, col_rank)
+        A = DMatrix(row_rank, col_rank, dtype=self.dtype)
+        B = DMatrix(row_rank, col_rank, dtype=self.dtype)
+        C = DMatrix(row_rank, 1, dtype=self.dtype)
+        D = DMatrix(1, col_rank, dtype=self.dtype)
 
         def check_subslice_set_ranges():
             N_errors = 0
@@ -547,30 +580,30 @@ class Test_DMatrix(unittest.TestCase):
         drow_rank = 67
         dcol_rank = 37
 
-        source_ref = np.zeros((srow_rank, scol_rank))
-        source_ref.ravel()[:] = np.arange(0, srow_rank * scol_rank)
-        source_test = DMatrix(srow_rank, scol_rank, source_ref)
+        source_ref = np.zeros((srow_rank, scol_rank), dtype=self.dtype)
+        source_ref.ravel()[:] = np.arange(0, srow_rank * scol_rank, dtype=self.dtype)
+        source_test = DMatrix(srow_rank, scol_rank, source_ref, dtype=self.dtype)
 
         def check_nt(source_slice, dest_slice):
-            dest = DMatrix(drow_rank, dcol_rank)
+            dest = DMatrix(drow_rank, dcol_rank, dtype=self.dtype)
             dest[dest_slice] = source_test[source_slice]
 
             self.assertTrue(np.allclose(source_ref[source_slice], dest[dest_slice].np_arr))
 
         def check_lt(source_slice, dest_slice):
-            dest = DMatrix(drow_rank, dcol_rank)
+            dest = DMatrix(drow_rank, dcol_rank, dtype=self.dtype)
             dest.T[dest_slice] = source_test[source_slice]
 
             self.assertTrue(np.allclose(source_ref[source_slice], dest.T[dest_slice].np_arr))
 
         def check_rt(source_slice, dest_slice):
-            dest = DMatrix(drow_rank, dcol_rank)
+            dest = DMatrix(drow_rank, dcol_rank, dtype=self.dtype)
             dest[dest_slice] = source_test.T[source_slice]
 
             self.assertTrue(np.allclose(source_ref.T[source_slice], dest[dest_slice].np_arr))
 
         def check_bt(source_slice, dest_slice):
-            dest = DMatrix(drow_rank, dcol_rank)
+            dest = DMatrix(drow_rank, dcol_rank, dtype=self.dtype)
             dest.T[dest_slice] = source_test.T[source_slice]
 
             self.assertTrue(np.allclose(source_ref.T[source_slice], dest.T[dest_slice].np_arr))
@@ -592,6 +625,14 @@ class Test_DMatrix(unittest.TestCase):
             check_lt(sslice, dslice)
             check_rt(sslice, dslice)
             check_bt(sslice, dslice)
+
+
+class Test_DMatrix_f32(Test_f32, Test_DMatrix):
+    __test__ = True
+
+
+class Test_DMatrix_f64(Test_f64, Test_DMatrix):
+    __test__ = True
 
 
 if __name__ == "__main__":
