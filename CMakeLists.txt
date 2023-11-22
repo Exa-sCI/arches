@@ -50,15 +50,22 @@ target_include_directories(arrays PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/inclu
 target_compile_options(arrays PRIVATE -fPIC -Wall -O3)
 set_target_properties(arrays PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/arches/build)
 
-add_library(jchunk SHARED)
-target_sources(jchunk PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/integrals.cpp)
-target_include_directories(jchunk PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/include)
-target_compile_options(jchunk PRIVATE -fPIC -Wall -O3)
-set_target_properties(jchunk PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/arches/build)
+add_library(integrals SHARED)
+target_sources(integrals PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/integrals.cpp)
+target_include_directories(integrals PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/include)
+target_compile_options(integrals PRIVATE -fPIC -Wall -O3)
+set_target_properties(integrals PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/arches/build)
+
+add_library(determinant SHARED)
+target_sources(determinant PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/determinant.cpp)
+target_include_directories(determinant PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/include)
+target_compile_options(determinant PRIVATE -fPIC -Wall -O3)
+set_target_properties(determinant PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/arches/build)
 
 add_library(kernels SHARED)
 target_sources(kernels PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/kernels.cpp)
 target_include_directories(kernels PRIVATE ${PROJECT_SOURCE_DIR}/arches/src/include)
+target_link_libraries(kernels integral_indexing_utils integral_types determinant)
 target_compile_options(kernels PRIVATE -fPIC -Wall -O3)
 set_target_properties(kernels PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/arches/build)
 

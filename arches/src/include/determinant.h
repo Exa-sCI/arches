@@ -47,6 +47,18 @@ class spin_det_t {
         block_arr = block_arr_ptr.get();
     }
 
+    // fill initialization
+    spin_det_t(idx_t min_mos, idx_t max_orb, bool fill) : spin_det_t(min_mos) {
+        this->set(0, max_orb, fill);
+    }
+
+    // iter initialization
+    spin_det_t(idx_t min_mos, const idx_t N_filled, const idx_t *orbs) : spin_det_t(min_mos) {
+        for (auto i = 0; i < N_filled; i++) {
+            this->set(orbs[i], true);
+        }
+    }
+
     // lvalue assignment
     spin_det_t &operator=(const spin_det_t &other) {
         N_mos = other.N_mos;
@@ -79,7 +91,7 @@ class spin_det_t {
     /*
     Usage operators and methods
     */
-    bool operator[](idx_t orb) {
+    bool operator[](idx_t orb) const {
         // assert(orb >= 0);
         // assert(orb < N_mos);
         idx_t block = orb / block_size;
@@ -254,7 +266,16 @@ class det_t {
 
     // https://stackoverflow.com/a/27830679/7674852 seem to recommand doing the
     // other way arround
-    const spin_det_t &operator[](idx_t i) const { return (*this)[i]; }
+    const spin_det_t &operator[](idx_t i) const {
+        switch (i) {
+        case 0:
+            return alpha;
+        // Avoid `non-void function does not return a value in all control
+        // paths`
+        default:
+            return beta;
+        }
+    }
 };
 
 class DetArray {
@@ -329,10 +350,10 @@ int compute_phase_double_excitation(det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t
 // overload phase compute for (1,1) excitations
 det_t apply_single_excitation(det_t s, int spin, idx_t hole, idx_t particle);
 
-spin_det_t apply_spin_single_excitation(spin_det_t s, idx_t hole, idx_t particle);
+spin_det_t apply_single_excitation(spin_det_t s, idx_t hole, idx_t particle);
 
-det_t apply_double_excitation(det_t s, std::pair<int, int> spin, idx_t h1, idx_t h2, idx_t p1,
-                              idx_t p2);
+// det_t apply_double_excitation(det_t s, std::pair<int, int> spin, idx_t h1, idx_t h2, idx_t p1,
+//                               idx_t p2);
 
 typedef std::vector<idx_t> spin_constraint_t;
 typedef std::pair<spin_constraint_t, spin_constraint_t> exc_constraint_t;
@@ -347,17 +368,18 @@ std::string to_string(const spin_constraint_t &c, idx_t max_orb) {
 
 spin_constraint_t to_constraint(const spin_det_t &c) {
     spin_constraint_t res;
-    auto npos = c.npos;
-    auto c_pos = c.find_next(0);
-    while (c_pos < npos) {
-        res.push_back(c_pos);
-        c_pos = c.find_next(0);
+    int count = 0;
+    for (auto i = 0; i < c.N_mos; i++) {
+        if (c[i]) {
+            res.push_back(i);
+            count++;
+        }
     }
     return res;
 }
 
-std::vector<det_t> get_constrained_determinants(det_t d, exc_constraint_t constraint,
-                                                idx_t max_orb);
+// std::vector<det_t> get_constrained_determinants(det_t d, exc_constraint_t constraint,
+//                                                 idx_t max_orb);
 
 std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t constraint, idx_t max_orb);
 
@@ -376,8 +398,8 @@ std::vector<det_t> get_ss_doubles_by_exc_mask(det_t d, int spin, spin_constraint
 
 std::vector<det_t> get_all_singles(det_t d);
 
-void get_connected_dets(DetArray *dets_int, DetArray *dets_ext, idx_t *hc_alpha, idx_t *hc_beta,
-                        idx_t *pc_alpha, idx_t *pc_beta);
+// void get_connected_dets(DetArray *dets_int, DetArray *dets_ext, idx_t *hc_alpha, idx_t *hc_beta,
+//                         idx_t *pc_alpha, idx_t *pc_beta);
 
 // This is way too slow for actual formation of explicit Hamiltonians, but it's easy to write!
 // Should get bilinear mappings so that we can iterate over known determinants and find connections
@@ -395,14 +417,14 @@ void get_H_structure_naive(DetArray *psi_det, SymCSRMatrix<T> *H, idx_t N_det, T
 
         H_p[i + 1] += 1; // add H_ii
         csr_rows[i].push_back(i);
-        for (auto j = i + 1, j < N_det; j++) {
+        for (auto j = i + 1; j < N_det; j++) {
             det_t &d_col = psi_det->arr[j];
 
             det_t exc = exc_det(d_row, d_col);
-            auto degree = (exc[0].count() + exc[1].count) / 2;
+            auto degree = (exc[0].count() + exc[1].count()) / 2;
 
             if (degree <= 2) { // add H_ij
-                csr_rows[i].push_back[j];
+                csr_rows[i].push_back(j);
                 H_p[i + 1] += 1;
             }
         }
@@ -420,7 +442,7 @@ void get_H_structure_naive(DetArray *psi_det, SymCSRMatrix<T> *H, idx_t N_det, T
     // initialize values at 0
     std::unique_ptr<T[]> H_v(new T[H_p[N_det]]);
     T *H_v_p = H_v.get();
-    std::fill(H_v_p, H_v_p + H_p[m], (T)0.0);
+    std::fill(H_v_p, H_v_p + H_p[N_det], (T)0.0);
 
     *H = SymCSRMatrix<T>(N_det, N_det, H_p, H_c, H_v); // use the move constructor + move operator
 }

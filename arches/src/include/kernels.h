@@ -49,8 +49,8 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
         for (auto d_i = 0; d_i < N_int; d_i++) {
             det_t &d_int = psi_int[d_i];
             // i must be occupied only in int_det; j only in det_j
-            bool i_alpha = d_int.alpha[ij.i] && ~d_int.alpha[ij.j];
-            bool i_beta = d_int.beta[ij.i] && ~d_int.beta[ij.j];
+            bool i_alpha = d_int.alpha[ij.i] && !d_int.alpha[ij.j];
+            bool i_beta = d_int.beta[ij.i] && !d_int.beta[ij.j];
             if (!(i_alpha || i_beta))
                 continue;
 
@@ -64,8 +64,8 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
                 if (degree_alpha + degree_beta != 1)
                     continue; // determinants not related by single exc
 
-                bool j_check = degree_alpha ? (~d_ext.alpha[ij.i] && d_ext.alpha[ij.j])
-                                            : (~d_ext.beta[ij.i] && d_ext.beta[ij.j]);
+                bool j_check = degree_alpha ? (!d_ext.alpha[ij.i] && d_ext.alpha[ij.j])
+                                            : (!d_ext.beta[ij.i] && d_ext.beta[ij.j]);
                 if (!j_check)
                     continue; // integral doesn't apply
 
@@ -596,7 +596,7 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
             // g_ii in (0,1,2,3) :
             // 0 - none, 1 - only alpha 2- only beta 3 - both alpha and beta
             int g_11, g_22, g_33, g_44 = 0;
-            for (auto spin = 0; spin < N_SPIN_SPECIES; spin++) {
+            for (auto spin = 0; spin < 2; spin++) {
                 g_11 = (spin + 1) *
                        ((d_int[spin][q] && d_int[spin][r]) && (!d_int[spin][s] && !d_int[spin][t]));
                 g_22 = (spin + 1) *
@@ -644,7 +644,7 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                             res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
                         }
                     }
-                case 0:
+                case 0: { // scoped so that variable can initialize
                     // (0,2) : g_ii >= 2 is criterion for acceptance
                     bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
                     if (!aa_check)
@@ -664,7 +664,8 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     for (auto state = 0; state < N_states; state++) {
                         res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
                     }
-                case 2:
+                }
+                case 2: { // scoped so that variable can initialize
                     // (2,0) : g_ii % 2 is criterion for acceptance
                     bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
                     if (!bb_check)
@@ -683,6 +684,7 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     for (auto state = 0; state < N_states; state++) {
                         res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
                     }
+                }
                 }
             }
         }
@@ -715,7 +717,7 @@ void H_OE_ii(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_
 
         for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
             auto idx = H_p[j];
-            auto &det = psi_det[det_j];
+            auto &det = psi_det[j];
 
             H_v[idx] += (det.alpha[ij.i] + det.beta[ij.i]) * J[i];
         }
@@ -735,8 +737,8 @@ void H_OE_ij(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_
             det_t &d_row = psi_det[row];
 
             // i must be occupied only in d_i; j only in d_j
-            bool i_alpha = d_row.alpha[ij.i] && ~d_row.alpha[ij.j];
-            bool i_beta = d_row.beta[ij.i] && ~d_row.beta[ij.j];
+            bool i_alpha = d_row.alpha[ij.i] && !d_row.alpha[ij.j];
+            bool i_beta = d_row.beta[ij.i] && !d_row.beta[ij.j];
             if (!(i_alpha || i_beta))
                 continue;
 
@@ -750,8 +752,8 @@ void H_OE_ij(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_
                 if (degree_alpha + degree_beta != 1)
                     continue; // determinants not related by single exc
 
-                bool j_check = degree_alpha ? (~d_col.alpha[ij.i] && d_col.alpha[ij.j])
-                                            : (~d_col.beta[ij.i] && d_col.beta[ij.j]);
+                bool j_check = degree_alpha ? (!d_col.alpha[ij.i] && d_col.alpha[ij.j])
+                                            : (!d_col.beta[ij.i] && d_col.beta[ij.j]);
 
                 if (!j_check)
                     continue;
@@ -768,7 +770,7 @@ template <class T>
 void H_A(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
 
     for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
-        auto &det = psi_det[det_j];
+        auto &det = psi_det[j];
         auto idx = H_p[j];
 
         for (auto i = 0; i < N; i++) { // loop over integrals
@@ -790,7 +792,7 @@ void H_B(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T
         r = c_idx.j;
 
         for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
-            auto &det = psi_det[det_j];
+            auto &det = psi_det[j];
             auto idx = H_p[j];
 
             H_v[idx] += det[0][q] * det[0][r] * J[i];
@@ -938,7 +940,7 @@ void H_E(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, i
                 det_t &d_col = psi_det[col];
 
                 // early exit on exc degree is probably simplest
-                det_t exc = exc_det(d_int, d_ext);
+                det_t exc = exc_det(d_row, d_col);
                 auto alpha_count = exc[0].count() / 2;
                 auto beta_count = exc[1].count() / 2;
                 auto degree = (alpha_count + beta_count);
@@ -997,7 +999,7 @@ void H_F_ii(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p
         r = c_idx.k;
 
         for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
-            auto &det = psi_det[det_j];
+            auto &det = psi_det[j];
             auto idx = H_p[j];
 
             H_v[idx] -= det[0][q] * det[0][r] * J[i]; // phase implicit in -=
@@ -1073,7 +1075,7 @@ void H_G(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, i
             // g_ii in (0,1,2,3) :
             // 0 - none, 1 - only alpha 2- only beta 3 - both alpha and beta
             int g_11, g_22, g_33, g_44 = 0;
-            for (auto spin = 0; spin < N_SPIN_SPECIES; spin++) {
+            for (auto spin = 0; spin < 2; spin++) {
                 g_11 = (spin + 1) *
                        ((d_row[spin][q] && d_row[spin][r]) && (!d_row[spin][s] && !d_row[spin][t]));
                 g_22 = (spin + 1) *
@@ -1114,7 +1116,7 @@ void H_G(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, i
 
                         H_v[idx] += J[i] * phase;
                     }
-                case 0:
+                case 0: {
                     // (0,2) : g_ii >= 2 is criterion for acceptance
                     bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
                     if (!aa_check)
@@ -1132,7 +1134,9 @@ void H_G(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, i
                     }
 
                     H_v[idx] += J[i] * phase;
-                case 2:
+                }
+                case 2: {
+
                     // (2,0) : g_ii % 2 is criterion for acceptance
                     bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
                     if (!bb_check)
@@ -1150,6 +1154,7 @@ void H_G(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, i
                     }
 
                     H_v[idx] += J[i] * phase;
+                }
                 }
             }
         }

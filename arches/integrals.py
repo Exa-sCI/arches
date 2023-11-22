@@ -121,7 +121,7 @@ class JChunk(LinkedHandle):
 
     @category.setter
     def category(self, val):
-        if (val not in "ABCDEFG") or (len(val) != 1):
+        if val not in ("A", "B", "C", "D", "E", "F", "G", "OE"):
             raise ValueError
 
         self._category = val
@@ -218,7 +218,7 @@ class JChunkFactory:
 
         match val:
             case "OE":
-                f = JChunkFactory.oe_idx_iter
+                f = JChunkFactory.OE_idx_iter
             case "A":
                 f = JChunkFactory.A_idx_iter
             case "B":
@@ -261,7 +261,7 @@ class JChunkFactory:
             return self._idx_iter
 
     @staticmethod
-    def oe_idx_iter(N_mo):
+    def OE_idx_iter(N_mo):
         for i, j in combinations_with_replacement(range(N_mo), 2):
             yield compound_idx2(i, j)
 
