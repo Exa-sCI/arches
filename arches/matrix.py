@@ -171,6 +171,10 @@ for k in [f32, f64]:
     ApB.restype = None
     AmB.restype = None
 
+    submat_assign = getattr(lib_matrix, pfix + "set_submatrix" + sfix)
+    submat_assign.argtypes = [c_char, c_char, idx_t, idx_t, k_p, idx_t, k_p, idx_t]
+    submat_assign.restype = None
+
     for cfig in ["mkl"]:
         gemm = getattr(lib_matrix, sd[k] + "gemm_" + cfig)
         gemm.argtypes = [  # C = alpha * A @ B + beta * C
@@ -222,6 +226,9 @@ class DMatrix(AMatrix):
     _get_arr_ptr_f64 = lib_matrix.DMatrix_get_arr_ptr_f64
     _destructor_f32 = lib_matrix.DMatrix_dtor_f32
     _destructor_f64 = lib_matrix.DMatrix_dtor_f64
+
+    _set_submatrix_f32 = lib_matrix.DMatrix_set_submatrix_f32
+    _set_submatrix_f64 = lib_matrix.DMatrix_set_submatrix_f64
 
     _sgemm = lib_matrix.sgemm_mkl
     _dgemm = lib_matrix.dgemm_mkl
@@ -339,6 +346,16 @@ class DMatrix(AMatrix):
                 raise NotImplementedError
 
     @property
+    def set_submatrix(self):
+        match self.dtype:
+            case np.float32:
+                return self._set_submatrix_f32
+            case np.float64:
+                return self._set_submatrix_f64
+            case _:
+                raise NotImplementedError
+
+    @property
     def gemm(self):
         match self.dtype:
             case np.float32:
@@ -381,45 +398,102 @@ class DMatrix(AMatrix):
 
     @property
     def np_arr(self):
-        # TODO: returns the wrong thing if matrix is transposed
-        arr = np.reshape(
-            np.fromiter(self.arr.p, dtype=self.dtype, count=self.arr.size), (self.m, self.n)
-        )
+        if self.m == self.max_row_rank and self.n == self.max_col_rank:
+            arr = np.reshape(
+                np.fromiter(self.arr.p, dtype=self.dtype, count=self.arr.size), (self.m, self.n)
+            )
+        elif self.transposed:
+            temp = DMatrix(self.m, self.n)
+            ro, co = self.row_offset, self.col_offset
+            # TODO: something gets switched around twice, so swapping the offsets
+            # on the pass off to the temp matrix is necessary when the assignnee
+            # matrix is a transposed view. Figure out if that's okay? Tests pass for now.
+
+            self.row_offset, self.col_offset = co, ro
+            temp[:, :] = self[:, :]
+            self.row_offset = ro
+            self.col_offset = co
+            arr = temp.np_arr
+        else:  # Matrix is subsliced
+            # TODO: Consider making a faster option. For now, copy into a dense DMatrix
+            # and return its np arr
+            temp = DMatrix(self.m, self.n)
+            temp[:, :] = self[:, :]
+            arr = temp.np_arr
+
         return arr
 
     @property
     def T(self):
         # Return a view of the matrix
         return DMatrix(
-            handle=self.handle, m=self.n, n=self.m, dtype=self.dtype, t=not self.transposed
+            handle=self.handle,
+            m=self.n,
+            n=self.m,
+            max_row_rank=self.max_col_rank,
+            max_col_rank=self.max_row_rank,
+            row_offset=self.row_offset,
+            col_offset=self.col_offset,
+            dtype=self.dtype,
+            t=not self.transposed,
         )
 
-    def __getitem__(self, t):
-        # Return submatrix
-        if len(t) != 2:
-            raise ValueError("Wrong number of dimensions indexed.")
+    def _parse_slice(self, t):
+        match t:
+            case slice():
+                if t.step is not None:
+                    raise NotImplementedError("Strided slicing of matrices not supported.")
+                if self.m == 1:
+                    row_start = 0
+                    row_stop = 1
+                    col_start = 0 if t.start is None else t.start
+                    col_stop = self.n if t.stop is None else t.stop
+                elif self.n == 1:
+                    row_start = 0 if t.start is None else t.start
+                    row_stop = self.n if t.stop is None else t.stop
+                    col_start = 0
+                    col_stop = 1
+                else:
+                    raise ValueError(
+                        "Single slice indexing not supported for matrices without singleton dimension."
+                    )
+            case tuple():
+                if len(t) != 2:
+                    raise ValueError("Wrong number of dimensions indexed.")
 
-        if t[0].step is not None or t[1].step is not None:
-            raise NotImplementedError("Strided slicing of matrices not supported.")
+                if t[0].step is not None or t[1].step is not None:
+                    raise NotImplementedError("Strided slicing of matrices not supported.")
 
-        row_start = 0 if t[0].start is None else t[0].start
-        row_stop = self.m if t[0].stop is None else t[0].stop
+                row_start = 0 if t[0].start is None else t[0].start
+                row_stop = self.m if t[0].stop is None else t[0].stop
 
-        col_start = 0 if t[1].start is None else t[1].start
-        col_stop = self.m if t[1].stop is None else t[1].stop
+                col_start = 0 if t[1].start is None else t[1].start
+                col_stop = self.n if t[1].stop is None else t[1].stop
+            case _:
+                raise ValueError
 
         if row_start < 0 or row_stop > self.m:
             raise ValueError(
                 f"Requested slice ({row_start}, {row_stop}) extends beyond row rank {self.m}."
             )
 
-        if col_start < 0 or col_stop > self.m:
+        if col_start < 0 or col_stop > self.n:
             raise ValueError(
                 f"Requested slice ({col_start}, {col_stop}) extends beyond col rank {self.n}."
             )
 
-        # TODO: What happens if this is tranposed?
+        row_offset = self.col_offset + col_start if self.transposed else self.row_offset + row_start
+        col_offset = self.row_offset + row_start if self.transposed else self.col_offset + col_start
+
+        print(row_offset, col_offset)
+        return row_start, row_stop, col_start, col_stop, row_offset, col_offset
+
+    def __getitem__(self, t):
+        row_start, row_stop, col_start, col_stop, row_offset, col_offset = self._parse_slice(t)
+
         # TODO: What happens with nested subslices?
+        # Do we need to revert back to global coordinates always or can the
+        # array location in original memory be determined elsewise?
         return DMatrix(
             handle=self.handle,
             m=row_stop - row_start,
@@ -428,8 +502,36 @@ class DMatrix(AMatrix):
             t=self.transposed,
             max_row_rank=self.max_row_rank,
             max_col_rank=self.max_col_rank,
-            row_offset=self.row_offset + row_start,
-            col_offset=self.col_offset + col_start,
+            row_offset=row_offset,
+            col_offset=col_offset,
+        )
+
+    def __setitem__(self, t, B):
+        row_start, row_stop, col_start, col_stop, row_offset, col_offset = self._parse_slice(t)
+
+        if not isinstance(B, DMatrix):
+            raise NotImplementedError
+
+        if B.m != (row_stop - row_start) or B.n != (col_stop - col_start):
+            raise ValueError(
+                f"Source shape {B.m, B.n} and destination shape {row_stop-row_start, col_stop-col_start} do not match."
+            )
+
+        op_A = "t" if self.transposed else "n"
+        op_B = "t" if B.transposed else "n"
+        dest_p = self.get_arr_ptr(self.handle, row_offset, col_offset)
+        lda = self.max_row_rank if self.transposed else self.max_col_rank
+        ldb = B.max_row_rank if B.transposed else B.max_col_rank
+
+        self.set_submatrix(
+            c_char(op_A.encode("utf-8")),
+            c_char(op_B.encode("utf-8")),
+            B.m,
+            B.n,
+            dest_p,
+            lda,
+            B.arr.p,
+            ldb,
         )
 
     def __add__(self, B):
@@ -760,7 +862,7 @@ class DistMatrix(AMatrix):
 
 
 class PartialSumMatrix(DistMatrix):
-    """Matrix distributed as a sum of matrices, i.e., A = \sum_i A_i"""
+    """Matrix distributed as a sum of matrices, i.e., A = \\sum_i A_i"""
 
     def __init__(self, comm, A, m, n, dtype, mpi_type):
         assert A.m == m  # local size needs to be the same as global

@@ -5,9 +5,8 @@
 // ctypes matrix routine interfaces
 extern "C" {
 
-void sgemm_mkl( char op_a,  char op_b,  idx_t m,  idx_t n,  idx_t k,
-                float alpha, const float *A,  idx_t lda, const float *B,  idx_t ldb,
-                float beta, float *C,  idx_t ldc) {
+void sgemm_mkl(char op_a, char op_b, idx_t m, idx_t n, idx_t k, float alpha, const float *A,
+               idx_t lda, const float *B, idx_t ldb, float beta, float *C, idx_t ldc) {
 
     CBLAS_LAYOUT layout = CblasRowMajor;
     CBLAS_TRANSPOSE trans_A = op_a == 't' ? CblasTrans : CblasNoTrans;
@@ -90,11 +89,12 @@ DMatrix<double> *DMatrix_ctor_a_f64(idx_t m, idx_t n, double *fill) {
 }
 
 // DMatrix pointer returns
+// these assume row-major storage
 float *DMatrix_get_arr_ptr_f32(DMatrix<float> *A, idx_t m_start, idx_t n_start) {
-    return A->A + (A->m * m_start + n_start);
+    return A->A + (A->n * m_start + n_start);
 }
 double *DMatrix_get_arr_ptr_f64(DMatrix<double> *A, idx_t m_start, idx_t n_start) {
-    return A->A + (A->m * m_start + n_start);
+    return A->A + (A->n * m_start + n_start);
 }
 
 // DMatrix destructors
@@ -125,4 +125,90 @@ idx_t *SymCSRMatrix_get_ac_ptr_f64(SymCSRMatrix<double> *A) { return A->A_c; }
 
 float *SymCSRMatrix_get_av_ptr_f32(SymCSRMatrix<float> *A) { return A->A_v; }
 double *SymCSRMatrix_get_av_ptr_f64(SymCSRMatrix<double> *A) { return A->A_v; }
+}
+
+extern "C" {
+
+// TODO: would love to not have our own version of this: at least MKL should have copy utilities
+void DMatrix_set_submatrix_f32(const char op_A, const char op_B, const idx_t m, const idx_t n,
+                               float *A, const idx_t lda, const float *B, const idx_t ldb) {
+
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    A[i * lda + j] = B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    A[ia * lda + ja] = B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    A[ia * lda + ja] = B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    A[i * lda + j] = B[i * ldb + j];
+                }
+            }
+        }
+    }
+}
+
+void DMatrix_set_submatrix_f64(const char op_A, const char op_B, const idx_t m, const idx_t n,
+                               double *A, const idx_t lda, const double *B, const idx_t ldb) {
+
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    A[i * lda + j] = B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    A[ia * lda + ja] = B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    A[ia * lda + ja] = B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    A[i * lda + j] = B[i * ldb + j];
+                }
+            }
+        }
+    }
+}
 }
