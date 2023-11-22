@@ -30,6 +30,7 @@ run_folder = pathlib.Path(__file__).parent.resolve()
 lib_integrals = CDLL(run_folder.joinpath("build/libintegrals.so"))
 
 
+# TODO: check if python version is at least 3.12, if so, import from itertools instead
 def batched(iterable, n):
     ## Lifted from 3.12 documentation
     while batch := tuple(islice(iterable, n)):
@@ -77,7 +78,7 @@ class JChunk(LinkedHandle):
     _constructor_f32 = lib_integrals.JChunk_ctor_f32
     _constructor_f64 = lib_integrals.JChunk_ctor_f64
     _destructor_f32 = lib_integrals.JChunk_dtor_f32
-    _destructor_f32 = lib_integrals.JChunk_dtor_f64
+    _destructor_f64 = lib_integrals.JChunk_dtor_f64
 
     _get_idx_ptr_f32 = lib_integrals.JChunk_get_idx_ptr_f32
     _get_idx_ptr_f64 = lib_integrals.JChunk_get_idx_ptr_f64
@@ -86,10 +87,14 @@ class JChunk(LinkedHandle):
 
     def __init__(self, category, chunk_size, J_ind, J, dtype=np.float64, handle=None, **kwargs):
         self.dtype = dtype
+        self.chunk_size = chunk_size
+
         super().__init__(handle=handle, chunk_size=chunk_size, J_ind=J_ind, J=J)
         self.category = category
         self._pt2_kernels = dispatch_pt2_kernel(category)
         self._H_kernels = dispatch_H_kernel(category)
+        self.idx = ManagedArray_idx_t(self.get_idx_ptr(self.handle), self.chunk_size, None)
+        self.J = self._M_array_type(self.get_J_ptr(self.handle), self.chunk_size, None)
 
     @property
     def _f_ctor(self):
@@ -116,6 +121,47 @@ class JChunk(LinkedHandle):
         return self._f_ctor(idx_t(chunk_size), J_ind_d, J_d)
 
     @property
+    def _M_array_type(self):
+        match self.dtype:
+            case np.float32:
+                return ManagedArray_f32
+            case np.float64:
+                return ManagedArray_f64
+
+    @property
+    def get_J_ptr(self):
+        match self.dtype:
+            case np.float32:
+                return self._get_J_ptr_f32
+            case np.float64:
+                return self._get_J_ptr_f64
+            case _:
+                raise NotImplementedError
+
+    @property
+    def get_idx_ptr(self):
+        match self.dtype:
+            case np.float32:
+                return self._get_idx_ptr_f32
+            case np.float64:
+                return self._get_idx_ptr_f64
+            case _:
+                raise NotImplementedError
+
+    @property
+    def _d_tor(self):
+        match self.dtype:
+            case np.float32:
+                return self._destructor_f32
+            case np.float64:
+                return self._destructor_f64
+            case _:
+                raise NotImplementedError
+
+    def destructor(self, handle):
+        self._d_tor(handle)
+
+    @property
     def category(self):
         return self._category
 
@@ -128,7 +174,16 @@ class JChunk(LinkedHandle):
 
     @property
     def chunk_size(self):
-        return self.J.size
+        return self._chunk_size
+
+    @chunk_size.setter
+    def chunk_size(self, val):
+        if not np.issubdtype(type(val), np.integer):
+            raise TypeError
+        if val < 0:
+            raise ValueError
+
+        self._chunk_size = val
 
     @property
     def idx(self):
@@ -211,8 +266,6 @@ class JChunkFactory:
     def category(self, val):
         if val not in ("OE", "A", "B", "C", "D", "E", "F", "G"):
             raise ValueError
-        if len(val) != 1:
-            raise ValueError
 
         self._category = val
 
@@ -237,11 +290,11 @@ class JChunkFactory:
         # Yield indices in batches and distribute batches over communicator
         if self.chunk_size < 1:
             self.batched = False
-            self._idx_iter = islice(f(N_mo), self.comm_rank, None, self.comm_size)
+            self._idx_iter = islice(f(self.N_mo), self.comm_rank, None, self.comm_size)
         else:
             self.batched = True
             self._idx_iter = islice(
-                batched(f(N_mo), self.chunk_size), self.comm_rank, None, self.comm_size
+                batched(f(self.N_mo), self.chunk_size), self.comm_rank, None, self.comm_size
             )
             self._advance_batch()  # initialize first batch
 
@@ -313,22 +366,22 @@ class JChunkFactory:
             while self.idx_iter:
                 # TODO: Would really like to be able to tie the count to the chunk size for performance
                 # but with this current design it is hard to see if this is the last batch
-                J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int32)
+                J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int64)
                 J_vals = np.fromiter(self.val_iter, count=-1, dtype=self.src_data.dtype)
                 chunk_size = J_ind.shape[0]
 
-                new_chunk = JChunk(chunk_size, J_vals, J_ind)
+                new_chunk = JChunk(self.category, chunk_size, J_ind, J_vals)
                 chunks.append(new_chunk)
                 self._advance_batch()
 
             return chunks
 
         else:
-            J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int32)
+            J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int64)
             J_vals = np.fromiter(self.val_iter, count=-1, dtype=self.src_data.dtype)
             chunk_size = J_ind.shape[0]
 
-            return JChunk(chunk_size, J_vals, J_ind)
+            return JChunk(self.category, chunk_size, J_ind, J_vals)
 
 
 if __name__ == "__main__":

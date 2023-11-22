@@ -1,6 +1,16 @@
 import pathlib
 from abc import ABC, abstractmethod
-from ctypes import CDLL, POINTER, c_double, c_float, c_int, c_long, c_uint, c_ulong, c_void_p
+from ctypes import (
+    CDLL,
+    POINTER,
+    c_double,
+    c_float,
+    c_long,
+    c_longlong,
+    c_ulong,
+    c_ulonglong,
+    c_void_p,
+)
 from functools import singledispatchmethod
 
 import numpy as np
@@ -8,7 +18,7 @@ from numpy.ctypeslib import ndpointer
 
 ## Register all the types here for common use
 # i64 is the indexing type for all
-all_types = (c_int, c_long, c_uint, c_ulong, c_float, c_double)
+all_types = (c_long, c_longlong, c_ulong, c_ulonglong, c_float, c_double)
 i32, i64, ui32, ui64, f32, f64 = all_types
 idx_t = i64  # alias for idx_t
 handle_t = c_void_p  # void pointers
@@ -118,6 +128,10 @@ class ManagedArray(ABC):
     @abstractmethod
     def set_strided_range(p, k, v):
         pass
+
+    @property
+    def np_arr(self):
+        return np.fromiter(self.p, dtype=self.dtype, count=self.size)
 
     def __getitem__(self, k):
         if isinstance(k, slice):

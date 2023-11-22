@@ -1,4 +1,5 @@
 import unittest
+from functools import reduce
 from itertools import combinations_with_replacement, product
 
 import numpy as np
@@ -60,12 +61,10 @@ class Test_Chunks(unittest.TestCase):
 
     def test_iters(self):
         def check_category(cat, idx):
-            all_ind = set([v["idx"] for v in self.canon_order.values() if v["category"] == cat])
-            self.assertTrue(
-                all_ind == set(idx), msg=f"Failed to get all indices for category {cat}"
-            )
-            self.assertTrue(
-                len(all_ind) == len(idx), msg=f"Some indices double counted in category {cat}"
+            ref_ind = set([v["idx"] for v in self.canon_order.values() if v["category"] == cat])
+            self.assertEqual(ref_ind, set(idx), msg=f"Failed to get all indices for category {cat}")
+            self.assertEqual(
+                len(ref_ind), len(idx), msg=f"Some indices double counted in category {cat}"
             )
 
         check_category("A", list(JChunkFactory.A_idx_iter(self.N_mos)))
@@ -76,3 +75,57 @@ class Test_Chunks(unittest.TestCase):
         check_category("F", list(JChunkFactory.F_idx_iter(self.N_mos)))
         check_category("G", list(JChunkFactory.G_idx_iter(self.N_mos)))
         check_category("OE", list(JChunkFactory.OE_idx_iter(self.N_mos)))
+
+    def test_idx(self):
+        def check_category(cat):
+            factory = JChunkFactory(self.N_mos, cat, FakeReader())
+            chunk = factory.get_chunks()
+
+            ref_ind = set([v["idx"] for v in self.canon_order.values() if v["category"] == cat])
+            test_set = set(chunk.idx.np_arr)
+            test_ind = list(chunk.idx.np_arr)
+
+            self.assertEqual(ref_ind, test_set, msg=f"Failed to get all indices for category {cat}")
+            self.assertEqual(
+                len(ref_ind),
+                len(test_ind),
+                msg=f"Some indices double counted in category {cat}",
+            )
+
+        check_category("A")
+        check_category("B")
+        check_category("C")
+        check_category("D")
+        check_category("E")
+        check_category("F")
+        check_category("G")
+        check_category("OE")
+
+    def test_batched_idx(self):
+        def check_category(cat):
+            factory = JChunkFactory(self.N_mos, cat, FakeReader(), chunk_size=256)
+            chunks = factory.get_chunks()
+
+            ref_ind = set([v["idx"] for v in self.canon_order.values() if v["category"] == cat])
+            test_sets = [set(chunk.idx.np_arr) for chunk in chunks]
+            test_ind = reduce(lambda x, y: x.union(y), test_sets)
+
+            N_ind = 0
+            for t in test_sets:
+                N_ind += len(t)
+
+            self.assertEqual(ref_ind, test_ind, msg=f"Failed to get all indices for category {cat}")
+            self.assertEqual(
+                len(ref_ind),
+                N_ind,
+                msg=f"Some indices double counted in category {cat}",
+            )
+
+        check_category("A")
+        check_category("B")
+        check_category("C")
+        check_category("D")
+        check_category("E")
+        check_category("F")
+        check_category("G")
+        check_category("OE")
