@@ -1,4 +1,5 @@
 import pathlib
+import warnings
 from ctypes import CDLL
 from functools import reduce
 from itertools import combinations, combinations_with_replacement, islice, product
@@ -363,9 +364,12 @@ class JChunkFactory:
     def get_chunks(self):
         if self.batched:  # this batching procedure is a little ugly but it works for now
             chunks = []
+            empty = True
             while self.idx_iter:
+                empty = False
                 # TODO: Would really like to be able to tie the count to the chunk size for performance
                 # but with this current design it is hard to see if this is the last batch
+                # TODO: Change np.int64 to map from idx_t
                 J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int64)
                 J_vals = np.fromiter(self.val_iter, count=-1, dtype=self.src_data.dtype)
                 chunk_size = J_ind.shape[0]
@@ -374,80 +378,21 @@ class JChunkFactory:
                 chunks.append(new_chunk)
                 self._advance_batch()
 
-            return chunks
+            if empty:
+                warnings.warn(
+                    f"Current chunking configuration with batch size of {self.chunk_size}"
+                    f"and comm size of {self.comm_size} leaves rank {self.comm_rank} with an empty chunk"
+                )
+                empty_J_ind = np.empty(shape=0, dtype=np.int64)
+                empty_J = np.empty(shape=0, dtype=self.src_data.dtype)
+                return [JChunk(self.category, 0, empty_J_ind, empty_J)]
+
+            else:
+                return chunks
 
         else:
             J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int64)
             J_vals = np.fromiter(self.val_iter, count=-1, dtype=self.src_data.dtype)
             chunk_size = J_ind.shape[0]
 
-            return JChunk(self.category, chunk_size, J_ind, J_vals)
-
-
-if __name__ == "__main__":
-
-    class FakeComm:
-        def __init__(self, rank, size):
-            self.rank = rank
-            self.size = size
-
-        def Get_rank(self):
-            return self.rank
-
-        def Get_size(self):
-            return self.size
-
-    def test_chunk(N_mo, cat, ref_data, src_data=IntegralReader()):
-        fact = JChunkFactory(N_mo, cat, src_data)
-        chunk = fact.get_chunks()
-        all_ind = set([v["idx"] for k, v in ref_data.items() if v["category"] == cat])
-
-        assert all_ind == set(chunk.idx)
-        assert (len(all_ind)) == chunk.chunk_size
-
-    def test_chunk_batched(N_mo, cat, ref_data, src_data=IntegralReader()):
-        fact = JChunkFactory(N_mo, cat, src_data, chunk_size=2048)
-        chunks = fact.get_chunks()
-        all_ind = set([v["idx"] for k, v in ref_data.items() if v["category"] == cat])
-
-        assert all_ind == set(
-            reduce(lambda x, y: set(x).union(set(y)), [chunk.idx for chunk in chunks])
-        )
-
-    def test_chunk_batched_dist(N_mo, cat, ref_data, comm_size, src_data=IntegralReader()):
-        all_ind = set([v["idx"] for k, v in ref_data.items() if v["category"] == cat])
-
-        local_chunks = []
-        for rank in range(comm_size):
-            comm = FakeComm(rank, comm_size)
-            fact = JChunkFactory(N_mo, cat, src_data, comm=comm, chunk_size=2048)
-            chunks = fact.get_chunks()
-            local_chunk = set(reduce(lambda x, y: x.union(y), [set(chunk.idx) for chunk in chunks]))
-            local_chunks.append(local_chunk)
-
-        assert all_ind == set(reduce(lambda x, y: x.union(y), [chunk for chunk in local_chunks]))
-
-    def get_canon_order(N_mo):
-        orb_list = tuple([x for x in range(N_mo)])
-        canon_order = dict()
-        for i, j, k, l in product(orb_list, orb_list, orb_list, orb_list):  # noqa: E741
-            canon_idx = canonical_idx4(i, j, k, l)
-            canon_order[canon_idx] = {
-                "idx": compound_idx4(*canon_idx),
-                "category": integral_category(*canon_idx),
-            }
-        return canon_order
-
-    N_mo = 32
-    canon_order = get_canon_order(N_mo=N_mo)
-
-    for cat in "ABCDEFG":
-        try:
-            test_chunk(N_mo, cat, canon_order)
-            test_chunk_batched(N_mo, cat, canon_order)
-        except AssertionError:
-            print(f"Failed on category {cat}")
-
-    comm_size = 8
-    for cat in "G":
-        test_chunk_batched_dist(N_mo, cat, canon_order, comm_size)
+            return [JChunk(self.category, chunk_size, J_ind, J_vals)]

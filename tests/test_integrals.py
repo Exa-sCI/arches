@@ -1,4 +1,5 @@
 import unittest
+import warnings
 from functools import reduce
 from itertools import combinations_with_replacement, product
 
@@ -79,7 +80,7 @@ class Test_Chunks(unittest.TestCase):
     def test_idx(self):
         def check_category(cat):
             factory = JChunkFactory(self.N_mos, cat, FakeReader())
-            chunk = factory.get_chunks()
+            chunk = factory.get_chunks()[0]
 
             ref_ind = set([v["idx"] for v in self.canon_order.values() if v["category"] == cat])
             test_set = set(chunk.idx.np_arr)
@@ -92,14 +93,8 @@ class Test_Chunks(unittest.TestCase):
                 msg=f"Some indices double counted in category {cat}",
             )
 
-        check_category("A")
-        check_category("B")
-        check_category("C")
-        check_category("D")
-        check_category("E")
-        check_category("F")
-        check_category("G")
-        check_category("OE")
+        for cat in self.categories:
+            check_category(cat)
 
     def test_batched_idx(self):
         def check_category(cat):
@@ -121,11 +116,52 @@ class Test_Chunks(unittest.TestCase):
                 msg=f"Some indices double counted in category {cat}",
             )
 
-        check_category("A")
-        check_category("B")
-        check_category("C")
-        check_category("D")
-        check_category("E")
-        check_category("F")
-        check_category("G")
-        check_category("OE")
+        for cat in self.categories:
+            check_category(cat)
+
+    def test_dist_batched_idx(self):
+        def check_category(cat, comm_size):
+            local_inds = []
+            for rank in range(comm_size):
+                comm = FakeComm(rank, comm_size)
+                fact = JChunkFactory(self.N_mos, cat, FakeReader(), comm=comm, chunk_size=256)
+                chunks = fact.get_chunks()
+                local_sets = [set(chunk.idx.np_arr) for chunk in chunks]
+                print(cat, rank, comm_size, len(local_sets), len(chunks))
+                local_ind = reduce(lambda x, y: x.union(y), local_sets)
+                local_inds.append(local_ind)
+
+            ref_ind = set([v["idx"] for v in self.canon_order.values() if v["category"] == cat])
+            test_ind = reduce(lambda x, y: x.union(y), local_inds)
+
+            N_ind = 0
+            for t in local_inds:
+                N_ind += len(t)
+
+            self.assertEqual(
+                ref_ind,
+                test_ind,
+                msg=f"Failed to get all indices for category {cat} with comm size {comm_size}",
+            )
+            self.assertEqual(
+                len(ref_ind),
+                N_ind,
+                msg=f"Some indices double counted in category {cat} with comm size {comm_size}",
+            )
+
+        with warnings.catch_warnings(record=False):
+            warnings.simplefilter("ignore")
+            for comm_size in [1, 2, 8, 17, 39]:
+                for cat in self.categories:
+                    check_category(cat, comm_size)
+
+    def test_dist_batched_warning(self):
+        def check_category(cat):
+            comm = FakeComm(1, 2)
+            ref_ind = set([v["idx"] for v in self.canon_order.values() if v["category"] == cat])
+            fact = JChunkFactory(self.N_mos, cat, FakeReader(), comm=comm, chunk_size=len(ref_ind))
+            chunks = fact.get_chunks()
+
+        with self.assertWarns(Warning):
+            for cat in self.categories:
+                check_category(cat)
