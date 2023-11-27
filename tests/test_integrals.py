@@ -4,6 +4,7 @@ from functools import reduce
 from itertools import combinations_with_replacement, product
 
 import numpy as np
+from test_types import Test_f32, Test_f64
 
 from arches.drivers import integral_category
 from arches.integral_indexing_utils import (
@@ -41,6 +42,18 @@ class FakeReader:
 
 
 class Test_Chunks(unittest.TestCase):
+    __test__ = False
+
+
+class Test_Chunks_f32(Test_f32, Test_Chunks):
+    __test__ = True
+
+
+class Test_Chunks_f64(Test_f64, Test_Chunks):
+    __test__ = True
+
+
+class Test_ChunkFactory(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         N_mos = 16

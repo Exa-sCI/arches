@@ -1,23 +1,12 @@
 import unittest
 
 import numpy as np
+from test_types import Test_f32, Test_f64
 
 from arches.matrix import DMatrix
 
 seed = 21872
 rng = np.random.default_rng(seed=seed)
-
-
-class Test_f32:
-    dtype = np.float32
-    rtol = 1e-4
-    atol = 1e-6
-
-
-class Test_f64:
-    dtype = np.float64
-    rtol = 1e-8
-    atol = 1e-10
 
 
 class Test_DMatrix(unittest.TestCase):
