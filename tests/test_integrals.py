@@ -14,6 +14,9 @@ from arches.integral_indexing_utils import (
 )
 from arches.integrals import JChunk, JChunkFactory
 
+seed = 79123
+rng = np.random.default_rng(seed=seed)
+
 
 class FakeComm:
     # to avoid initializing MPI for just tests
@@ -43,6 +46,31 @@ class FakeReader:
 
 class Test_Chunks(unittest.TestCase):
     __test__ = False
+
+    def setUp(self):
+        self.size = 256
+        self.N_trials = 50
+        self.rng = rng
+
+    def test_constructor(self):
+        def check_chunk():
+            J_ind = rng.integers(0, 1000000, size=(self.size)).astype(np.int64)
+            J_vals = rng.normal(0, 1, size=(self.size)).astype(self.dtype)
+            chunk = JChunk("A", self.size, J_ind, J_vals, dtype=self.dtype)
+
+            self.assertTrue(np.allclose(chunk.idx.np_arr, J_ind))
+            self.assertTrue(np.allclose(chunk.J.np_arr, J_vals))
+
+        for _ in range(self.N_trials):
+            check_chunk()
+
+    def test_bad_category(self):
+        J_ind = np.zeros(self.size, dtype=np.int64)
+        J_vals = np.zeros(self.size, dtype=self.dtype)
+        for cat in ["", "AB", "dog", "OEEE"]:
+            self.assertRaises(
+                ValueError, lambda: JChunk(cat, self.size, J_ind, J_vals, dtype=self.dtype)
+            )
 
 
 class Test_Chunks_f32(Test_f32, Test_Chunks):
@@ -178,3 +206,7 @@ class Test_ChunkFactory(unittest.TestCase):
         with self.assertWarns(Warning):
             for cat in self.categories:
                 check_category(cat)
+
+
+if __name__ == "__main__":
+    unittest.main()
