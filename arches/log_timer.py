@@ -21,7 +21,7 @@ class ScopedTimer:
 
 
 class LogTimer:
-    def __init__(self, func, config_map, report_on=("exit")):
+    def __init__(self, func, config_map, report_on):
         update_wrapper(self, func)
         self.func = func
         self.func_sig = signature(func)
@@ -78,8 +78,17 @@ class LogTimer:
     def report_on(self):
         return self._report_on
 
+    @report_on.setter
+    def report_on(self, val):
+        if val in ((None,), ("call",), ("exit",), ("call", "exit"), ("exit", "call")):
+            self._report_on = val
+        else:
+            raise ValueError(
+                "Value must be one of ('call'), ('exit'), ('call', 'exit'), or (None,)"
+            )
 
-def logtimer(config_map, report_on="exit"):
+
+def logtimer(config_map, report_on=("exit",)):
     def _logtimer(func):
         return LogTimer(func, config_map, report_on)
 
