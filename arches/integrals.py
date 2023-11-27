@@ -1,14 +1,11 @@
 import pathlib
 import warnings
 from ctypes import CDLL
-from functools import reduce
-from itertools import combinations, combinations_with_replacement, islice, product
+from itertools import combinations, combinations_with_replacement, islice
 
 import numpy as np
 
-from arches.drivers import integral_category
 from arches.integral_indexing_utils import (
-    canonical_idx4,
     compound_idx2,
     compound_idx4,
 )
@@ -38,7 +35,7 @@ def batched(iterable, n):
         yield batch
 
 
-class IntegralReader:
+class IntegralDictReader:
     def __init__(self, d=None):
         self.d = d
 
