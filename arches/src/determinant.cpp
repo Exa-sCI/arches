@@ -254,3 +254,23 @@ std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constrai
 
     return ss_doubles;
 }
+
+extern "C" {
+
+//// spin_det_t
+// constructors
+spin_det_t *Dets_spin_det_t_empty_ctor(idx_t N_mos) { return new spin_det_t(N_mos); }
+
+spin_det_t *Dets_spin_det_t_fill_ctor(idx_t N_mos, idx_t max_orb) {
+    return new spin_det_t(N_mos, max_orb, true);
+}
+
+spin_det_t *Dets_spin_det_t_orb_list_ctor(idx_t N_mos, idx_t N_filled, idx_t *orbs) {
+    return new spin_det_t(N_mos, N_filled, orbs);
+}
+
+// destructor
+void Dets_spin_det_t_dtor(spin_det_t *sdet) { delete sdet; }
+
+// utilities
+}

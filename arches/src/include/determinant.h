@@ -42,7 +42,7 @@ class spin_det_t {
         N_mos = min_mos;
         N_blocks = N_mos / (block_size) + (N_mos % (block_size) != 0);
 
-        std::unique_ptr<mo_block_t[]> p(new mo_block_t[N_blocks]);
+        std::unique_ptr<mo_block_t[]> p(new mo_block_t[N_blocks]());
         block_arr_ptr = std::move(p);
         block_arr = block_arr_ptr.get();
     }
