@@ -1,7 +1,7 @@
 import pathlib
 import warnings
 from ctypes import CDLL
-from itertools import combinations, combinations_with_replacement, islice
+from itertools import combinations, combinations_with_replacement, cycle, islice
 
 import numpy as np
 
@@ -9,6 +9,7 @@ from arches.integral_indexing_utils import (
     compound_idx2,
     compound_idx4,
 )
+from arches.io import load_integrals
 from arches.kernels import dispatch_H_kernel, dispatch_pt2_kernel
 from arches.linked_object import (
     LinkedHandle,
@@ -36,18 +37,19 @@ def batched(iterable, n):
 
 
 class IntegralDictReader:
-    def __init__(self, d=None):
+    def __init__(self, d, dtype=np.float32):
         self.d = d
+        self._dtype = dtype
 
     def __getitem__(self, idx):
-        if self.d is None:
-            return 0.0
-        else:
+        try:
             return self.d[idx]
+        except KeyError:
+            return 0.0
 
     @property
     def dtype(self):
-        return np.float32
+        return self._dtype
 
 
 ### Register handles for JChunks
@@ -288,7 +290,12 @@ class JChunkFactory:
         # Yield indices in batches and distribute batches over communicator
         if self.chunk_size < 1:
             self.batched = False
-            self._idx_iter = islice(f(self.N_mo), self.comm_rank, None, self.comm_size)
+
+            # cast to list: batched version caches the iterator anyway, so the interface is
+            # more consistent. w/o some form of caching, would need to have two synced iterators
+            # or similar to be able to yield indices for the index arrays and value arrays without
+            # exhausing the index generator
+            self._idx_iter = list(islice(f(self.N_mo), self.comm_rank, None, self.comm_size))
         else:
             self.batched = True
             self._idx_iter = islice(
@@ -370,6 +377,8 @@ class JChunkFactory:
                 J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int64)
                 J_vals = np.fromiter(self.val_iter, count=-1, dtype=self.src_data.dtype)
                 chunk_size = J_ind.shape[0]
+                if self.category == "A":
+                    print(J_ind, J_vals)
 
                 new_chunk = JChunk(self.category, chunk_size, J_ind, J_vals)
                 chunks.append(new_chunk)
@@ -382,7 +391,7 @@ class JChunkFactory:
                 )
                 empty_J_ind = np.empty(shape=0, dtype=np.int64)
                 empty_J = np.empty(shape=0, dtype=self.src_data.dtype)
-                return [JChunk(self.category, 0, empty_J_ind, empty_J)]
+                return [JChunk(self.category, 0, empty_J_ind, empty_J, dtype=self.src_data.dtype)]
 
             else:
                 return chunks
@@ -390,6 +399,44 @@ class JChunkFactory:
         else:
             J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int64)
             J_vals = np.fromiter(self.val_iter, count=-1, dtype=self.src_data.dtype)
+            if self.category == "A":
+                print(J_ind, J_vals)
             chunk_size = J_ind.shape[0]
 
-            return [JChunk(self.category, chunk_size, J_ind, J_vals)]
+            return [JChunk(self.category, chunk_size, J_ind, J_vals, dtype=self.src_data.dtype)]
+
+
+def default_comm_cat_map(rank):
+    # Only distribute G chunks over communicator
+    if rank > 0:
+        cats = ("G",)
+    else:
+        cats = ("A", "B", "C", "D", "E", "F", "G", "OE")
+
+    return cats
+
+
+def load_integrals_into_chunks(
+    fp, comm, comm_cat_map=default_comm_cat_map, chunk_size=-1, dtype=np.float64
+):
+    # Set-up IO
+    n_orb, E0, J_oe, J_te = load_integrals(fp)
+    J_oe_reader = IntegralDictReader(J_oe, dtype=dtype)
+    J_te_reader = IntegralDictReader(J_te, dtype=dtype)
+
+    # Get chunks as defined by comm, batch size, and category mapping onto ranks
+    cats = comm_cat_map(comm.Get_rank())
+
+    chunks = []
+    for cat in cats:
+        if cat == "OE":
+            # fact = JChunkFactory(n_orb, cat, J_oe_reader, chunk_size, comm)
+            fact = JChunkFactory(n_orb, cat, J_oe_reader, chunk_size, comm)
+        else:
+            # fact = JChunkFactory(n_orb, cat, J_te_reader, chunk_size, comm)
+            fact = JChunkFactory(n_orb, cat, J_te_reader, chunk_size, comm)
+
+        # add new chunks and prune any empty chunks coming from bad distribution of integrals
+        chunks += [chunk for chunk in fact.get_chunks() if chunk.chunk_size > 0]
+
+    return n_orb, E0, chunks

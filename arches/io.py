@@ -1,16 +1,17 @@
 # ruff : noqa : E741
+import math
+from collections import defaultdict
+from itertools import takewhile
+
 from arches.fundamental_types import (
-    Tuple,
-    One_electron_integral,
-    Two_electron_integral,
     Determinant,
     Energy,
     List,
+    One_electron_integral,
+    Tuple,
+    Two_electron_integral,
 )
-from collections import defaultdict
-from arches.integral_indexing_utils import compound_idx4
-import math
-from itertools import takewhile
+from arches.integral_indexing_utils import compound_idx2, compound_idx4
 
 #   _____      _ _   _       _ _          _   _
 #  |_   _|    (_) | (_)     | (_)        | | (_)
@@ -87,12 +88,8 @@ def load_integrals(
             E0 = v
         elif j == 0:
             # One-electron integrals are symmetric (when real, not complex)
-            d_one_e_integral[
-                (i - 1, k - 1)
-            ] = (
-                v
-            )  # index minus one to be consistent with determinant orbital indexing starting at zero
-            d_one_e_integral[(k - 1, i - 1)] = v
+            # index minus one to be consistent with determinant orbital indexing starting at zero
+            d_one_e_integral[compound_idx2(i - 1, k - 1)] = v
         else:
             # Two-electron integrals have many permutation symmetries:
             # Exchange r1 and r2 (indices i,k and j,l)

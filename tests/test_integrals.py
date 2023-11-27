@@ -1,3 +1,4 @@
+import pathlib
 import unittest
 import warnings
 from functools import reduce
@@ -10,9 +11,12 @@ from arches.drivers import integral_category
 from arches.integral_indexing_utils import (
     canonical_idx4,
     compound_idx2,
+    compound_idx2_reverse,
     compound_idx4,
+    compound_idx4_reverse,
 )
-from arches.integrals import JChunk, JChunkFactory
+from arches.integrals import JChunk, JChunkFactory, load_integrals_into_chunks
+from arches.io import load_integrals
 
 seed = 79123
 rng = np.random.default_rng(seed=seed)
@@ -206,6 +210,100 @@ class Test_ChunkFactory(unittest.TestCase):
         with self.assertWarns(Warning):
             for cat in self.categories:
                 check_category(cat)
+
+
+class Test_IO(unittest.TestCase):
+    __test__ = False
+
+    def test_IO(self):
+        run_folder = pathlib.Path(__file__).parent.resolve()
+        fp = run_folder.joinpath("../data/f2_631g.18det.fcidump")
+
+        N_orb_ref, E0_ref, ref_J_oe, ref_J_te = load_integrals(str(fp))
+
+        N_orb_test, E0_test, chunks = load_integrals_into_chunks(
+            str(fp), FakeComm(0, 1), dtype=self.dtype
+        )
+
+        self.assertEqual(N_orb_ref, N_orb_test)
+        self.assertEqual(E0_ref, E0_test)
+
+        ref_J_oe_check = {k: False for k in ref_J_oe.keys()}
+        ref_J_te_check = {k: False for k in ref_J_te.keys()}
+
+        for chunk in chunks:
+            if chunk.category == "OE":
+                for k, v in zip(chunk.idx.np_arr, chunk.J.np_arr):
+                    self.assertTrue(
+                        np.isclose(v, ref_J_oe[k], rtol=self.rtol, atol=self.atol),
+                        msg=f"Failed on category {chunk.category} for index {compound_idx2_reverse(k)}",
+                    )
+                    ref_J_oe_check[k] = True
+            else:
+                for k, v in zip(chunk.idx.np_arr, chunk.J.np_arr):
+                    self.assertTrue(
+                        np.isclose(v, ref_J_te[k], rtol=self.rtol, atol=self.atol),
+                        msg=f"Failed on category {chunk.category} for index {compound_idx4_reverse(k)}",
+                    )
+                    ref_J_te_check[k] = True
+
+        self.assertTrue(
+            reduce(lambda x, y: x and y, ref_J_oe_check.values()),
+            msg="Some OE indices not acccounted for.",
+        )
+        self.assertTrue(
+            reduce(lambda x, y: x and y, ref_J_te_check.values()),
+            msg="Some TE indices not acccounted for.",
+        )
+
+    def test_IO_batched(self):
+        run_folder = pathlib.Path(__file__).parent.resolve()
+        fp = run_folder.joinpath("../data/f2_631g.18det.fcidump")
+
+        N_orb_ref, E0_ref, ref_J_oe, ref_J_te = load_integrals(str(fp))
+
+        N_orb_test, E0_test, chunks = load_integrals_into_chunks(
+            str(fp), FakeComm(0, 1), chunk_size=32
+        )
+
+        self.assertEqual(N_orb_ref, N_orb_test)
+        self.assertEqual(E0_ref, E0_test)
+
+        ref_J_oe_check = {k: False for k in ref_J_oe.keys()}
+        ref_J_te_check = {k: False for k in ref_J_te.keys()}
+
+        for chunk in chunks:
+            if chunk.category == "OE":
+                for k, v in zip(chunk.idx.np_arr, chunk.J.np_arr):
+                    self.assertTrue(
+                        np.isclose(v, ref_J_oe[k], rtol=self.rtol, atol=self.atol),
+                        msg=f"Failed on category {chunk.category} for index {compound_idx2_reverse(k)}",
+                    )
+                    ref_J_oe_check[k] = True
+            else:
+                for k, v in zip(chunk.idx.np_arr, chunk.J.np_arr):
+                    self.assertTrue(
+                        np.isclose(v, ref_J_te[k], rtol=self.rtol, atol=self.atol),
+                        msg=f"Failed on category {chunk.category} for index {compound_idx4_reverse(k)}",
+                    )
+                    ref_J_te_check[k] = True
+
+        self.assertTrue(
+            reduce(lambda x, y: x and y, ref_J_oe_check.values()),
+            msg="Some OE indices not acccounted for.",
+        )
+        self.assertTrue(
+            reduce(lambda x, y: x and y, ref_J_te_check.values()),
+            msg="Some TE indices not acccounted for.",
+        )
+
+
+class Test_IO_f32(Test_f32, Test_IO):
+    __test__ = True
+
+
+class Test_IO_f64(Test_f64, Test_IO):
+    __test__ = True
 
 
 if __name__ == "__main__":
