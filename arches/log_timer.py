@@ -95,58 +95,57 @@ def logtimer(config_map, report_on=("exit",)):
     return _logtimer
 
 
-def example_1():
-    config_map = (lambda a, b, **kwargs: (a, b), lambda a, b: f"(A: {a}, B: {b})")
-
-    @logtimer(config_map)
-    def f(a, b, c):
-        return a + b + c
-
-    f.report_on = ("call", "exit")
-    f(1, 2, 3)
-    f(1, 2, 3)
-    f(1, 2, 3)
-    f(1, 2, 3)
-    f(1, 2, 3)
-    f(1, 2, 3)
-    f(1, 2, 3)
-
-    f(2, 3, 4)
-    f(2, 3, 4)
-    f(2, 3, 4)
-    f(2, 3, 4)
-
-    f(5, 6, 2)
-    f(5, 6, 2)
-
-    f(11, 12, 23)
-
-
-def example_2():
-    config_map = (lambda a, b, **kwargs: (a, b), lambda a, b: f"(A: {a}, B: {b})")
-
-    @logtimer(config_map)
-    def f(a, b, c):
-        return a + b + c
-
-    f.report_on = (None,)
-    f(1, 2, 3)
-    f(1, 2, 3)
-
-    f(2, 3, 4)
-    f(2, 3, 4)
-    f.print_log()
-    f.clear_log()
-
-    print("-----")
-    f(5, 6, 2)
-    f(5, 6, 2)
-
-    f(11, 12, 23)
-    f.print_log()
-
-
 if __name__ == "__main__":
+
+    def example_1():
+        config_map = (lambda a, b, **kwargs: (a, b), lambda a, b: f"(A: {a}, B: {b})")
+
+        @logtimer(config_map)
+        def f(a, b, c):
+            return a + b + c
+
+        f.report_on = ("call", "exit")
+        f(1, 2, 3)
+        f(1, 2, 3)
+        f(1, 2, 3)
+        f(1, 2, 3)
+        f(1, 2, 3)
+        f(1, 2, 3)
+        f(1, 2, 3)
+
+        f(2, 3, 4)
+        f(2, 3, 4)
+        f(2, 3, 4)
+        f(2, 3, 4)
+
+        f(5, 6, 2)
+        f(5, 6, 2)
+
+        f(11, 12, 23)
+
+    def example_2():
+        config_map = (lambda a, b, **kwargs: (a, b), lambda a, b: f"(A: {a}, B: {b})")
+
+        @logtimer(config_map)
+        def f(a, b, c):
+            return a + b + c
+
+        f.report_on = (None,)
+        f(1, 2, 3)
+        f(1, 2, 3)
+
+        f(2, 3, 4)
+        f(2, 3, 4)
+        f.print_log()
+        f.clear_log()
+
+        print("-----")
+        f(5, 6, 2)
+        f(5, 6, 2)
+
+        f(11, 12, 23)
+        f.print_log()
+
     example_1()
     print("\n ######### \n")
     example_2()
