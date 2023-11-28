@@ -1,4 +1,5 @@
 import pathlib
+from abc import ABC, abstractmethod
 from ctypes import CDLL, c_bool
 from dataclasses import dataclass
 
@@ -49,6 +50,17 @@ lib_dets.Dets_spin_det_t_and.restype = handle_t
 lib_dets.Dets_spin_det_t_count.argtypes = [handle_t]
 lib_dets.Dets_spin_det_t_count.restype = i32
 
+lib_dets.Dets_spin_det_t_phase_single_exc.argtypes = [handle_t, idx_t, idx_t]
+lib_dets.Dets_spin_det_t_phase_single_exc.restype = i32
+
+lib_dets.Dets_spin_det_t_phase_double_exc.argtypes = [handle_t, idx_t, idx_t, idx_t, idx_t]
+lib_dets.Dets_spin_det_t_phase_double_exc.restype = i32
+
+lib_dets.Dets_spin_det_t_apply_single_exc.argtypes = [handle_t, idx_t, idx_t]
+lib_dets.Dets_spin_det_t_apply_single_exc.restype = handle_t
+
+lib_dets.Dets_spin_det_t_apply_double_exc.argtypes = [handle_t, idx_t, idx_t, idx_t, idx_t]
+lib_dets.Dets_spin_det_t_apply_double_exc.restype = handle_t
 
 #### det t
 lib_dets.Dets_det_t_empty_ctor.argtypes = [idx_t]
@@ -62,6 +74,15 @@ lib_dets.Dets_det_t_dtor.restype = None
 
 lib_dets.Dets_det_t_get_spin_det_handle.argtypes = [handle_t, c_bool]
 lib_dets.Dets_det_t_get_spin_det_handle.restype = handle_t
+
+lib_dets.Dets_det_t_phase_double_exc.argtypes = [handle_t, idx_t, idx_t, idx_t, idx_t]
+lib_dets.Dets_det_t_phase_double_exc.restype = i32
+
+lib_dets.Dets_det_t_apply_single_exc.argtypes = [handle_t, idx_t, idx_t, idx_t]
+lib_dets.Dets_det_t_apply_single_exc.restype = handle_t
+
+lib_dets.Dets_det_t_apply_double_exc.argtypes = [handle_t, idx_t, idx_t, idx_t, idx_t, idx_t, idx_t]
+lib_dets.Dets_det_t_apply_double_exc.restype = handle_t
 
 
 class spin_det_t(LinkedHandle):
@@ -133,6 +154,14 @@ class spin_det_t(LinkedHandle):
     def popcount(self):
         return lib_dets.Dets_spin_det_t_count(self.handle)
 
+    def compute_phase_single_exc(self, h, p):
+        return lib_dets.Dets_spin_det_t_phase_single_exc(self.handle, idx_t(h), idx_t(p))
+
+    def compute_phase_double_exc(self, h1, h2, p1, p2):
+        return lib_dets.Dets_spin_det_t_phase_double_exc(
+            self.handle, idx_t(h1), idx_t(h2), idx_t(p1), idx_t(p2)
+        )
+
 
 class det_t(LinkedHandle):
     _empty_ctor = lib_dets.Dets_det_t_empty_ctor
@@ -195,3 +224,165 @@ class det_t(LinkedHandle):
                 return self.beta
             case _:
                 raise ValueError
+
+    def compute_phase_opp_spin_double_exc(self, h1, h2, p1, p2):
+        return lib_dets.Dets_det_t_phase_double_exc(
+            self.handle, idx_t(h1), idx_t(h2), idx_t(p1), idx_t(p2)
+        )
+
+    def get_exc_det(self, other):
+        res_handle = lib_dets.Dets_det_t_exc_det(self.handle, other.handle)
+        return det_t(handle=res_handle, override_original=True, N_orbs=self.N_orbs)
+
+
+class exc(ABC):
+    def __init__(self, h, p, spin):
+        self.spin = spin
+        self.h = h
+        self.p = p
+
+    @property
+    def h(self):
+        return self._h
+
+    @h.setter
+    @abstractmethod
+    def h(self, v):
+        pass
+
+    @property
+    def p(self):
+        return self._p
+
+    @p.setter
+    @abstractmethod
+    def p(self, v):
+        pass
+
+    @property
+    def spin(self):
+        return self._spin
+
+    @spin.setter
+    @abstractmethod
+    def spin(self, v):
+        pass
+
+    @abstractmethod
+    def __matmul__(self, other):
+        pass
+
+
+class single_exc(exc):
+    def __init__(self, h, p, spin=None):
+        super().__init__(h, p, spin)
+
+    def h(self, v):
+        if np.issubdtype(type(v), np.integer):
+            self._h = v
+        else:
+            raise TypeError
+
+    def p(self, v):
+        if np.issubdtype(type(v), np.integer):
+            self._p = v
+        else:
+            raise TypeError
+
+    def spin(self, v):
+        match v:
+            case 1 | 0 | None:
+                self._v = v
+            case _:
+                raise ValueError
+
+    def __matmul__(self, other):
+        match other:
+            case spin_det_t():
+                res_handle = lib_dets.Dets_spin_det_t_apply_single_exc(
+                    other.handle, idx_t(self.h), idx_t(self.p)
+                )
+                return spin_det_t(handle=res_handle, override_handle=True, N_orbs=other.N_orbs)
+            case det_t():
+                res_handle = lib_dets.Dets_det_t_apply_single_exc(
+                    other.handle, idx_t(self.spin), idx_t(self.h), idx_t(self.p)
+                )
+                return det_t(handle=res_handle, override_original=True, N_orbs=other.N_orbs)
+            case single_exc():
+                if self.spin is None and other.spin is None:
+                    return double_exc((self.h, other.h), (self.p, other.p))
+                elif self.spin is not None and other.spin is not None:
+                    return double_exc((self.h, other.h), (self.p, other.p), (self.spin, other.spin))
+                else:
+                    raise ValueError
+            case _:
+                raise NotImplementedError
+
+
+class double_exc(exc):
+    def __init__(self, h, p, spin=None):
+        if len(h) != 2:
+            raise ValueError
+
+        if len(h) != len(p):
+            raise ValueError
+
+        if (spin is not None) and (len(h) != len(spin)):
+            raise ValueError
+
+        super().__init__(h, p, spin)
+
+    def h(self, v):
+        if np.issubdtype(type(v[0]), np.integer) and np.issubdtype(type(v[1]), np.integer):
+            if v[0] == v[1] and ((self.spin is None) or (self.spin[0] == self.spin[1])):
+                raise ValueError
+            self._h = v
+        else:
+            raise TypeError
+
+    def p(self, v):
+        if np.issubdtype(type(v[0]), np.integer) and np.issubdtype(type(v[1]), np.integer):
+            if v[0] == v[1] and ((self.spin is None) or (self.spin[0] == self.spin[1])):
+                raise ValueError
+            self._p = v
+        else:
+            raise TypeError
+
+    def spin(self, v):
+        match v:
+            case None:
+                self._v = v
+            case tuple() | list():
+                if v[0] in (0, 1) and v[1] in (0, 1):
+                    self._v = v
+                else:
+                    raise ValueError
+            case _:
+                raise ValueError
+
+    def __matmul__(self, other):
+        match other:
+            case spin_det_t():
+                res_handle = lib_dets.Dets_spin_det_t_apply_double_exc(
+                    other.handle,
+                    idx_t(self.h[0]),
+                    idx_t(self.h[1]),
+                    idx_t(self.p[0]),
+                    idx_t(self.p[1]),
+                )
+                return spin_det_t(handle=res_handle, override_handle=True, N_orbs=other.N_orbs)
+            case det_t():
+                if self.spin is None:
+                    raise ValueError
+                res_handle = lib_dets.Dets_det_t_apply_double_exc(
+                    other.handle,
+                    idx_t(self.spin[0]),
+                    idx_t(self.spin[1]),
+                    idx_t(self.h[0]),
+                    idx_t(self.h[1]),
+                    idx_t(self.p[0]),
+                    idx_t(self.p[1]),
+                )
+                return det_t(handle=res_handle, override_original=True, N_orbs=other.N_orbs)
+            case _:
+                raise NotImplementedError

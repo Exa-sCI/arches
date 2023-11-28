@@ -2,7 +2,9 @@ import unittest
 
 import numpy as np
 
-from arches.determinant import det_t, spin_det_t
+from arches.determinant import det_t, double_exc, single_exc, spin_det_t
+from arches.fundamental_types import Determinant as det_ref
+from arches.fundamental_types import Spin_determinant_tuple as spin_det_ref
 
 rng = np.random.default_rng(seed=6329)
 
@@ -157,12 +159,94 @@ class Test_SpinDet(unittest.TestCase):
         for _ in range(self.N_trials):
             check_popcount()
 
+    def test_compute_single_phase(self):
+        def check_phase(orb_list, h, p):
+            ref_phase = spin_det_ref(orb_list).single_phase(h, p)
+            test_phase = spin_det_t(self.N_orbs, orb_list).compute_phase_single_exc(h, p)
+
+            self.assertEqual(
+                ref_phase,
+                test_phase,
+                msg=f"Incorrect phase for occupied orbitals {orb_list} and excitation {h}->{p}",
+            )
+
+        for _ in range(self.N_trials):
+            orb_list = rng.integers(0, self.N_orbs, 8)
+            orb_list = tuple(np.unique(orb_list))
+            h = rng.choice(orb_list)
+            p = rng.integers(0, self.N_orbs, 1)[0]
+            while p in orb_list:
+                p = rng.integers(0, self.N_orbs, 1)[0]
+            check_phase(orb_list, h, p)
+
+    def test_compute_double_phase(self):
+        def check_phase(orb_list, h1, h2, p1, p2):
+            ref_phase = spin_det_ref(orb_list).double_phase(h1, p1, h2, p2)
+            test_phase = spin_det_t(self.N_orbs, orb_list).compute_phase_double_exc(h1, h2, p1, p2)
+
+            self.assertEqual(
+                ref_phase,
+                test_phase,
+                msg=f"Incorrect phase for occupied orbitals {orb_list} and excitation {(h1, h2)}->{(p1, p2)}",
+            )
+
+        for _ in range(self.N_trials):
+            orb_list = rng.integers(0, self.N_orbs, 16)
+            orb_list = tuple(np.unique(orb_list))
+            h1, h2 = rng.choice(orb_list, 2)
+            p1, p2 = rng.integers(0, self.N_orbs, 2)
+            while (p1 in orb_list) or (p2 in orb_list):
+                p1, p2 = rng.integers(0, self.N_orbs, 2)
+            check_phase(orb_list, h1, h2, p1, p2)
+
+    def test_apply_single_exc(self):
+        def check_single_exc(orb_list, h, p):
+            det = single_exc(h, p, None) @ spin_det_t(self.N_orbs, orb_list)
+            orbs = tuple([i for i, b in enumerate(det.as_bit_tuple) if b])
+
+            self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h, p]))
+
+        for _ in range(self.N_trials):
+            orb_list = rng.integers(0, self.N_orbs, 8)
+            orb_list = tuple(np.unique(orb_list))
+            h = rng.choice(orb_list)
+            p = rng.integers(0, self.N_orbs, 1)[0]
+            while p in orb_list:
+                p = rng.integers(0, self.N_orbs, 1)[0]
+            check_single_exc(orb_list, h, p)
+
+    def test_apply_double_exc(self):
+        def check_double_exc(orb_list, h1, h2, p1, p2):
+            det = double_exc((h1, h2), (p1, p2), None) @ spin_det_t(self.N_orbs, orb_list)
+            orbs = tuple([i for i, b in enumerate(det.as_bit_tuple) if b])
+
+            self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h1, h2, p1, p2]))
+
+        def check_chained_singles(orb_list, h1, h2, p1, p2):
+            exc = single_exc(h1, p1) @ single_exc(h2, p2)
+            det = exc @ spin_det_t(self.N_orbs, orb_list)
+
+            orbs = tuple([i for i, b in enumerate(det.as_bit_tuple) if b])
+
+            self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h1, h2, p1, p2]))
+
+        for _ in range(self.N_trials):
+            orb_list = rng.integers(0, self.N_orbs, 8)
+            orb_list = tuple(np.unique(orb_list))
+            h1, h2 = rng.choice(orb_list, 2)
+            p1, p2 = rng.integers(0, self.N_orbs, 2)
+            while p1 in orb_list or p2 in orb_list:
+                p1, p2 = rng.integers(0, self.N_orbs, 2)
+
+            check_double_exc(orb_list, h1, h2, p1, p2)
+            check_chained_singles(orb_list, h1, h2, p1, p2)
+
 
 class Test_Det(unittest.TestCase):
     def setUp(self):
         self.rng = rng
         self.N_trials = 64
-        self.N_orbs = 72  # larger than both ui32 and ui64 blocks
+        self.N_orbs = 28  # larger than both ui32 and ui64 blocks
 
     def test_constructor(self):
         N_orbs = 8
@@ -217,6 +301,182 @@ class Test_Det(unittest.TestCase):
 
         self.assertEqual(c_b[0].as_bit_tuple, c_ref_tuple)
         self.assertEqual(c_b[1].as_bit_tuple, b_ref_tuple)
+
+    def test_compute_opp_spin_double_phase(self):
+        def check_phase(alpha_orb_list, beta_orb_list, h1, h2, p1, p2):
+            alpha = spin_det_t(self.N_orbs, alpha_orb_list)
+            beta = spin_det_t(self.N_orbs, beta_orb_list)
+            det = det_t(alpha=alpha, beta=beta)
+            aphase = alpha.compute_phase_single_exc(h1, p1)
+            bphase = beta.compute_phase_single_exc(h2, p2)
+            ref_phase = aphase * bphase
+
+            test_phase = det.compute_phase_opp_spin_double_exc(h1, h2, p1, p2)
+
+            self.assertEqual(
+                ref_phase,
+                test_phase,
+                msg=f"Incorrect phase for occupied orbitals {alpha_orb_list, beta_orb_list} and excitation {(h1, h2)}->{(p1, p2)}",
+            )
+
+        for _ in range(self.N_trials):
+            alpha_orb_list = rng.integers(0, self.N_orbs, 8)
+            alpha_orb_list = tuple(np.unique(alpha_orb_list))
+            beta_orb_list = rng.integers(0, self.N_orbs, 8)
+            beta_orb_list = tuple(np.unique(beta_orb_list))
+
+            h1 = rng.choice(alpha_orb_list, 1)[0]
+            h2 = rng.choice(beta_orb_list, 1)[0]
+
+            p1, p2 = rng.integers(0, self.N_orbs, 2)
+            while (p1 in alpha_orb_list) or (p2 in beta_orb_list):
+                p1, p2 = rng.integers(0, self.N_orbs, 2)
+
+            check_phase(alpha_orb_list, beta_orb_list, h1, h2, p1, p2)
+
+    def test_exc_det(self):
+        def check_exc(a1, b1, a2, b2):
+            ref_1 = det_ref(a1, b1)
+            ref_2 = det_ref(a2, b2)
+            test_1 = det_t(alpha=spin_det_t(self.N_orbs, a1), beta=spin_det_t(self.N_orbs, b1))
+            test_2 = det_t(alpha=spin_det_t(self.N_orbs, a2), beta=spin_det_t(self.N_orbs, b2))
+
+            ref_exc = det_ref(ref_1.alpha ^ ref_2.alpha, ref_1.beta ^ ref_2.beta)
+            test_exc = test_1.get_exc_det(test_2)
+
+            alpha_orbs = tuple([i for i, b in enumerate(test_exc.alpha.as_bit_tuple) if b])
+            beta_orbs = tuple([i for i, b in enumerate(test_exc.beta.as_bit_tuple) if b])
+
+            self.assertEqual(ref_exc.alpha, alpha_orbs)
+            self.assertEqual(ref_exc.beta, beta_orbs)
+
+        for _ in range(self.N_trials):
+            a1 = rng.integers(0, self.N_orbs, 8)
+            a1 = tuple(np.unique(a1))
+            b1 = rng.integers(0, self.N_orbs, 8)
+            b1 = tuple(np.unique(b1))
+
+            a2 = rng.integers(0, self.N_orbs, 8)
+            a2 = tuple(np.unique(a2))
+            b2 = rng.integers(0, self.N_orbs, 8)
+            b2 = tuple(np.unique(b2))
+
+            check_exc(a1, b1, a2, b2)
+
+    def test_apply_single_exc(self):
+        def check_single_exc(alpha_orbs, beta_orbs, h, p, spin):
+            exc = single_exc(h, p, spin)
+            det = det_t(
+                alpha=spin_det_t(self.N_orbs, alpha_orbs),
+                beta=spin_det_t(self.N_orbs, beta_orbs),
+            )
+
+            res = exc @ det
+            orbs = tuple([i for i, b in enumerate(res[spin].as_bit_tuple) if b])
+            orb_list = beta_orbs if spin else alpha_orbs
+            self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h, p]))
+
+        for _ in range(self.N_trials):
+            alpha_orb_list = rng.integers(0, self.N_orbs, 8)
+            alpha_orb_list = tuple(np.unique(alpha_orb_list))
+            beta_orb_list = rng.integers(0, self.N_orbs, 8)
+            beta_orb_list = tuple(np.unique(beta_orb_list))
+
+            h1 = rng.choice(alpha_orb_list, 1)[0]
+            h2 = rng.choice(beta_orb_list, 1)[0]
+
+            p1, p2 = rng.integers(0, self.N_orbs, 2)
+            while (p1 in alpha_orb_list) or (p2 in beta_orb_list):
+                p1, p2 = rng.integers(0, self.N_orbs, 2)
+
+            check_single_exc(alpha_orb_list, beta_orb_list, h1, p1, 0)
+            check_single_exc(alpha_orb_list, beta_orb_list, h2, p2, 1)
+
+    def test_apply_double_exc(self):
+        def check_same_spin_double(alpha_orbs, beta_orbs, h1, h2, p1, p2, spin):
+            exc = double_exc((h1, h2), (p1, p2), (spin, spin))
+            det = det_t(
+                alpha=spin_det_t(self.N_orbs, alpha_orbs),
+                beta=spin_det_t(self.N_orbs, beta_orbs),
+            )
+
+            res = exc @ det
+            orbs = tuple([i for i, b in enumerate(res[spin].as_bit_tuple) if b])
+            orb_list = beta_orbs if spin else alpha_orbs
+            self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h1, h2, p1, p2]))
+
+        def check_same_spin_chained_single(alpha_orbs, beta_orbs, h1, h2, p1, p2, spin):
+            exc = single_exc(h1, p1, spin) @ single_exc(h2, p2, spin)
+            det = det_t(
+                alpha=spin_det_t(self.N_orbs, alpha_orbs),
+                beta=spin_det_t(self.N_orbs, beta_orbs),
+            )
+
+            res = exc @ det
+            orbs = tuple([i for i, b in enumerate(res[spin].as_bit_tuple) if b])
+            orb_list = beta_orbs if spin else alpha_orbs
+            self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h1, h2, p1, p2]))
+
+        def check_opp_spin_double(alpha_orbs, beta_orbs, h1, h2, p1, p2, s1, s2):
+            exc = double_exc((h1, h2), (p1, p2), (s1, s2))
+            det = det_t(
+                alpha=spin_det_t(self.N_orbs, alpha_orbs),
+                beta=spin_det_t(self.N_orbs, beta_orbs),
+            )
+            res = exc @ det
+
+            orbs1 = tuple([i for i, b in enumerate(res[s1].as_bit_tuple) if b])
+            orbs2 = tuple([i for i, b in enumerate(res[s2].as_bit_tuple) if b])
+
+            orb_list1 = beta_orbs if s1 else alpha_orbs
+            orb_list2 = beta_orbs if s2 else alpha_orbs
+
+            self.assertTrue(set(orb_list1).symmetric_difference(set(orbs1)) == set([h1, p1]))
+            self.assertTrue(set(orb_list2).symmetric_difference(set(orbs2)) == set([h2, p2]))
+
+        def check_opp_spin_chained_single(alpha_orbs, beta_orbs, h1, h2, p1, p2, s1, s2):
+            exc = single_exc(h1, p1, s1) @ single_exc(h2, p2, s2)
+            det = det_t(
+                alpha=spin_det_t(self.N_orbs, alpha_orbs),
+                beta=spin_det_t(self.N_orbs, beta_orbs),
+            )
+            res = exc @ det
+
+            orbs1 = tuple([i for i, b in enumerate(res[s1].as_bit_tuple) if b])
+            orbs2 = tuple([i for i, b in enumerate(res[s2].as_bit_tuple) if b])
+
+            orb_list1 = beta_orbs if s1 else alpha_orbs
+            orb_list2 = beta_orbs if s2 else alpha_orbs
+
+            self.assertTrue(set(orb_list1).symmetric_difference(set(orbs1)) == set([h1, p1]))
+            self.assertTrue(set(orb_list2).symmetric_difference(set(orbs2)) == set([h2, p2]))
+
+        for _ in range(self.N_trials):
+            alpha_orb_list = rng.integers(0, self.N_orbs, 8)
+            alpha_orb_list = tuple(np.unique(alpha_orb_list))
+            beta_orb_list = rng.integers(0, self.N_orbs, 8)
+            beta_orb_list = tuple(np.unique(beta_orb_list))
+
+            ha1, ha2 = rng.choice(alpha_orb_list, 2)
+            hb1, hb2 = rng.choice(beta_orb_list, 2)
+
+            pa1, pa2 = rng.integers(0, self.N_orbs, 2)
+            while pa1 in alpha_orb_list or pa2 in alpha_orb_list:
+                pa1, pa2 = rng.integers(0, self.N_orbs, 2)
+
+            pb1, pb2 = rng.integers(0, self.N_orbs, 2)
+            while pb1 in beta_orb_list or pb2 in beta_orb_list:
+                pb1, pb2 = rng.integers(0, self.N_orbs, 2)
+
+            check_same_spin_double(alpha_orb_list, beta_orb_list, ha1, ha2, pa1, pa2, 0)
+            check_same_spin_chained_single(alpha_orb_list, beta_orb_list, ha1, ha2, pa1, pa2, 0)
+            check_same_spin_double(alpha_orb_list, beta_orb_list, hb1, hb2, pb1, pb2, 1)
+            check_same_spin_chained_single(alpha_orb_list, beta_orb_list, hb1, hb2, pb1, pb2, 1)
+
+            check_opp_spin_double(alpha_orb_list, beta_orb_list, ha1, hb1, pa1, pb1, 0, 1)
+            check_opp_spin_double(alpha_orb_list, beta_orb_list, hb2, ha2, pb2, pa2, 1, 0)
+            check_opp_spin_chained_single(alpha_orb_list, beta_orb_list, ha1, hb1, pa1, pb1, 0, 1)
+            check_opp_spin_chained_single(alpha_orb_list, beta_orb_list, hb2, ha2, pb2, pa2, 1, 0)
 
 
 if __name__ == "__main__":

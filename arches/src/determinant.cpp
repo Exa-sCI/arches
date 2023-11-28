@@ -7,17 +7,10 @@
 int compute_phase_single_excitation(spin_det_t d, idx_t h, idx_t p) {
     const auto &[i, j] = std::minmax(h, p);
     spin_det_t hpmask(d.N_mos);
-    hpmask.set(i + 1, j - i - 1, 1);
+    hpmask.set(i + 1, j, 1);
     const bool parity = (hpmask & d).count() % 2;
     return parity ? -1 : 1;
 }
-
-// TEST_CASE("testing get_phase_single") {
-//     CHECK(compute_phase_single_excitation(spin_det_t{"11000"}, 4, 2) == -1);
-//     CHECK(compute_phase_single_excitation(spin_det_t{"10001"}, 4, 2) == 1);
-//     CHECK(compute_phase_single_excitation(spin_det_t{"01100"}, 2, 4) == -1);
-//     CHECK(compute_phase_single_excitation(spin_det_t{"00100"}, 2, 4) == 1);
-// }
 
 int compute_phase_double_excitation(spin_det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
     // Single spin channel excitations, i.e., (2,0) or (0,2)
@@ -38,11 +31,17 @@ int compute_phase_double_excitation(det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t
 }
 
 det_t exc_det(det_t &a, det_t &b) {
-    // spin_det_t alpha = a[0] ^ b[0];
-    // spin_det_t beta = a[1] ^ b[1];
-    // return det_t(alpha, beta);
-
     return det_t(a[0] ^ b[0], a[1] ^ b[1]); // Does this work since I have the move defined?
+}
+
+spin_det_t apply_single_excitation(spin_det_t s, idx_t h, idx_t p) {
+    // assert(s[h] == 1);
+    // assert(s[p] == 0);
+
+    auto s2 = spin_det_t(s);
+    s2.set(h, 0);
+    s2.set(p, 1);
+    return s2;
 }
 
 det_t apply_single_excitation(det_t s, int spin, idx_t h, idx_t p) {
@@ -57,22 +56,22 @@ det_t apply_single_excitation(det_t s, int spin, idx_t h, idx_t p) {
     return s2;
 }
 
-spin_det_t apply_single_excitation(spin_det_t s, idx_t h, idx_t p) {
-    // assert(s[h] == 1);
-    // assert(s[p] == 0);
-
-    auto s2 = spin_det_t(s);
-    s2.set(h, 0);
-    s2.set(p, 1);
-    return s2;
-}
-
 // TEST_CASE("testing apply_single_excitation") {
 //     det_t s{spin_det_t{"11000"}, spin_det_t{"00001"}};
 //     CHECK(apply_single_excitation(s, 0, 4, 1) == det_t{spin_det_t{"01010"},
 //     spin_det_t{"00001"}}); CHECK(apply_single_excitation(s, 1, 0, 1) ==
 //     det_t{spin_det_t{"11000"}, spin_det_t{"00010"}});
 // }
+
+spin_det_t apply_double_excitation(spin_det_t s, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
+    // Check if valid
+    auto s2 = spin_det_t(s);
+    s2.set(h1, 0);
+    s2.set(h2, 0);
+    s2.set(p1, 1);
+    s2.set(p2, 1);
+    return s2;
+}
 
 det_t apply_double_excitation(det_t s, int spin_1, int spin_2, idx_t h1, idx_t h2, idx_t p1,
                               idx_t p2) {
@@ -306,6 +305,23 @@ spin_det_t *Dets_spin_det_t_and(spin_det_t *det, spin_det_t *other) {
 
 int Dets_spin_det_t_count(spin_det_t *det) { return det->count(); }
 
+int Dets_spin_det_t_phase_single_exc(spin_det_t *det, idx_t h, idx_t p) {
+    return compute_phase_single_excitation(*det, h, p);
+}
+
+int Dets_spin_det_t_phase_double_exc(spin_det_t *det, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
+    return compute_phase_double_excitation(*det, h1, h2, p1, p2);
+}
+
+spin_det_t *Dets_spin_det_t_apply_single_exc(spin_det_t *det, idx_t h, idx_t p) {
+    return new spin_det_t(apply_single_excitation(*det, h, p));
+}
+
+spin_det_t *Dets_spin_det_t_apply_double_exc(spin_det_t *det, idx_t h1, idx_t h2, idx_t p1,
+                                             idx_t p2) {
+    return new spin_det_t(apply_double_excitation(*det, h1, h2, p1, p2));
+}
+
 //// det_t
 
 // constructors
@@ -320,5 +336,21 @@ void Dets_det_t_dtor(det_t *det) { delete det; }
 // utilities
 spin_det_t *Dets_det_t_get_spin_det_handle(det_t *det, bool spin) {
     return spin ? &det->beta : &det->alpha;
+}
+
+// operations
+int Dets_det_t_phase_double_exc(det_t *det, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
+    return compute_phase_double_excitation(*det, h1, h2, p1, p2);
+}
+
+det_t *Dets_det_t_exc_det(det_t *det_1, det_t *det_2) { return new det_t(exc_det(*det_1, *det_2)); }
+
+det_t *Dets_det_t_apply_single_exc(det_t *det, idx_t spin, idx_t h, idx_t p) {
+    return new det_t(apply_single_excitation(*det, spin, h, p));
+}
+
+det_t *Dets_det_t_apply_double_exc(det_t *det, idx_t s1, idx_t s2, idx_t h1, idx_t h2, idx_t p1,
+                                   idx_t p2) {
+    return new det_t(apply_double_excitation(*det, s1, s2, h1, h2, p1, p2));
 }
 }
