@@ -1,5 +1,6 @@
 import pathlib
 from ctypes import CDLL, c_bool
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -8,7 +9,7 @@ from arches.linked_object import LinkedArray_i32, LinkedHandle, handle_t, i32, i
 run_folder = pathlib.Path(__file__).parent.resolve()
 lib_dets = CDLL(run_folder.joinpath("build/libdeterminant.so"))
 
-
+#### spin det t
 lib_dets.Dets_spin_det_t_empty_ctor.argtypes = [idx_t]
 lib_dets.Dets_spin_det_t_empty_ctor.restype = handle_t
 
@@ -47,6 +48,20 @@ lib_dets.Dets_spin_det_t_and.restype = handle_t
 
 lib_dets.Dets_spin_det_t_count.argtypes = [handle_t]
 lib_dets.Dets_spin_det_t_count.restype = i32
+
+
+#### det t
+lib_dets.Dets_det_t_empty_ctor.argtypes = [idx_t]
+lib_dets.Dets_det_t_empty_ctor.restype = handle_t
+
+lib_dets.Dets_det_t_copy_ctor.argtypes = [handle_t, handle_t]
+lib_dets.Dets_det_t_copy_ctor.restype = handle_t
+
+lib_dets.Dets_det_t_dtor.argtypes = [handle_t]
+lib_dets.Dets_det_t_dtor.restype = None
+
+lib_dets.Dets_det_t_get_spin_det_handle.argtypes = [handle_t, c_bool]
+lib_dets.Dets_det_t_get_spin_det_handle.restype = handle_t
 
 
 class spin_det_t(LinkedHandle):
@@ -117,3 +132,66 @@ class spin_det_t(LinkedHandle):
 
     def popcount(self):
         return lib_dets.Dets_spin_det_t_count(self.handle)
+
+
+class det_t(LinkedHandle):
+    _empty_ctor = lib_dets.Dets_det_t_empty_ctor
+    _copy_ctor = lib_dets.Dets_det_t_copy_ctor
+    _dtor = lib_dets.Dets_det_t_dtor
+
+    def __init__(self, N_orbs=None, alpha=None, beta=None, handle=None, **kwargs):
+        super().__init__(handle=handle, N_orbs=N_orbs, alpha=alpha, beta=beta, **kwargs)
+        if N_orbs is None:
+            self.N_orbs = alpha.N_orbs
+        else:
+            self.N_orbs = N_orbs
+
+        self.alpha = spin_det_t(self.N_orbs, handle=self.get_spin_det_handle(False))
+        self.beta = spin_det_t(self.N_orbs, handle=self.get_spin_det_handle(True))
+
+    def constructor(self, N_orbs, alpha, beta, **kwargs):
+        if (alpha is None) and (beta is None):
+            return self._empty_ctor(N_orbs)
+        else:
+            return self._copy_ctor(alpha.handle, beta.handle)
+
+    def destructor(self, handle):
+        self._dtor(handle)
+
+    def get_spin_det_handle(self, idx):
+        return lib_dets.Dets_det_t_get_spin_det_handle(self.handle, c_bool(idx))
+
+    def debug_print(self):
+        self.alpha.debug_print()
+        self.beta.debug_print()
+
+    @property
+    def alpha(self):
+        return self._alpha
+
+    @alpha.setter
+    def alpha(self, sdet):
+        if isinstance(sdet, spin_det_t):
+            self._alpha = sdet
+        else:
+            raise TypeError
+
+    @property
+    def beta(self):
+        return self._beta
+
+    @beta.setter
+    def beta(self, sdet):
+        if isinstance(sdet, spin_det_t):
+            self._beta = sdet
+        else:
+            raise TypeError
+
+    def __getitem__(self, val):
+        match val:
+            case 0:
+                return self.alpha
+            case 1:
+                return self.beta
+            case _:
+                raise ValueError

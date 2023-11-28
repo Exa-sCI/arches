@@ -284,7 +284,6 @@ void Dets_spin_det_t_print(spin_det_t *det) {
 void Dets_spin_det_t_to_bit_tuple(spin_det_t *det, idx_t start_orb, idx_t end_orb, int *t) {
     auto j = 0;
     for (auto i = start_orb; i < end_orb; i++, j++) {
-        // std::cout << i << std::endl; // << " " << det->operator[](i) << std::endl;
         t[j] = (int)det->operator[](i);
     }
 }
@@ -306,4 +305,20 @@ spin_det_t *Dets_spin_det_t_and(spin_det_t *det, spin_det_t *other) {
 }
 
 int Dets_spin_det_t_count(spin_det_t *det) { return det->count(); }
+
+//// det_t
+
+// constructors
+det_t *Dets_det_t_empty_ctor(idx_t N_mos) { return new det_t(N_mos); }
+det_t *Dets_det_t_copy_ctor(spin_det_t *alpha, spin_det_t *beta) {
+    return new det_t(*alpha, *beta);
+}
+
+// destructor
+void Dets_det_t_dtor(det_t *det) { delete det; }
+
+// utilities
+spin_det_t *Dets_det_t_get_spin_det_handle(det_t *det, bool spin) {
+    return spin ? &det->beta : &det->alpha;
+}
 }

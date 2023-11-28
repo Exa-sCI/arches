@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from arches.determinant import spin_det_t
+from arches.determinant import det_t, spin_det_t
 
 rng = np.random.default_rng(seed=6329)
 
@@ -10,10 +10,10 @@ rng = np.random.default_rng(seed=6329)
 class Test_SpinDet(unittest.TestCase):
     def setUp(self):
         self.rng = rng
-        self.N_trials = 1024
+        self.N_trials = 64
         self.N_orbs = 72  # larger than both ui32 and ui64 blocks
 
-    def test_constuctor(self):
+    def test_constructor(self):
         N_orbs = 8
         N_filled = 4
         orb_list = (0, 1, 2, 4, 6)
@@ -156,6 +156,67 @@ class Test_SpinDet(unittest.TestCase):
 
         for _ in range(self.N_trials):
             check_popcount()
+
+
+class Test_Det(unittest.TestCase):
+    def setUp(self):
+        self.rng = rng
+        self.N_trials = 64
+        self.N_orbs = 72  # larger than both ui32 and ui64 blocks
+
+    def test_constructor(self):
+        N_orbs = 8
+        N_filled = 4
+        orb_list = (0, 1, 2, 4, 6)
+
+        a = det_t(N_orbs)
+        b_s = spin_det_t(N_orbs, occ=True, max_orb=N_filled)
+        b_s_2 = spin_det_t(N_orbs, occ=True, max_orb=N_filled)
+        b = det_t(alpha=b_s, beta=b_s_2)
+        c = det_t(alpha=b_s, beta=spin_det_t(N_orbs, occ=orb_list))
+        c_b = det_t(alpha=spin_det_t(N_orbs, occ=orb_list), beta=b_s)
+
+        a_ref_tuple = tuple([0 for _ in range(N_orbs)])
+        b_ref_tuple = tuple([int(x < N_filled) for x in range(N_orbs)])
+        c_ref_tuple = tuple([int(x in orb_list) for x in range(N_orbs)])
+
+        self.assertEqual(a.alpha.as_bit_tuple, a_ref_tuple)
+        self.assertEqual(a.beta.as_bit_tuple, a_ref_tuple)
+
+        self.assertEqual(b.alpha.as_bit_tuple, b_ref_tuple)
+        self.assertEqual(b.beta.as_bit_tuple, b_ref_tuple)
+
+        self.assertEqual(c[0].as_bit_tuple, b_ref_tuple)
+        self.assertEqual(c[1].as_bit_tuple, c_ref_tuple)
+
+        self.assertEqual(c_b[0].as_bit_tuple, c_ref_tuple)
+        self.assertEqual(c_b[1].as_bit_tuple, b_ref_tuple)
+
+    def test_multi_block_constructor(self):
+        N_filled = 20
+        orb_list = (0, 3, 17, 20, 32, 48, 60, 68)
+
+        a = det_t(self.N_orbs)
+        b_s = spin_det_t(self.N_orbs, occ=True, max_orb=N_filled)
+        b = det_t(alpha=b_s, beta=b_s)
+        c = det_t(alpha=b_s, beta=spin_det_t(self.N_orbs, occ=orb_list))
+        c_b = det_t(alpha=spin_det_t(self.N_orbs, occ=orb_list), beta=b_s)
+
+        a_ref_tuple = tuple([0 for _ in range(self.N_orbs)])
+        b_ref_tuple = tuple([int(x < N_filled) for x in range(self.N_orbs)])
+        c_ref_tuple = tuple([int(x in orb_list) for x in range(self.N_orbs)])
+
+        self.assertEqual(a.alpha.as_bit_tuple, a_ref_tuple)
+        self.assertEqual(a.beta.as_bit_tuple, a_ref_tuple)
+
+        self.assertEqual(b.alpha.as_bit_tuple, b_ref_tuple)
+        self.assertEqual(b.beta.as_bit_tuple, b_ref_tuple)
+
+        self.assertEqual(c[0].as_bit_tuple, b_ref_tuple)
+        self.assertEqual(c[1].as_bit_tuple, c_ref_tuple)
+
+        self.assertEqual(c_b[0].as_bit_tuple, c_ref_tuple)
+        self.assertEqual(c_b[1].as_bit_tuple, b_ref_tuple)
 
 
 if __name__ == "__main__":

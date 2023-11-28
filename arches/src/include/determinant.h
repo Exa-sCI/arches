@@ -65,8 +65,10 @@ class spin_det_t {
     spin_det_t &operator=(const spin_det_t &other) {
         N_mos = other.N_mos;
         N_blocks = other.N_blocks;
+        block_size = other.block_size;
+        read_mask = ((mo_block_t)1) << (block_size - 1);
 
-        std::unique_ptr<mo_block_t[]> p(new mo_block_t[N_blocks]);
+        std::unique_ptr<mo_block_t[]> p(new mo_block_t[N_blocks]());
         block_arr_ptr = std::move(p);
         block_arr = block_arr_ptr.get();
         std::copy(other.block_arr, other.block_arr + N_blocks, block_arr);
@@ -77,6 +79,8 @@ class spin_det_t {
     spin_det_t &operator=(spin_det_t &&other) {
         N_mos = other.N_mos;
         N_blocks = other.N_blocks;
+        block_size = other.block_size;
+        read_mask = ((mo_block_t)1) << (block_size - 1);
 
         block_arr_ptr = std::move(other.block_arr_ptr);
         block_arr = block_arr_ptr.get();
@@ -98,7 +102,6 @@ class spin_det_t {
         // assert(orb < N_mos);
         idx_t block = orb / block_size;
         idx_t offset = orb % block_size;
-        // std::cout << std::bitset<sizeof(mo_block_t) * 8>(block_arr[block]) << std::endl;
         return (block_arr[block] << offset) & read_mask;
     }
 
