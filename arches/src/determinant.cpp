@@ -273,4 +273,27 @@ spin_det_t *Dets_spin_det_t_orb_list_ctor(idx_t N_mos, idx_t N_filled, idx_t *or
 void Dets_spin_det_t_dtor(spin_det_t *sdet) { delete sdet; }
 
 // utilities
+void Dets_spin_det_t_print(spin_det_t *det) {
+    auto N_orbs = det->N_mos;
+    for (auto i = 0; i < N_orbs; i++) {
+        std::cout << det->operator[](i);
+    }
+    std::cout << std::endl;
+}
+
+void Dets_spin_det_t_to_bit_tuple(spin_det_t *det, idx_t start_orb, idx_t end_orb, int *t) {
+    auto j = 0;
+    for (auto i = start_orb; i < end_orb; i++, j++) {
+        // std::cout << i << std::endl; // << " " << det->operator[](i) << std::endl;
+        t[j] = (int)det->operator[](i);
+    }
+}
+
+// operations
+void Dets_spin_det_t_set_orb(spin_det_t *det, idx_t orb, bool val) { det->set(orb, val); }
+
+void Dets_spin_det_t_set_orb_range(spin_det_t *det, idx_t min_orb, idx_t max_orb, bool val) {
+    det->set(min_orb, max_orb, val);
+}
+bool Dets_spin_det_t_get_orb(spin_det_t *det, idx_t orb) { return det->operator[](orb); }
 }

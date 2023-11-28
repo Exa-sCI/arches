@@ -3,6 +3,7 @@
 #include "integral_indexing_utils.h"
 #include "matrix.h"
 #include <array>
+#include <bitset>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -38,7 +39,8 @@ class spin_det_t {
     // empty initialization
     spin_det_t(idx_t min_mos) {
         block_size = sizeof(mo_block_t) * 8;
-        read_mask = 1 << (block_size - 1);
+        read_mask = ((mo_block_t)1) << (block_size - 1);
+
         N_mos = min_mos;
         N_blocks = N_mos / (block_size) + (N_mos % (block_size) != 0);
 
@@ -96,7 +98,7 @@ class spin_det_t {
         // assert(orb < N_mos);
         idx_t block = orb / block_size;
         idx_t offset = orb % block_size;
-
+        // std::cout << std::bitset<sizeof(mo_block_t) * 8>(block_arr[block]) << std::endl;
         return (block_arr[block] << offset) & read_mask;
     }
 
@@ -107,12 +109,13 @@ class spin_det_t {
         idx_t offset = orb % block_size;
 
         mo_block_t mask;
-        switch (val) {
-        case true: // Turning on bit at orb
-            mask = 1 << (block_size - offset);
+        if (val) {
+            // Turning on bit at orb
+            mask = ((mo_block_t)1) << (block_size - offset - 1);
             block_arr[block] |= mask;
-        case false: // Turning off bit at orb
-            mask = ~(1 << (block_size - offset));
+        } else {
+            // Turning off bit at orb
+            mask = ~(((mo_block_t)1) << (block_size - offset - 1));
             block_arr[block] &= mask;
         }
     };
@@ -124,23 +127,35 @@ class spin_det_t {
         idx_t s_block = start_orb / block_size;
         idx_t e_block = end_orb / block_size;
 
-        // for all blocks prior to end block, can handle whole block
-        mo_block_t mask = val ? ~0 : 0;
-        for (auto i = s_block; i < e_block; i++) {
-            block_arr[i] = mask;
+        // for all blocks after first and before end block, can handle whole block
+        mo_block_t block_mask = val ? ~((mo_block_t)0) : 0;
+        for (auto i = s_block + 1; i < e_block; i++) {
+            block_arr[i] = block_mask;
         }
 
-        // handle last block
         idx_t max_offset = end_orb % block_size;
-        mask =
-            mask << (block_size - max_offset); // if val, trailing orbs after end_orb should be zero
-        mask = val ? mask : ~mask; // else, up to offset should be zero and after should be ones
+        mo_block_t end_mask = max_offset ? block_mask << (block_size - max_offset) : 0;
+        // if val, trailing orbs after end_orb should be zero
+        // else, up to offset should be zero and after should be one
+        end_mask = val ? end_mask : ~end_mask;
 
-        switch (val) {
-        case true:
-            block_arr[e_block] |= mask;
-        case false:
-            block_arr[e_block] &= mask;
+        idx_t min_offset = start_orb % block_size;
+        mo_block_t start_mask = block_mask >> (min_offset);
+        start_mask = val ? start_mask : ~start_mask;
+        if (s_block == e_block) {
+            start_mask = start_mask & end_mask;
+        } else {
+            if (val) {
+                block_arr[e_block] |= end_mask;
+            } else {
+                block_arr[e_block] &= end_mask;
+            }
+        }
+
+        if (val) {
+            block_arr[s_block] |= start_mask;
+        } else {
+            block_arr[s_block] &= start_mask;
         }
     };
 
