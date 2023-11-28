@@ -98,6 +98,65 @@ class Test_SpinDet(unittest.TestCase):
             check_getsingle(start_orb)
             check_getrange(start_orb, end_orb)
 
+    def test_bitflip(self):
+        def check_bitflip():
+            ref_orbs = (rng.normal(0, 1, size=(self.N_orbs,)) > 0.0).astype(np.int64)
+            orb_list = [int(x) for x in np.nonzero(ref_orbs)[0]]
+
+            a = spin_det_t(self.N_orbs, orb_list)
+            b = ~a
+
+            self.assertFalse(np.any(np.array(a.as_bit_tuple) == np.array(b.as_bit_tuple)))
+
+        for _ in range(self.N_trials):
+            check_bitflip()
+
+    def test_xor(self):
+        d = spin_det_t(self.N_orbs, True, max_orb=self.N_orbs)
+
+        def check_xor():
+            ref_orbs = (rng.normal(0, 1, size=(self.N_orbs,)) > 0.0).astype(np.int64)
+            orb_list = [int(x) for x in np.nonzero(ref_orbs)[0]]
+
+            a = spin_det_t(self.N_orbs, orb_list)
+            b = ~a
+            c = a ^ b
+
+            self.assertTrue(np.all(c.as_bit_tuple))
+            self.assertEqual(a.as_bit_tuple, (b ^ d).as_bit_tuple)
+
+        for _ in range(self.N_trials):
+            check_xor()
+
+    def test_and(self):
+        d = spin_det_t(self.N_orbs, True, max_orb=self.N_orbs)
+
+        def check_and():
+            ref_orbs = (rng.normal(0, 1, size=(self.N_orbs,)) > 0.0).astype(np.int64)
+            orb_list = [int(x) for x in np.nonzero(ref_orbs)[0]]
+
+            a = spin_det_t(self.N_orbs, orb_list)
+            b = ~a
+            c = a & b
+
+            self.assertFalse(np.any(c.as_bit_tuple))
+            self.assertEqual(a.as_bit_tuple, (a & d).as_bit_tuple)
+
+        for _ in range(self.N_trials):
+            check_and()
+
+    def test_popcount(self):
+        def check_popcount():
+            ref_orbs = (rng.normal(0, 1, size=(self.N_orbs,)) > 0.0).astype(np.int64)
+            orb_list = [int(x) for x in np.nonzero(ref_orbs)[0]]
+
+            a = spin_det_t(self.N_orbs, orb_list)
+
+            self.assertEqual(len(orb_list), a.popcount())
+
+        for _ in range(self.N_trials):
+            check_popcount()
+
 
 if __name__ == "__main__":
     unittest.main()

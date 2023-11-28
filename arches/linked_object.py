@@ -66,6 +66,8 @@ class LinkedHandle(ABC):
         else:
             self.handle = handle
             self._original = False
+            if "override_original" in kwargs.keys():
+                self._original = kwargs["override_original"]
 
     def __del__(self):
         # only call destructor if the owning object is not a copied view

@@ -296,4 +296,14 @@ void Dets_spin_det_t_set_orb_range(spin_det_t *det, idx_t min_orb, idx_t max_orb
     det->set(min_orb, max_orb, val);
 }
 bool Dets_spin_det_t_get_orb(spin_det_t *det, idx_t orb) { return det->operator[](orb); }
+
+spin_det_t *Dets_spin_det_t_bit_flip(spin_det_t *det) { return new spin_det_t(det->operator~()); }
+spin_det_t *Dets_spin_det_t_xor(spin_det_t *det, spin_det_t *other) {
+    return new spin_det_t(det->operator^(*other));
+}
+spin_det_t *Dets_spin_det_t_and(spin_det_t *det, spin_det_t *other) {
+    return new spin_det_t(det->operator&(*other));
+}
+
+int Dets_spin_det_t_count(spin_det_t *det) { return det->count(); }
 }

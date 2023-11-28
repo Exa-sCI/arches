@@ -3,7 +3,7 @@ from ctypes import CDLL, c_bool
 
 import numpy as np
 
-from arches.linked_object import LinkedArray_i32, LinkedHandle, handle_t, i32_p, idx_t, idx_t_p
+from arches.linked_object import LinkedArray_i32, LinkedHandle, handle_t, i32, i32_p, idx_t, idx_t_p
 
 run_folder = pathlib.Path(__file__).parent.resolve()
 lib_dets = CDLL(run_folder.joinpath("build/libdeterminant.so"))
@@ -35,6 +35,18 @@ lib_dets.Dets_spin_det_t_get_orb.restype = c_bool
 
 lib_dets.Dets_spin_det_t_set_orb_range.argtypes = [handle_t, idx_t, idx_t, c_bool]
 lib_dets.Dets_spin_det_t_set_orb_range.restype = None
+
+lib_dets.Dets_spin_det_t_bit_flip.argtypes = [handle_t]
+lib_dets.Dets_spin_det_t_bit_flip.restype = handle_t
+
+lib_dets.Dets_spin_det_t_xor.argtypes = [handle_t, handle_t]
+lib_dets.Dets_spin_det_t_xor.restype = handle_t
+
+lib_dets.Dets_spin_det_t_and.argtypes = [handle_t, handle_t]
+lib_dets.Dets_spin_det_t_and.restype = handle_t
+
+lib_dets.Dets_spin_det_t_count.argtypes = [handle_t]
+lib_dets.Dets_spin_det_t_count.restype = i32
 
 
 class spin_det_t(LinkedHandle):
@@ -90,3 +102,18 @@ class spin_det_t(LinkedHandle):
                 raise NotImplementedError
         else:
             return lib_dets.Dets_spin_det_t_get_orb(self.handle, idx_t(k))
+
+    def __invert__(self):
+        handle = lib_dets.Dets_spin_det_t_bit_flip(self.handle)
+        return spin_det_t(self.N_orbs, handle=handle, override_original=True)
+
+    def __xor__(self, other):
+        handle = lib_dets.Dets_spin_det_t_xor(self.handle, other.handle)
+        return spin_det_t(self.N_orbs, handle=handle, override_original=True)
+
+    def __and__(self, other):
+        handle = lib_dets.Dets_spin_det_t_and(self.handle, other.handle)
+        return spin_det_t(self.N_orbs, handle=handle, override_original=True)
+
+    def popcount(self):
+        return lib_dets.Dets_spin_det_t_count(self.handle)
