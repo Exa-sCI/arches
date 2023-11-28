@@ -8,15 +8,15 @@ Interface functions for reading and setting values of managed pointers
 extern "C" {
 
 // int 32
-int at_i32(int *a, idx_t i) { return a[i]; }
+long int at_i32(long int *a, idx_t i) { return a[i]; }
 
-void set_i32(int *a, idx_t i, int val) { a[i] = val; }
+void set_i32(long int *a, idx_t i, long int val) { a[i] = val; }
 
-void set_range_i32(int *a, idx_t start, idx_t stop, int *fill) {
+void set_range_i32(long int *a, idx_t start, idx_t stop, long int *fill) {
     std::copy(fill, fill + (stop - start), a + start);
 }
 
-void set_strided_range_i32(int *a, idx_t start, idx_t stop, idx_t step, int *fill) {
+void set_strided_range_i32(long int *a, idx_t start, idx_t stop, idx_t step, long int *fill) {
     auto j = 0;
     for (auto i = 0; i < stop; i += step, j++) {
         a[i] = fill[j];
@@ -24,15 +24,16 @@ void set_strided_range_i32(int *a, idx_t start, idx_t stop, idx_t step, int *fil
 }
 
 // int 64
-long int at_i64(long int *a, idx_t i) { return a[i]; }
+long long int at_i64(long long int *a, idx_t i) { return a[i]; }
 
-void set_i64(long int *a, idx_t i, long int val) { a[i] = val; }
+void set_i64(long long int *a, idx_t i, long long int val) { a[i] = val; }
 
-void set_range_i64(long int *a, idx_t start, idx_t stop, long int *fill) {
+void set_range_i64(long long int *a, idx_t start, idx_t stop, long long int *fill) {
     std::copy(fill, fill + (stop - start), a + start);
 }
 
-void set_strided_range_i64(long int *a, idx_t start, idx_t stop, idx_t step, long int *fill) {
+void set_strided_range_i64(long long int *a, idx_t start, idx_t stop, idx_t step,
+                           long long int *fill) {
     auto j = 0;
     for (auto i = 0; i < stop; i += step, j++) {
         a[i] = fill[j];
@@ -40,16 +41,16 @@ void set_strided_range_i64(long int *a, idx_t start, idx_t stop, idx_t step, lon
 }
 
 // uint 32
-unsigned int at_ui32(unsigned int *a, idx_t i) { return a[i]; }
+unsigned long int at_ui32(unsigned long int *a, idx_t i) { return a[i]; }
 
-void set_ui32(unsigned int *a, idx_t i, unsigned int val) { a[i] = val; }
+void set_ui32(unsigned long int *a, idx_t i, unsigned long int val) { a[i] = val; }
 
-void set_range_ui32(unsigned int *a, idx_t start, idx_t stop, unsigned int *fill) {
+void set_range_ui32(unsigned long int *a, idx_t start, idx_t stop, unsigned long int *fill) {
     std::copy(fill, fill + (stop - start), a + start);
 }
 
-void set_strided_range_ui32(unsigned int *a, idx_t start, idx_t stop, idx_t step,
-                            unsigned int *fill) {
+void set_strided_range_ui32(unsigned long int *a, idx_t start, idx_t stop, idx_t step,
+                            unsigned long int *fill) {
     auto j = 0;
     for (auto i = 0; i < stop; i += step, j++) {
         a[i] = fill[j];
@@ -57,16 +58,17 @@ void set_strided_range_ui32(unsigned int *a, idx_t start, idx_t stop, idx_t step
 }
 
 // uint 64
-unsigned long int at_ui64(unsigned long int *a, idx_t i) { return a[i]; }
+unsigned long long int at_ui64(unsigned long long int *a, idx_t i) { return a[i]; }
 
-void set_ui64(unsigned long int *a, idx_t i, unsigned long int val) { a[i] = val; }
+void set_ui64(unsigned long long int *a, idx_t i, unsigned long long int val) { a[i] = val; }
 
-void set_range_ui64(unsigned long int *a, idx_t start, idx_t stop, unsigned long int *fill) {
+void set_range_ui64(unsigned long long int *a, idx_t start, idx_t stop,
+                    unsigned long long int *fill) {
     std::copy(fill, fill + (stop - start), a + start);
 }
 
-void set_strided_range_ui64(unsigned long int *a, idx_t start, idx_t stop, idx_t step,
-                            unsigned long int *fill) {
+void set_strided_range_ui64(unsigned long long int *a, idx_t start, idx_t stop, idx_t step,
+                            unsigned long long int *fill) {
     auto j = 0;
     for (auto i = 0; i < stop; i += step, j++) {
         a[i] = fill[j];
@@ -119,10 +121,12 @@ extern "C" {
 // Empty constructors
 LArray<float> *LArray_ctor_e_f32(idx_t n) { return new LArray<float>(n); }
 LArray<double> *LArray_ctor_e_f64(idx_t n) { return new LArray<double>(n); }
-LArray<int> *LArray_ctor_e_i32(idx_t n) { return new LArray<int>(n); }
-LArray<long int> *LArray_ctor_e_i64(idx_t n) { return new LArray<long int>(n); }
-LArray<unsigned int> *LArray_ctor_e_ui32(idx_t n) { return new LArray<unsigned int>(n); }
-LArray<unsigned long int> *LArray_ctor_e_ui64(idx_t n) { return new LArray<unsigned long int>(n); }
+LArray<long int> *LArray_ctor_e_i32(idx_t n) { return new LArray<long int>(n); }
+LArray<long long int> *LArray_ctor_e_i64(idx_t n) { return new LArray<long long int>(n); }
+LArray<unsigned long int> *LArray_ctor_e_ui32(idx_t n) { return new LArray<unsigned long int>(n); }
+LArray<unsigned long long int> *LArray_ctor_e_ui64(idx_t n) {
+    return new LArray<unsigned long long int>(n);
+}
 LArray<idx_t> *LArray_ctor_e_idx_t(idx_t n) { return new LArray<idx_t>(n); }
 
 // Fill constructors
@@ -130,15 +134,17 @@ LArray<float> *LArray_ctor_c_f32(idx_t n, float fill_val) { return new LArray<fl
 LArray<double> *LArray_ctor_c_f64(idx_t n, double fill_val) {
     return new LArray<double>(n, fill_val);
 }
-LArray<int> *LArray_ctor_c_i32(idx_t n, int fill_val) { return new LArray<int>(n, fill_val); }
-LArray<long int> *LArray_ctor_c_i64(idx_t n, long int fill_val) {
+LArray<long int> *LArray_ctor_c_i32(idx_t n, long int fill_val) {
     return new LArray<long int>(n, fill_val);
 }
-LArray<unsigned int> *LArray_ctor_c_ui32(idx_t n, unsigned int fill_val) {
-    return new LArray<unsigned int>(n, fill_val);
+LArray<long long int> *LArray_ctor_c_i64(idx_t n, long long int fill_val) {
+    return new LArray<long long int>(n, fill_val);
 }
-LArray<unsigned long int> *LArray_ctor_c_ui64(idx_t n, unsigned long int fill_val) {
+LArray<unsigned long int> *LArray_ctor_c_ui32(idx_t n, unsigned long int fill_val) {
     return new LArray<unsigned long int>(n, fill_val);
+}
+LArray<unsigned long long int> *LArray_ctor_c_ui64(idx_t n, unsigned long long int fill_val) {
+    return new LArray<unsigned long long int>(n, fill_val);
 }
 LArray<idx_t> *LArray_ctor_c_idx_t(idx_t n, idx_t fill_val) {
     return new LArray<idx_t>(n, fill_val);
@@ -151,29 +157,41 @@ LArray<float> *LArray_ctor_a_f32(idx_t n, float *fill_val) {
 LArray<double> *LArray_ctor_a_f64(idx_t n, double *fill_val) {
     return new LArray<double>(n, fill_val);
 }
-LArray<int> *LArray_ctor_a_i32(idx_t n, int *fill_val) { return new LArray<int>(n, fill_val); }
-LArray<long int> *LArray_ctor_a_i64(idx_t n, long int *fill_val) {
+LArray<long int> *LArray_ctor_a_i32(idx_t n, long int *fill_val) {
     return new LArray<long int>(n, fill_val);
 }
-LArray<unsigned int> *LArray_ctor_a_ui32(idx_t n, unsigned int *fill_val) {
-    return new LArray<unsigned int>(n, fill_val);
+LArray<long long int> *LArray_ctor_a_i64(idx_t n, long long int *fill_val) {
+    return new LArray<long long int>(n, fill_val);
 }
-LArray<unsigned long int> *LArray_ctor_a_ui64(idx_t n, unsigned long int *fill_val) {
+LArray<unsigned long int> *LArray_ctor_a_ui32(idx_t n, unsigned long int *fill_val) {
     return new LArray<unsigned long int>(n, fill_val);
+}
+LArray<unsigned long long int> *LArray_ctor_a_ui64(idx_t n, unsigned long long int *fill_val) {
+    return new LArray<unsigned long long int>(n, fill_val);
 }
 LArray<idx_t> *LArray_ctor_a_idx_t(idx_t n, idx_t *fill_val) {
     return new LArray<idx_t>(n, fill_val);
 }
 
+// Array ptr returns
+float *LArray_get_arr_ptr_f32(LArray<float> *X) { return X->arr; }
+double *LArray_get_arr_ptr_f64(LArray<double> *X) { return X->arr; }
+long int *LArray_get_arr_ptr_i32(LArray<long int> *X) { return X->arr; }
+long long int *LArray_get_arr_ptr_i64(LArray<long long int> *X) { return X->arr; }
+unsigned long int *LArray_get_arr_ptr_ui32(LArray<unsigned long int> *X) { return X->arr; }
+unsigned long long int *LArray_get_arr_ptr_ui64(LArray<unsigned long long int> *X) {
+    return X->arr;
+}
+idx_t *LArray_get_arr_ptr_idx_t(LArray<idx_t> *X) { return X->arr; }
+
 // Destructors
 void LArray_dtor_f32(LArray<float> *X) { delete X; }
 void LArray_dtor_f64(LArray<double> *X) { delete X; }
-void LArray_dtor_i32(LArray<int> *X) { delete X; }
-void LArray_dtor_i64(LArray<long int> *X) { delete X; }
-void LArray_dtor_ui32(LArray<unsigned int> *X) { delete X; }
-void LArray_dtor_ui64(LArray<unsigned long int> *X) { delete X; }
+void LArray_dtor_i32(LArray<long int> *X) { delete X; }
+void LArray_dtor_i64(LArray<long long int> *X) { delete X; }
+void LArray_dtor_ui32(LArray<unsigned long int> *X) { delete X; }
+void LArray_dtor_ui64(LArray<unsigned long long int> *X) { delete X; }
 void LArray_dtor_idx_t(LArray<idx_t> *X) { delete X; }
-void LArray_dtor_det_t(LArray<det_t> *X) { delete X; }
 }
 
 /*
@@ -183,31 +201,47 @@ Array operation utilities
 extern "C" {
 
 // int 32
-void LArray_ipow2_i32(int *a, const idx_t N) { mul_LArray(a, a, a, N); }
+void LArray_ipow2_i32(long int *a, const idx_t N) { mul_LArray(a, a, a, N); }
 
-void LArray_add_i32(const int *a, const int *b, int *c, const idx_t N) { add_LArray(a, b, c, N); }
-void LArray_add_c_i32(const int *a, const int b, int *c, const idx_t N) { add_LArray(a, b, c, N); }
+void LArray_add_i32(const long int *a, const long int *b, long int *c, const idx_t N) {
+    add_LArray(a, b, c, N);
+}
+void LArray_add_c_i32(const long int *a, const long int b, long int *c, const idx_t N) {
+    add_LArray(a, b, c, N);
+}
 
-void LArray_iadd_i32(int *a, const int *b, const idx_t N) { add_LArray(a, b, a, N); }
-void LArray_iadd_c_i32(int *a, const int b, const idx_t N) { add_LArray(a, b, a, N); }
+void LArray_iadd_i32(long int *a, const long int *b, const idx_t N) { add_LArray(a, b, a, N); }
+void LArray_iadd_c_i32(long int *a, const long int b, const idx_t N) { add_LArray(a, b, a, N); }
 
-void LArray_sub_i32(const int *a, const int *b, int *c, const idx_t N) { sub_LArray(a, b, c, N); }
-void LArray_sub_c_i32(const int *a, const int b, int *c, const idx_t N) { sub_LArray(a, b, c, N); }
+void LArray_sub_i32(const long int *a, const long int *b, long int *c, const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
+void LArray_sub_c_i32(const long int *a, const long int b, long int *c, const idx_t N) {
+    sub_LArray(a, b, c, N);
+}
 
-void LArray_isub_i32(int *a, const int *b, const idx_t N) { sub_LArray(a, b, a, N); }
-void LArray_isub_c_i32(int *a, const int b, const idx_t N) { sub_LArray(a, b, a, N); }
+void LArray_isub_i32(long int *a, const long int *b, const idx_t N) { sub_LArray(a, b, a, N); }
+void LArray_isub_c_i32(long int *a, const long int b, const idx_t N) { sub_LArray(a, b, a, N); }
 
-void LArray_mul_i32(const int *a, const int *b, int *c, const idx_t N) { mul_LArray(a, b, c, N); }
-void LArray_mul_c_i32(const int *a, const int b, int *c, const idx_t N) { mul_LArray(a, b, c, N); }
+void LArray_mul_i32(const long int *a, const long int *b, long int *c, const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
+void LArray_mul_c_i32(const long int *a, const long int b, long int *c, const idx_t N) {
+    mul_LArray(a, b, c, N);
+}
 
-void LArray_imul_i32(int *a, const int *b, const idx_t N) { mul_LArray(a, b, a, N); }
-void LArray_imul_c_i32(int *a, const int b, const idx_t N) { mul_LArray(a, b, a, N); }
+void LArray_imul_i32(long int *a, const long int *b, const idx_t N) { mul_LArray(a, b, a, N); }
+void LArray_imul_c_i32(long int *a, const long int b, const idx_t N) { mul_LArray(a, b, a, N); }
 
-void LArray_div_i32(const int *a, const int *b, int *c, const idx_t N) { div_LArray(a, b, c, N); }
-void LArray_div_c_i32(const int *a, const int b, int *c, const idx_t N) { div_LArray(a, b, c, N); }
+void LArray_div_i32(const long int *a, const long int *b, long int *c, const idx_t N) {
+    div_LArray(a, b, c, N);
+}
+void LArray_div_c_i32(const long int *a, const long int b, long int *c, const idx_t N) {
+    div_LArray(a, b, c, N);
+}
 
-void LArray_idiv_i32(int *a, const int *b, const idx_t N) { div_LArray(a, b, a, N); }
-void LArray_idiv_c_i32(int *a, const int b, const idx_t N) { div_LArray(a, b, a, N); }
+void LArray_idiv_i32(long int *a, const long int *b, const idx_t N) { div_LArray(a, b, a, N); }
+void LArray_idiv_c_i32(long int *a, const long int b, const idx_t N) { div_LArray(a, b, a, N); }
 
 // int 64
 void LArray_ipow2_i64(long *a, const idx_t N) { mul_LArray(a, a, a, N); }
@@ -253,65 +287,69 @@ void LArray_idiv_i64(long *a, const long *b, const idx_t N) { div_LArray(a, b, a
 void LArray_idiv_c_i64(long *a, const long b, const idx_t N) { div_LArray(a, b, a, N); }
 
 // uint 32
-void LArray_ipow2_ui32(unsigned int *a, const idx_t N) { mul_LArray(a, a, a, N); }
+void LArray_ipow2_ui32(unsigned long int *a, const idx_t N) { mul_LArray(a, a, a, N); }
 
-void LArray_add_ui32(const unsigned int *a, const unsigned int *b, unsigned int *c, const idx_t N) {
+void LArray_add_ui32(const unsigned long int *a, const unsigned long int *b, unsigned long int *c,
+                     const idx_t N) {
     add_LArray(a, b, c, N);
 }
-void LArray_add_c_ui32(const unsigned int *a, const unsigned int b, unsigned int *c,
+void LArray_add_c_ui32(const unsigned long int *a, const unsigned long int b, unsigned long int *c,
                        const idx_t N) {
     add_LArray(a, b, c, N);
 }
 
-void LArray_iadd_ui32(unsigned int *a, const unsigned int *b, const idx_t N) {
+void LArray_iadd_ui32(unsigned long int *a, const unsigned long int *b, const idx_t N) {
     add_LArray(a, b, a, N);
 }
-void LArray_iadd_c_ui32(unsigned int *a, const unsigned int b, const idx_t N) {
+void LArray_iadd_c_ui32(unsigned long int *a, const unsigned long int b, const idx_t N) {
     add_LArray(a, b, a, N);
 }
 
-void LArray_sub_ui32(const unsigned int *a, const unsigned int *b, unsigned int *c, const idx_t N) {
+void LArray_sub_ui32(const unsigned long int *a, const unsigned long int *b, unsigned long int *c,
+                     const idx_t N) {
     sub_LArray(a, b, c, N);
 }
-void LArray_sub_c_ui32(const unsigned int *a, const unsigned int b, unsigned int *c,
+void LArray_sub_c_ui32(const unsigned long int *a, const unsigned long int b, unsigned long int *c,
                        const idx_t N) {
     sub_LArray(a, b, c, N);
 }
 
-void LArray_isub_ui32(unsigned int *a, const unsigned int *b, const idx_t N) {
+void LArray_isub_ui32(unsigned long int *a, const unsigned long int *b, const idx_t N) {
     sub_LArray(a, b, a, N);
 }
-void LArray_isub_c_ui32(unsigned int *a, const unsigned int b, const idx_t N) {
+void LArray_isub_c_ui32(unsigned long int *a, const unsigned long int b, const idx_t N) {
     sub_LArray(a, b, a, N);
 }
 
-void LArray_mul_ui32(const unsigned int *a, const unsigned int *b, unsigned int *c, const idx_t N) {
+void LArray_mul_ui32(const unsigned long int *a, const unsigned long int *b, unsigned long int *c,
+                     const idx_t N) {
     mul_LArray(a, b, c, N);
 }
-void LArray_mul_c_ui32(const unsigned int *a, const unsigned int b, unsigned int *c,
+void LArray_mul_c_ui32(const unsigned long int *a, const unsigned long int b, unsigned long int *c,
                        const idx_t N) {
     mul_LArray(a, b, c, N);
 }
 
-void LArray_imul_ui32(unsigned int *a, const unsigned int *b, const idx_t N) {
+void LArray_imul_ui32(unsigned long int *a, const unsigned long int *b, const idx_t N) {
     mul_LArray(a, b, a, N);
 }
-void LArray_imul_c_ui32(unsigned int *a, const unsigned int b, const idx_t N) {
+void LArray_imul_c_ui32(unsigned long int *a, const unsigned long int b, const idx_t N) {
     mul_LArray(a, b, a, N);
 }
 
-void LArray_div_ui32(const unsigned int *a, const unsigned int *b, unsigned int *c, const idx_t N) {
+void LArray_div_ui32(const unsigned long int *a, const unsigned long int *b, unsigned long int *c,
+                     const idx_t N) {
     div_LArray(a, b, c, N);
 }
-void LArray_div_c_ui32(const unsigned int *a, const unsigned int b, unsigned int *c,
+void LArray_div_c_ui32(const unsigned long int *a, const unsigned long int b, unsigned long int *c,
                        const idx_t N) {
     div_LArray(a, b, c, N);
 }
 
-void LArray_idiv_ui32(unsigned int *a, const unsigned int *b, const idx_t N) {
+void LArray_idiv_ui32(unsigned long int *a, const unsigned long int *b, const idx_t N) {
     div_LArray(a, b, a, N);
 }
-void LArray_idiv_c_ui32(unsigned int *a, const unsigned int b, const idx_t N) {
+void LArray_idiv_c_ui32(unsigned long int *a, const unsigned long int b, const idx_t N) {
     div_LArray(a, b, a, N);
 }
 
