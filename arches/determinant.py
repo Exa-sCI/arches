@@ -85,6 +85,20 @@ lib_dets.Dets_det_t_apply_double_exc.argtypes = [handle_t, idx_t, idx_t, idx_t, 
 lib_dets.Dets_det_t_apply_double_exc.restype = handle_t
 
 
+#### DetArray
+lib_dets.Dets_DetArray_empty_ctor.argtypes = [idx_t, idx_t]
+lib_dets.Dets_DetArray_empty_ctor.restype = handle_t
+
+lib_dets.Dets_DetArray_dtor.argtypes = [handle_t]
+lib_dets.Dets_DetArray_dtor.restype = None
+
+lib_dets.Dets_DetArray_getitem.argtypes = [handle_t, idx_t]
+lib_dets.Dets_DetArray_getitem.restype = handle_t
+
+lib_dets.Dets_DetArray_setitem.argtypes = [handle_t, handle_t, idx_t]
+lib_dets.Dets_DetArray_setitem.restype = None
+
+
 class spin_det_t(LinkedHandle):
     _empty_ctor = lib_dets.Dets_spin_det_t_empty_ctor
     _fill_ctor = lib_dets.Dets_spin_det_t_fill_ctor
@@ -233,6 +247,39 @@ class det_t(LinkedHandle):
     def get_exc_det(self, other):
         res_handle = lib_dets.Dets_det_t_exc_det(self.handle, other.handle)
         return det_t(handle=res_handle, override_original=True, N_orbs=self.N_orbs)
+
+
+class DetArray(LinkedHandle):
+    _empty_ctor = lib_dets.Dets_DetArray_empty_ctor
+    _dtor = lib_dets.Dets_DetArray_dtor
+
+    def __init__(self, N_dets, N_orbs, handle=None, **kwargs):
+        super().__init__(handle=handle, N_dets=N_dets, N_orbs=N_orbs, **kwargs)
+        self.N_dets = N_dets
+        self.N_orbs = N_orbs
+
+    def constructor(self, N_dets, N_orbs, **kwargs):
+        return self._empty_ctor(idx_t(N_dets), idx_t(N_orbs))
+
+    def destructor(self, handle):
+        self._dtor(handle)
+
+    def __getitem__(self, k):
+        if isinstance(k, slice):
+            raise NotImplementedError
+        if np.issubdtype(type(k), np.integer):
+            res_handle = lib_dets.Dets_DetArray_getitem(self.handle, idx_t(k))
+            return det_t(handle=res_handle, N_orbs=self.N_orbs)
+        else:
+            raise TypeError
+
+    def __setitem__(self, k, v):
+        if isinstance(k, slice):
+            raise NotImplementedError
+        if np.issubdtype(type(k), np.integer) and isinstance(v, det_t):
+            lib_dets.Dets_DetArray_setitem(self.handle, v.handle, idx_t(k))
+        else:
+            raise TypeError
 
 
 class exc(ABC):

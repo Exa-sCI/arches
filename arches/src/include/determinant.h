@@ -313,14 +313,29 @@ class DetArray {
         N_mos = min_mos;
 
         std::vector<det_t> _temp(size);
-        // storage.reserve(size);
-        for (auto i = 0; i < size; i++) {
-            _temp.emplace_back(N_mos);
-        }
-
+        det_t empty_det(N_mos);
+        std::fill(_temp.begin(), _temp.end(), empty_det);
         storage = std::move(_temp);
         arr = &storage[0];
     }
+
+    // copy constructor
+    DetArray(const std::vector<det_t> &other) {
+        size = other.size();
+        N_mos = other[0].N_mos;
+        storage = other;
+        arr = &storage[0];
+    }
+
+    // move constructor
+    DetArray(const std::vector<det_t> &&other) {
+        size = other.size();
+        N_mos = other[0].N_mos;
+        storage = std::move(other);
+        arr = &storage[0];
+    }
+
+    const det_t &operator[](idx_t i) const { return arr[i]; }
 
     ~DetArray() = default;
 };

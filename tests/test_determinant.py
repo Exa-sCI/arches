@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from arches.determinant import det_t, double_exc, single_exc, spin_det_t
+from arches.determinant import DetArray, det_t, double_exc, single_exc, spin_det_t
 from arches.fundamental_types import Determinant as det_ref
 from arches.fundamental_types import Spin_determinant_tuple as spin_det_ref
 
@@ -246,7 +246,7 @@ class Test_Det(unittest.TestCase):
     def setUp(self):
         self.rng = rng
         self.N_trials = 64
-        self.N_orbs = 28  # larger than both ui32 and ui64 blocks
+        self.N_orbs = 72  # larger than both ui32 and ui64 blocks
 
     def test_constructor(self):
         N_orbs = 8
@@ -477,6 +477,46 @@ class Test_Det(unittest.TestCase):
             check_opp_spin_double(alpha_orb_list, beta_orb_list, hb2, ha2, pb2, pa2, 1, 0)
             check_opp_spin_chained_single(alpha_orb_list, beta_orb_list, ha1, hb1, pa1, pb1, 0, 1)
             check_opp_spin_chained_single(alpha_orb_list, beta_orb_list, hb2, ha2, pb2, pa2, 1, 0)
+
+
+class Test_DetArray(unittest.TestCase):
+    def setUp(self):
+        self.rng = rng
+        self.N_trials = 64
+        self.N_orbs = 72  # larger than both ui32 and ui64 blocks
+        self.N_dets = 1024
+
+    def test_constructor(self):
+        N_orbs = 8
+        N_dets = 32
+        arr = DetArray(N_dets, N_orbs)
+        ref_tuple = tuple([0 for _ in range(N_orbs)])
+        for i in range(N_dets):
+            self.assertEqual(arr[i][0].as_bit_tuple, ref_tuple)
+            self.assertEqual(arr[i][1].as_bit_tuple, ref_tuple)
+
+    def test_set_get_element(self):
+        dets = DetArray(self.N_dets, self.N_orbs)
+
+        ref_orb_lists = []
+        for i in range(self.N_dets):
+            alpha_orb_list = rng.integers(0, self.N_orbs, 8)
+            alpha_orb_list = tuple(np.unique(alpha_orb_list))
+            beta_orb_list = rng.integers(0, self.N_orbs, 8)
+            beta_orb_list = tuple(np.unique(beta_orb_list))
+
+            ref_orb_lists.append((alpha_orb_list, beta_orb_list))
+
+            dets[i] = det_t(
+                alpha=spin_det_t(self.N_orbs, alpha_orb_list),
+                beta=spin_det_t(self.N_orbs, beta_orb_list),
+            )
+
+        for i in range(self.N_dets):
+            test_alpha_orbs = tuple([i for i, b in enumerate(dets[i][0].as_bit_tuple) if b])
+            test_beta_orbs = tuple([i for i, b in enumerate(dets[i][1].as_bit_tuple) if b])
+            self.assertEqual(ref_orb_lists[i][0], test_alpha_orbs)
+            self.assertEqual(ref_orb_lists[i][1], test_beta_orbs)
 
 
 if __name__ == "__main__":

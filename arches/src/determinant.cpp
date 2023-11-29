@@ -56,13 +56,6 @@ det_t apply_single_excitation(det_t s, int spin, idx_t h, idx_t p) {
     return s2;
 }
 
-// TEST_CASE("testing apply_single_excitation") {
-//     det_t s{spin_det_t{"11000"}, spin_det_t{"00001"}};
-//     CHECK(apply_single_excitation(s, 0, 4, 1) == det_t{spin_det_t{"01010"},
-//     spin_det_t{"00001"}}); CHECK(apply_single_excitation(s, 1, 0, 1) ==
-//     det_t{spin_det_t{"11000"}, spin_det_t{"00010"}});
-// }
-
 spin_det_t apply_double_excitation(spin_det_t s, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
     // Check if valid
     auto s2 = spin_det_t(s);
@@ -88,16 +81,6 @@ det_t apply_double_excitation(det_t s, int spin_1, int spin_2, idx_t h1, idx_t h
     s2[spin_2].set(p2, 1);
     return s2;
 }
-
-// TEST_CASE("testing apply_double_excitation") {
-//     det_t s{spin_det_t{"11000000"}, spin_det_t{"10001000"}};
-//     CHECK(apply_double_excitation(s, std::pair<int>{0, 0}, 0, 1, 4, 5) ==
-//           det_t(spin_det_t{"00001100"}, spin_det_t{"10001000"}));
-//     CHECK(apply_double_excitation(s, std::pair<int>{1, 1}, 0, 4, 1, 7) ==
-//           det_t(spin_det_t{"11000000"}, spin_det_t{"01000001"}));
-//     CHECK(apply_double_excitation(s, std::pair<int>{0, 1}, 1, 0, 2, 2) ==
-//           det_t(spin_det_t{"10100000"}, spin_det_t{"00101000"}));
-// }
 
 std::vector<det_t> get_singles_by_exc_mask(det_t d, int spin, spin_constraint_t h,
                                            spin_constraint_t p) {
@@ -353,4 +336,26 @@ det_t *Dets_det_t_apply_double_exc(det_t *det, idx_t s1, idx_t s2, idx_t h1, idx
                                    idx_t p2) {
     return new det_t(apply_double_excitation(*det, s1, s2, h1, h2, p1, p2));
 }
+
+//// DetArray
+
+// constructor
+
+DetArray *Dets_DetArray_empty_ctor(idx_t N_dets, idx_t N_orbs) {
+    return new DetArray(N_dets, N_orbs);
+}
+
+// destructor
+
+void Dets_DetArray_dtor(DetArray *arr) { delete arr; }
+
+// member returns
+
+idx_t Dets_DetArray_get_N_dets(DetArray *arr) { return arr->size; }
+idx_t Dets_DetArray_get_N_mos(DetArray *arr) { return arr->N_mos; }
+
+// utilities
+
+det_t *Dets_DetArray_getitem(DetArray *arr, idx_t i) { return &arr->arr[i]; }
+void Dets_DetArray_setitem(DetArray *arr, det_t *other, idx_t i) { arr->arr[i] = *other; }
 }
