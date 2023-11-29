@@ -332,6 +332,16 @@ class DetArray(LinkedHandle):
         else:
             raise TypeError
 
+    def __iter__(self):
+        self.__i = -1
+        return self
+
+    def __next__(self):
+        self.__i += 1
+        if self.__i < self.N_dets:
+            return self[self.__i]
+        raise StopIteration
+
 
 class exc(ABC):
     def __init__(self, h, p, spin):

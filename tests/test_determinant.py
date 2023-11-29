@@ -537,12 +537,8 @@ class Test_DetArray(unittest.TestCase):
 
             test_singles = source_det.get_connected_singles()
 
-            # TODO: implement iter interface for det array
             # TODO: refactor previous tests to use as_orb_list property
-            test_set = set(
-                (test_singles[i][0].as_orb_list, test_singles[i][1].as_orb_list)
-                for i in range(test_singles.N_dets)
-            )
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_singles)
 
             self.assertEqual(
                 ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
@@ -575,12 +571,8 @@ class Test_DetArray(unittest.TestCase):
 
             test_doubles = source_det.get_connected_ss_doubles()
 
-            # TODO: implement iter interface for det array
             # TODO: refactor previous tests to use as_orb_list property
-            test_set = set(
-                (test_doubles[i][0].as_orb_list, test_doubles[i][1].as_orb_list)
-                for i in range(test_doubles.N_dets)
-            )
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_doubles)
 
             self.assertEqual(
                 ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
@@ -613,12 +605,8 @@ class Test_DetArray(unittest.TestCase):
 
             test_doubles = source_det.get_connected_os_doubles()
 
-            # TODO: implement iter interface for det array
             # TODO: refactor previous tests to use as_orb_list property
-            test_set = set(
-                (test_doubles[i][0].as_orb_list, test_doubles[i][1].as_orb_list)
-                for i in range(test_doubles.N_dets)
-            )
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_doubles)
 
             self.assertEqual(
                 ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
@@ -645,12 +633,9 @@ class Test_DetArray(unittest.TestCase):
 
             test_dets = source_det.generate_connected_dets()
 
-            # TODO: implement iter interface for det array
             # TODO: refactor previous tests to use as_orb_list property
-            test_set = set(
-                (test_dets[i][0].as_orb_list, test_dets[i][1].as_orb_list)
-                for i in range(test_dets.N_dets)
-            )
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
+
             self.assertEqual(
                 ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
             )
