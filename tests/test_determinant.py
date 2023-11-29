@@ -202,7 +202,7 @@ class Test_SpinDet(unittest.TestCase):
     def test_apply_single_exc(self):
         def check_single_exc(orb_list, h, p):
             det = single_exc(h, p, None) @ spin_det_t(self.N_orbs, orb_list)
-            orbs = tuple([i for i, b in enumerate(det.as_bit_tuple) if b])
+            orbs = det.as_orb_list
 
             self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h, p]))
 
@@ -218,7 +218,7 @@ class Test_SpinDet(unittest.TestCase):
     def test_apply_double_exc(self):
         def check_double_exc(orb_list, h1, h2, p1, p2):
             det = double_exc((h1, h2), (p1, p2), None) @ spin_det_t(self.N_orbs, orb_list)
-            orbs = tuple([i for i, b in enumerate(det.as_bit_tuple) if b])
+            orbs = det.as_orb_list
 
             self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h1, h2, p1, p2]))
 
@@ -226,7 +226,7 @@ class Test_SpinDet(unittest.TestCase):
             exc = single_exc(h1, p1) @ single_exc(h2, p2)
             det = exc @ spin_det_t(self.N_orbs, orb_list)
 
-            orbs = tuple([i for i, b in enumerate(det.as_bit_tuple) if b])
+            orbs = det.as_orb_list
 
             self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h1, h2, p1, p2]))
 
@@ -344,8 +344,8 @@ class Test_Det(unittest.TestCase):
             ref_exc = det_ref(ref_1.alpha ^ ref_2.alpha, ref_1.beta ^ ref_2.beta)
             test_exc = test_1.get_exc_det(test_2)
 
-            alpha_orbs = tuple([i for i, b in enumerate(test_exc.alpha.as_bit_tuple) if b])
-            beta_orbs = tuple([i for i, b in enumerate(test_exc.beta.as_bit_tuple) if b])
+            alpha_orbs = test_exc.alpha.as_orb_list
+            beta_orbs = test_exc.beta.as_orb_list
 
             self.assertEqual(ref_exc.alpha, alpha_orbs)
             self.assertEqual(ref_exc.beta, beta_orbs)
@@ -372,7 +372,7 @@ class Test_Det(unittest.TestCase):
             )
 
             res = exc @ det
-            orbs = tuple([i for i, b in enumerate(res[spin].as_bit_tuple) if b])
+            orbs = res[spin].as_orb_list
             orb_list = beta_orbs if spin else alpha_orbs
             self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h, p]))
 
@@ -401,7 +401,7 @@ class Test_Det(unittest.TestCase):
             )
 
             res = exc @ det
-            orbs = tuple([i for i, b in enumerate(res[spin].as_bit_tuple) if b])
+            orbs = res[spin].as_orb_list
             orb_list = beta_orbs if spin else alpha_orbs
             self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h1, h2, p1, p2]))
 
@@ -413,7 +413,7 @@ class Test_Det(unittest.TestCase):
             )
 
             res = exc @ det
-            orbs = tuple([i for i, b in enumerate(res[spin].as_bit_tuple) if b])
+            orbs = res[spin].as_orb_list
             orb_list = beta_orbs if spin else alpha_orbs
             self.assertTrue(set(orb_list).symmetric_difference(set(orbs)) == set([h1, h2, p1, p2]))
 
@@ -425,8 +425,8 @@ class Test_Det(unittest.TestCase):
             )
             res = exc @ det
 
-            orbs1 = tuple([i for i, b in enumerate(res[s1].as_bit_tuple) if b])
-            orbs2 = tuple([i for i, b in enumerate(res[s2].as_bit_tuple) if b])
+            orbs1 = res[s1].as_orb_list
+            orbs2 = res[s2].as_orb_list
 
             orb_list1 = beta_orbs if s1 else alpha_orbs
             orb_list2 = beta_orbs if s2 else alpha_orbs
@@ -442,8 +442,8 @@ class Test_Det(unittest.TestCase):
             )
             res = exc @ det
 
-            orbs1 = tuple([i for i, b in enumerate(res[s1].as_bit_tuple) if b])
-            orbs2 = tuple([i for i, b in enumerate(res[s2].as_bit_tuple) if b])
+            orbs1 = res[s1].as_orb_list
+            orbs2 = res[s2].as_orb_list
 
             orb_list1 = beta_orbs if s1 else alpha_orbs
             orb_list2 = beta_orbs if s2 else alpha_orbs
@@ -512,11 +512,9 @@ class Test_DetArray(unittest.TestCase):
                 beta=spin_det_t(self.N_orbs, beta_orb_list),
             )
 
-        for i in range(self.N_dets):
-            test_alpha_orbs = tuple([i for i, b in enumerate(dets[i][0].as_bit_tuple) if b])
-            test_beta_orbs = tuple([i for i, b in enumerate(dets[i][1].as_bit_tuple) if b])
-            self.assertEqual(ref_orb_lists[i][0], test_alpha_orbs)
-            self.assertEqual(ref_orb_lists[i][1], test_beta_orbs)
+        for i, det in enumerate(dets):
+            self.assertEqual(ref_orb_lists[i][0], det[0].as_orb_list)
+            self.assertEqual(ref_orb_lists[i][1], det[1].as_orb_list)
 
     def test_get_connected_singles(self):
         N_orbs = 16
