@@ -518,6 +518,151 @@ class Test_DetArray(unittest.TestCase):
             self.assertEqual(ref_orb_lists[i][0], test_alpha_orbs)
             self.assertEqual(ref_orb_lists[i][1], test_beta_orbs)
 
+    def test_get_connected_singles(self):
+        N_orbs = 16
+
+        def check_connected_singles(alpha_orb_list, beta_orb_list):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_single(x, y):
+                exc_degree = x.exc_degree(y)
+                return (exc_degree == (1, 0)) or (exc_degree == (0, 1))
+
+            connected_singles = [d for d in connected_dets if check_single(ref_source, d)]
+            ref_set = set([(d.alpha, d.beta) for d in connected_singles])
+
+            test_singles = source_det.get_connected_singles()
+
+            # TODO: implement iter interface for det array
+            # TODO: refactor previous tests to use as_orb_list property
+            test_set = set(
+                (test_singles[i][0].as_orb_list, test_singles[i][1].as_orb_list)
+                for i in range(test_singles.N_dets)
+            )
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        for _ in range(self.N_trials):
+            alpha_orb_list = rng.integers(0, N_orbs, 4)
+            alpha_orb_list = tuple(np.unique(alpha_orb_list))
+            beta_orb_list = rng.integers(0, N_orbs, 4)
+            beta_orb_list = tuple(np.unique(beta_orb_list))
+
+            check_connected_singles(alpha_orb_list, beta_orb_list)
+
+    def test_get_connected_ss_doubles(self):
+        N_orbs = 16
+
+        def check_connected_ss_doubles(alpha_orb_list, beta_orb_list):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_ss_double(x, y):
+                exc_degree = x.exc_degree(y)
+                return (exc_degree == (2, 0)) or (exc_degree == (0, 2))
+
+            connected_ss_doubles = [d for d in connected_dets if check_ss_double(ref_source, d)]
+            ref_set = set([(d.alpha, d.beta) for d in connected_ss_doubles])
+
+            test_doubles = source_det.get_connected_ss_doubles()
+
+            # TODO: implement iter interface for det array
+            # TODO: refactor previous tests to use as_orb_list property
+            test_set = set(
+                (test_doubles[i][0].as_orb_list, test_doubles[i][1].as_orb_list)
+                for i in range(test_doubles.N_dets)
+            )
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        for _ in range(self.N_trials):
+            alpha_orb_list = rng.integers(0, N_orbs, 4)
+            alpha_orb_list = tuple(np.unique(alpha_orb_list))
+            beta_orb_list = rng.integers(0, N_orbs, 4)
+            beta_orb_list = tuple(np.unique(beta_orb_list))
+
+            check_connected_ss_doubles(alpha_orb_list, beta_orb_list)
+
+    def test_get_connected_os_doubles(self):
+        N_orbs = 16
+
+        def check_connected_os_doubles(alpha_orb_list, beta_orb_list):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_os_double(x, y):
+                exc_degree = x.exc_degree(y)
+                return exc_degree == (1, 1)
+
+            connected_os_doubles = [d for d in connected_dets if check_os_double(ref_source, d)]
+            ref_set = set([(d.alpha, d.beta) for d in connected_os_doubles])
+
+            test_doubles = source_det.get_connected_os_doubles()
+
+            # TODO: implement iter interface for det array
+            # TODO: refactor previous tests to use as_orb_list property
+            test_set = set(
+                (test_doubles[i][0].as_orb_list, test_doubles[i][1].as_orb_list)
+                for i in range(test_doubles.N_dets)
+            )
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        for _ in range(self.N_trials):
+            alpha_orb_list = rng.integers(0, N_orbs, 4)
+            alpha_orb_list = tuple(np.unique(alpha_orb_list))
+            beta_orb_list = rng.integers(0, N_orbs, 4)
+            beta_orb_list = tuple(np.unique(beta_orb_list))
+
+            check_connected_os_doubles(alpha_orb_list, beta_orb_list)
+
+    def test_generate_connected_dets(self):
+        N_orbs = 16
+
+        def check_generate_dets(alpha_orb_list, beta_orb_list):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+            ref_set = set([(d.alpha, d.beta) for d in connected_dets])
+
+            test_dets = source_det.generate_connected_dets()
+
+            # TODO: implement iter interface for det array
+            # TODO: refactor previous tests to use as_orb_list property
+            test_set = set(
+                (test_dets[i][0].as_orb_list, test_dets[i][1].as_orb_list)
+                for i in range(test_dets.N_dets)
+            )
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        for _ in range(self.N_trials):
+            alpha_orb_list = rng.integers(0, N_orbs, 4)
+            alpha_orb_list = tuple(np.unique(alpha_orb_list))
+            beta_orb_list = rng.integers(0, N_orbs, 4)
+            beta_orb_list = tuple(np.unique(beta_orb_list))
+
+            check_generate_dets(alpha_orb_list, beta_orb_list)
+
 
 if __name__ == "__main__":
     unittest.main()

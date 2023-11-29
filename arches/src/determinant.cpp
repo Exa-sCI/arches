@@ -73,7 +73,6 @@ det_t apply_double_excitation(det_t s, int spin_1, int spin_2, idx_t h1, idx_t h
     // assert(s[spin.second][h2] == 1);
     // assert(s[spin.first][p1] == 0);
     // assert(s[spin.second][p2] == 0);
-
     auto s2 = det_t(s);
     s2[spin_1].set(h1, 0);
     s2[spin_2].set(h2, 0);
@@ -113,7 +112,8 @@ std::vector<det_t> get_ss_doubles_by_exc_mask(det_t d, int spin, spin_constraint
         for (auto h2 = h1 + 1; h2 < h.size(); h2++) {
             for (auto p1 = 0; p1 < p.size() - 1; p1++) {
                 for (auto p2 = p1 + 1; p2 < p.size(); p2++) {
-                    res.push_back(apply_double_excitation(d, spin, spin, h1, h2, p1, p2));
+                    res.push_back(
+                        apply_double_excitation(d, spin, spin, h[h1], h[h2], p[p1], p[p2]));
                 }
             }
         }
@@ -156,14 +156,39 @@ std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t constraint,
 std::vector<det_t> get_all_singles(det_t d) {
 
     std::vector<det_t> singles;
+
     std::vector<det_t> alpha_singles =
-        get_singles_by_exc_mask(d, 0, to_constraint(~d[0]), to_constraint(d[0]));
+        get_singles_by_exc_mask(d, 0, to_constraint(d[0]), to_constraint(~d[0]));
     std::vector<det_t> beta_singles =
-        get_singles_by_exc_mask(d, 1, to_constraint(~d[1]), to_constraint(d[1]));
+        get_singles_by_exc_mask(d, 1, to_constraint(d[1]), to_constraint(~d[1]));
     singles.insert(singles.end(), alpha_singles.begin(), alpha_singles.end());
     singles.insert(singles.end(), beta_singles.begin(), beta_singles.end());
 
     return singles;
+}
+
+std::vector<det_t> get_os_doubles(det_t d) {
+    std::vector<det_t> os_doubles;
+
+    spin_constraint_t alpha_holes = to_constraint(d[0]);
+    spin_constraint_t alpha_parts = to_constraint(~d[0]);
+
+    spin_constraint_t beta_holes = to_constraint(d[1]);
+    spin_constraint_t beta_parts = to_constraint(~d[1]);
+
+    // get all singles and iterate over product of (1,0) X (0,1) to get (1,1)
+    std::vector<spin_det_t> alpha_singles =
+        get_spin_singles_by_exc_mask(d[0], alpha_holes, alpha_parts);
+    std::vector<spin_det_t> beta_singles =
+        get_spin_singles_by_exc_mask(d[1], beta_holes, beta_parts);
+
+    for (auto &a : alpha_singles) {
+        for (auto &b : beta_singles) {
+            os_doubles.push_back(det_t(a, b));
+        }
+    }
+
+    return os_doubles;
 }
 
 // TODO: refactor, a lot of code re-use
@@ -204,6 +229,26 @@ std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t constrai
     return os_doubles;
 }
 
+std::vector<det_t> get_ss_doubles(det_t d) {
+    std::vector<det_t> ss_doubles;
+
+    spin_constraint_t alpha_holes = to_constraint(d[0]);
+    spin_constraint_t alpha_parts = to_constraint(~d[0]);
+
+    spin_constraint_t beta_holes = to_constraint(d[1]);
+    spin_constraint_t beta_parts = to_constraint(~d[1]);
+
+    // at this point, hole and particle bitsets are guaranteed to be disjoint
+    // iterate over product list and add to return vector
+    std::vector<det_t> alpha_ss_doubles =
+        get_ss_doubles_by_exc_mask(d, 0, alpha_holes, alpha_parts);
+    std::vector<det_t> beta_ss_doubles = get_ss_doubles_by_exc_mask(d, 1, beta_holes, beta_parts);
+    ss_doubles.insert(ss_doubles.end(), alpha_ss_doubles.begin(), alpha_ss_doubles.end());
+    ss_doubles.insert(ss_doubles.end(), beta_ss_doubles.begin(), beta_ss_doubles.end());
+
+    return ss_doubles;
+}
+
 std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb) {
     std::vector<det_t> ss_doubles;
 
@@ -220,11 +265,11 @@ std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constrai
     spin_det_t max_orb_mask(d.N_mos, max_orb, 1);
 
     // apply bit masks and get final list
-    spin_constraint_t alpha_holes = to_constraint((~d[0] & hole_mask) & max_orb_mask);
-    spin_constraint_t alpha_parts = to_constraint((d[0] & part_mask) & max_orb_mask);
+    spin_constraint_t alpha_holes = to_constraint((d[0] & hole_mask) & max_orb_mask);
+    spin_constraint_t alpha_parts = to_constraint((~d[0] & part_mask) & max_orb_mask);
 
-    spin_constraint_t beta_holes = to_constraint((~d[1] & hole_mask) & max_orb_mask);
-    spin_constraint_t beta_parts = to_constraint((d[1] & part_mask) & max_orb_mask);
+    spin_constraint_t beta_holes = to_constraint((d[1] & hole_mask) & max_orb_mask);
+    spin_constraint_t beta_parts = to_constraint((~d[1] & part_mask) & max_orb_mask);
 
     // at this point, hole and particle bitsets are guaranteed to be disjoint
     // iterate over product list and add to return vector
@@ -235,6 +280,20 @@ std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constrai
     ss_doubles.insert(ss_doubles.end(), beta_ss_doubles.begin(), beta_ss_doubles.end());
 
     return ss_doubles;
+}
+
+std::vector<det_t> get_all_connected_dets(det_t d) {
+
+    std::vector<det_t> connected;
+    std::vector<det_t> singles = get_all_singles(d);
+    std::vector<det_t> ss_doubles = get_ss_doubles(d);
+    std::vector<det_t> os_doubles = get_os_doubles(d);
+
+    connected.insert(connected.end(), singles.begin(), singles.end());
+    connected.insert(connected.end(), ss_doubles.begin(), ss_doubles.end());
+    connected.insert(connected.end(), os_doubles.begin(), os_doubles.end());
+
+    return connected;
 }
 
 extern "C" {
@@ -358,4 +417,22 @@ idx_t Dets_DetArray_get_N_mos(DetArray *arr) { return arr->N_mos; }
 
 det_t *Dets_DetArray_getitem(DetArray *arr, idx_t i) { return &arr->arr[i]; }
 void Dets_DetArray_setitem(DetArray *arr, det_t *other, idx_t i) { arr->arr[i] = *other; }
+
+//// Det generation routines
+
+DetArray *Dets_get_all_connected_singles(det_t *source) {
+    return new DetArray(get_all_singles(*source));
+}
+
+DetArray *Dets_get_connected_same_spin_doubles(det_t *source) {
+    return new DetArray(get_ss_doubles(*source));
+}
+
+DetArray *Dets_get_connected_opp_spin_doubles(det_t *source) {
+    return new DetArray(get_os_doubles(*source));
+}
+
+DetArray *Dets_get_connected_dets(det_t *source) {
+    return new DetArray(get_all_connected_dets(*source));
+}
 }

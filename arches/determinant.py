@@ -98,6 +98,25 @@ lib_dets.Dets_DetArray_getitem.restype = handle_t
 lib_dets.Dets_DetArray_setitem.argtypes = [handle_t, handle_t, idx_t]
 lib_dets.Dets_DetArray_setitem.restype = None
 
+lib_dets.Dets_DetArray_get_N_dets.argtypes = [handle_t]
+lib_dets.Dets_DetArray_get_N_dets.restype = idx_t
+
+lib_dets.Dets_DetArray_get_N_mos.argtypes = [handle_t]
+lib_dets.Dets_DetArray_get_N_mos.restype = idx_t
+
+#### Generation routines
+lib_dets.Dets_get_all_connected_singles.argtypes = [handle_t]
+lib_dets.Dets_get_all_connected_singles.restype = handle_t
+
+lib_dets.Dets_get_connected_same_spin_doubles.argtypes = [handle_t]
+lib_dets.Dets_get_connected_same_spin_doubles.restype = handle_t
+
+lib_dets.Dets_get_connected_opp_spin_doubles.argtypes = [handle_t]
+lib_dets.Dets_get_connected_opp_spin_doubles.restype = handle_t
+
+lib_dets.Dets_get_connected_dets.argtypes = [handle_t]
+lib_dets.Dets_get_connected_dets.restype = handle_t
+
 
 class spin_det_t(LinkedHandle):
     _empty_ctor = lib_dets.Dets_spin_det_t_empty_ctor
@@ -128,6 +147,10 @@ class spin_det_t(LinkedHandle):
     @property
     def as_bit_tuple(self):
         return self[0 : self.N_orbs]
+
+    @property
+    def as_orb_list(self):
+        return tuple([i for i, b in enumerate(self.as_bit_tuple) if b])
 
     def __setitem__(self, k, v):
         if isinstance(k, slice):
@@ -247,6 +270,34 @@ class det_t(LinkedHandle):
     def get_exc_det(self, other):
         res_handle = lib_dets.Dets_det_t_exc_det(self.handle, other.handle)
         return det_t(handle=res_handle, override_original=True, N_orbs=self.N_orbs)
+
+    def get_connected_singles(self):
+        res_handle = lib_dets.Dets_get_all_connected_singles(self.handle)
+        N_dets = lib_dets.Dets_DetArray_get_N_dets(res_handle)
+        return DetArray(
+            handle=res_handle, override_original=True, N_dets=N_dets, N_orbs=self.N_orbs
+        )
+
+    def get_connected_ss_doubles(self):
+        res_handle = lib_dets.Dets_get_connected_same_spin_doubles(self.handle)
+        N_dets = lib_dets.Dets_DetArray_get_N_dets(res_handle)
+        return DetArray(
+            handle=res_handle, override_original=True, N_dets=N_dets, N_orbs=self.N_orbs
+        )
+
+    def get_connected_os_doubles(self):
+        res_handle = lib_dets.Dets_get_connected_opp_spin_doubles(self.handle)
+        N_dets = lib_dets.Dets_DetArray_get_N_dets(res_handle)
+        return DetArray(
+            handle=res_handle, override_original=True, N_dets=N_dets, N_orbs=self.N_orbs
+        )
+
+    def generate_connected_dets(self):
+        res_handle = lib_dets.Dets_get_connected_dets(self.handle)
+        N_dets = lib_dets.Dets_DetArray_get_N_dets(res_handle)
+        return DetArray(
+            handle=res_handle, override_original=True, N_dets=N_dets, N_orbs=self.N_orbs
+        )
 
 
 class DetArray(LinkedHandle):
