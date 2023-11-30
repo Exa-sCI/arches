@@ -5,7 +5,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from arches.linked_object import LinkedArray_i32, LinkedHandle, handle_t, i32, i32_p, idx_t, idx_t_p
+from arches.linked_object import (
+    LinkedArray_i32,
+    LinkedArray_idx_t,
+    LinkedHandle,
+    handle_t,
+    i32,
+    i32_p,
+    idx_t,
+    idx_t_p,
+)
 
 run_folder = pathlib.Path(__file__).parent.resolve()
 lib_dets = CDLL(run_folder.joinpath("build/libdeterminant.so"))
@@ -105,17 +114,26 @@ lib_dets.Dets_DetArray_get_N_mos.argtypes = [handle_t]
 lib_dets.Dets_DetArray_get_N_mos.restype = idx_t
 
 #### Generation routines
-lib_dets.Dets_get_all_connected_singles.argtypes = [handle_t]
-lib_dets.Dets_get_all_connected_singles.restype = handle_t
+for exc in ["singles", "same_spin_doubles", "opp_spin_doubles", "dets"]:
+    pfix = "Dets_get_"
+    f_all = getattr(lib_dets, pfix + "connected_" + exc)
+    f_con = getattr(lib_dets, pfix + "constrained_" + exc)
 
-lib_dets.Dets_get_connected_same_spin_doubles.argtypes = [handle_t]
-lib_dets.Dets_get_connected_same_spin_doubles.restype = handle_t
+    f_all.argtypes = [handle_t]
+    f_all.restype = handle_t
 
-lib_dets.Dets_get_connected_opp_spin_doubles.argtypes = [handle_t]
-lib_dets.Dets_get_connected_opp_spin_doubles.restype = handle_t
-
-lib_dets.Dets_get_connected_dets.argtypes = [handle_t]
-lib_dets.Dets_get_connected_dets.restype = handle_t
+    f_con.argtypes = [
+        handle_t,
+        idx_t_p,
+        idx_t,
+        idx_t_p,
+        idx_t,
+        idx_t_p,
+        idx_t,
+        idx_t_p,
+        idx_t,
+    ]
+    f_con.restype = handle_t
 
 
 class spin_det_t(LinkedHandle):
@@ -271,33 +289,95 @@ class det_t(LinkedHandle):
         res_handle = lib_dets.Dets_det_t_exc_det(self.handle, other.handle)
         return det_t(handle=res_handle, override_original=True, N_orbs=self.N_orbs)
 
-    def get_connected_singles(self):
-        res_handle = lib_dets.Dets_get_all_connected_singles(self.handle)
+    def _dispatch_generation(self, f, constraint=None):
+        match constraint:
+            case None:
+                args = (self.handle,)
+            case tuple() | list():
+                if len(constraint) == 2:
+                    h, p = (
+                        np.array(constraint[0], dtype=np.int64),
+                        np.array(constraint[1], dtype=np.int64),
+                    )
+                    h_arr, p_arr = LinkedArray_idx_t(len(h), h), LinkedArray_idx_t(len(p), p)
+                    args = (
+                        self.handle,
+                        h_arr.arr.p,
+                        idx_t(len(h)),
+                        h_arr.arr.p,
+                        idx_t(len(h)),
+                        p_arr.arr.p,
+                        idx_t(len(p)),
+                        p_arr.arr.p,
+                        idx_t(len(p)),
+                    )
+                elif len(constraint) == 4:
+                    ha, hb, pa, pb = (
+                        np.array(constraint[0], dtype=np.int64),
+                        np.array(constraint[1], dtype=np.int64),
+                        np.array(constraint[2], dtype=np.int64),
+                        np.array(constraint[3], dtype=np.int64),
+                    )
+                    ha_arr, hb_arr, pa_arr, pb_arr = (
+                        LinkedArray_idx_t(len(ha), ha),
+                        LinkedArray_idx_t(len(hb), hb),
+                        LinkedArray_idx_t(len(pa), pa),
+                        LinkedArray_idx_t(len(pb), pb),
+                    )
+
+                    args = (
+                        self.handle,
+                        ha_arr.arr.p,
+                        idx_t(len(ha)),
+                        hb_arr.arr.p,
+                        idx_t(len(hb)),
+                        pa_arr.arr.p,
+                        idx_t(len(pa)),
+                        pb_arr.arr.p,
+                        idx_t(len(pb)),
+                    )
+
+                else:
+                    raise ValueError
+            case _:
+                raise TypeError
+
+        return f(*args)
+
+    def _generate_dets(self, f, constraint):
+        res_handle = self._dispatch_generation(f, constraint)
         N_dets = lib_dets.Dets_DetArray_get_N_dets(res_handle)
         return DetArray(
             handle=res_handle, override_original=True, N_dets=N_dets, N_orbs=self.N_orbs
         )
 
-    def get_connected_ss_doubles(self):
-        res_handle = lib_dets.Dets_get_connected_same_spin_doubles(self.handle)
-        N_dets = lib_dets.Dets_DetArray_get_N_dets(res_handle)
-        return DetArray(
-            handle=res_handle, override_original=True, N_dets=N_dets, N_orbs=self.N_orbs
-        )
+    def get_connected_singles(self, constraint=None):
+        if constraint is None:
+            f = lib_dets.Dets_get_connected_singles
+        else:
+            f = lib_dets.Dets_get_constrained_singles
+        return self._generate_dets(f, constraint)
 
-    def get_connected_os_doubles(self):
-        res_handle = lib_dets.Dets_get_connected_opp_spin_doubles(self.handle)
-        N_dets = lib_dets.Dets_DetArray_get_N_dets(res_handle)
-        return DetArray(
-            handle=res_handle, override_original=True, N_dets=N_dets, N_orbs=self.N_orbs
-        )
+    def get_connected_ss_doubles(self, constraint=None):
+        if constraint is None:
+            f = lib_dets.Dets_get_connected_same_spin_doubles
+        else:
+            f = lib_dets.Dets_get_constrained_same_spin_doubles
+        return self._generate_dets(f, constraint)
 
-    def generate_connected_dets(self):
-        res_handle = lib_dets.Dets_get_connected_dets(self.handle)
-        N_dets = lib_dets.Dets_DetArray_get_N_dets(res_handle)
-        return DetArray(
-            handle=res_handle, override_original=True, N_dets=N_dets, N_orbs=self.N_orbs
-        )
+    def get_connected_os_doubles(self, constraint=None):
+        if constraint is None:
+            f = lib_dets.Dets_get_connected_opp_spin_doubles
+        else:
+            f = lib_dets.Dets_get_constrained_opp_spin_doubles
+        return self._generate_dets(f, constraint)
+
+    def generate_connected_dets(self, constraint=None):
+        if constraint is None:
+            f = lib_dets.Dets_get_connected_dets
+        else:
+            f = lib_dets.Dets_get_constrained_dets
+        return self._generate_dets(f, constraint)
 
 
 class DetArray(LinkedHandle):

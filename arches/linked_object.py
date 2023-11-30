@@ -303,7 +303,7 @@ class LinkedArray(LinkedHandle):
             return self._empty_ctor(idx_t(N))
         elif hasattr(fill, "__iter__"):
             if isinstance(fill, np.ndarray):
-                d = fill.ctypes.data_as(self.ptype)
+                d = fill.ctypes.data_as(self.M_array_type._ptype)
             else:
                 d = fill  # Assume fill is an appropriate pointer type
             return self._copy_ctor(idx_t(N), d)
@@ -497,6 +497,9 @@ class LinkedArray_i64(LinkedArray):
 
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
+
+
+LinkedArray_idx_t = LinkedArray_i64
 
 
 class LinkedArray_ui32(LinkedArray):

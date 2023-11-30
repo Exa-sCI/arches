@@ -369,24 +369,17 @@ template <> struct std::hash<det_t> {
 
 std::hash<det_t> det_hash;
 
-// // Should be moved in the cpp of det
-// inline std::ostream &operator<<(std::ostream &os, const det_t &obj) {
-//     return os << "(" << obj.alpha << "," << obj.beta << ")";
-// }
-
-det_t exc_det(det_t &a, det_t &b);
-
 int compute_phase_single_excitation(spin_det_t d, idx_t h, idx_t p);
 int compute_phase_double_excitation(spin_det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
 int compute_phase_double_excitation(det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
 
-// overload phase compute for (1,1) excitations
-det_t apply_single_excitation(det_t s, int spin, idx_t hole, idx_t particle);
+det_t exc_det(det_t &a, det_t &b);
 
 spin_det_t apply_single_excitation(spin_det_t s, idx_t hole, idx_t particle);
+det_t apply_single_excitation(det_t s, int spin, idx_t hole, idx_t particle);
 
-// det_t apply_double_excitation(det_t s, std::pair<int, int> spin, idx_t h1, idx_t h2, idx_t p1,
-//                               idx_t p2);
+spin_det_t apply_double_excitation(spin_det_t det, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
+det_t apply_double_excitation(det_t det, int s1, int s2, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
 
 typedef std::vector<idx_t> spin_constraint_t;
 typedef std::pair<spin_constraint_t, spin_constraint_t> exc_constraint_t;
@@ -401,11 +394,9 @@ std::string to_string(const spin_constraint_t &c, idx_t max_orb) {
 
 spin_constraint_t to_constraint(const spin_det_t &c) {
     spin_constraint_t res;
-    int count = 0;
     for (auto i = 0; i < c.N_mos; i++) {
         if (c[i]) {
             res.push_back(i);
-            count++;
         }
     }
     return res;
@@ -413,12 +404,6 @@ spin_constraint_t to_constraint(const spin_det_t &c) {
 
 // std::vector<det_t> get_constrained_determinants(det_t d, exc_constraint_t constraint,
 //                                                 idx_t max_orb);
-
-std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t constraint, idx_t max_orb);
-
-std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb);
-
-std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb);
 
 std::vector<det_t> get_singles_by_exc_mask(det_t d, int spin, spin_constraint_t h,
                                            spin_constraint_t p);
@@ -431,15 +416,25 @@ std::vector<det_t> get_ss_doubles_by_exc_mask(det_t d, int spin, spin_constraint
 
 std::vector<det_t> get_all_singles(det_t d);
 
-// void get_connected_dets(DetArray *dets_int, DetArray *dets_ext, idx_t *hc_alpha, idx_t *hc_beta,
-//                         idx_t *pc_alpha, idx_t *pc_beta);
+std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t alpha_constraint, exc_constraint_t beta_constraint);
+
+std::vector<det_t> get_os_doubles(det_t d, bool return_singles);
+
+std::vector<det_t> get_constrained_os_doubles(det_t d,exc_constraint_t alpha_constraint, exc_constraint_t beta_constraint, bool return_singles);
+
+std::vector<det_t> get_ss_doubles(det_t d);
+
+std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t alpha_constraint, exc_constraint_t beta_constraint);
+
+std::vector<det_t> get_all_connected_dets(det_t d);
+
+std::vector<det_t> get_constrained_connected_dets(det_t d, exc_constraint_t alpha_constraint, exc_constraint_t beta_constraint);
 
 // This is way too slow for actual formation of explicit Hamiltonians, but it's easy to write!
 // Should get bilinear mappings so that we can iterate over known determinants and find connections
 // directly. Or, resort to on the fly generation of the Hamiltonian structure, which would need true
 // expandable vectors inside the offloaded kernels
-template <class T>
-void get_H_structure_naive(DetArray *psi_det, SymCSRMatrix<T> *H, idx_t N_det, T dummy) {
+template <class T> void get_H_structure_naive(DetArray *psi_det, SymCSRMatrix<T> *H, idx_t N_det) {
 
     std::vector<std::vector<idx_t>> csr_rows;
     std::unique_ptr<idx_t[]> H_p(new idx_t[N_det + 1]);

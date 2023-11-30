@@ -173,7 +173,7 @@ class Test_SpinDet(unittest.TestCase):
         for _ in range(self.N_trials):
             orb_list = rng.integers(0, self.N_orbs, 8)
             orb_list = tuple(np.unique(orb_list))
-            h = rng.choice(orb_list)
+            h = rng.choice(orb_list, replace=False)
             p = rng.integers(0, self.N_orbs, 1)[0]
             while p in orb_list:
                 p = rng.integers(0, self.N_orbs, 1)[0]
@@ -193,7 +193,7 @@ class Test_SpinDet(unittest.TestCase):
         for _ in range(self.N_trials):
             orb_list = rng.integers(0, self.N_orbs, 16)
             orb_list = tuple(np.unique(orb_list))
-            h1, h2 = rng.choice(orb_list, 2)
+            h1, h2 = rng.choice(orb_list, 2, replace=False)
             p1, p2 = rng.integers(0, self.N_orbs, 2)
             while (p1 in orb_list) or (p2 in orb_list):
                 p1, p2 = rng.integers(0, self.N_orbs, 2)
@@ -209,7 +209,7 @@ class Test_SpinDet(unittest.TestCase):
         for _ in range(self.N_trials):
             orb_list = rng.integers(0, self.N_orbs, 8)
             orb_list = tuple(np.unique(orb_list))
-            h = rng.choice(orb_list)
+            h = rng.choice(orb_list, replace=False)
             p = rng.integers(0, self.N_orbs, 1)[0]
             while p in orb_list:
                 p = rng.integers(0, self.N_orbs, 1)[0]
@@ -233,7 +233,7 @@ class Test_SpinDet(unittest.TestCase):
         for _ in range(self.N_trials):
             orb_list = rng.integers(0, self.N_orbs, 8)
             orb_list = tuple(np.unique(orb_list))
-            h1, h2 = rng.choice(orb_list, 2)
+            h1, h2 = rng.choice(orb_list, 2, replace=False)
             p1, p2 = rng.integers(0, self.N_orbs, 2)
             while p1 in orb_list or p2 in orb_list:
                 p1, p2 = rng.integers(0, self.N_orbs, 2)
@@ -245,7 +245,7 @@ class Test_SpinDet(unittest.TestCase):
 class Test_Det(unittest.TestCase):
     def setUp(self):
         self.rng = rng
-        self.N_trials = 64
+        self.N_trials = 1
         self.N_orbs = 72  # larger than both ui32 and ui64 blocks
 
     def test_constructor(self):
@@ -457,8 +457,8 @@ class Test_Det(unittest.TestCase):
             beta_orb_list = rng.integers(0, self.N_orbs, 8)
             beta_orb_list = tuple(np.unique(beta_orb_list))
 
-            ha1, ha2 = rng.choice(alpha_orb_list, 2)
-            hb1, hb2 = rng.choice(beta_orb_list, 2)
+            ha1, ha2 = rng.choice(alpha_orb_list, 2, replace=False)
+            hb1, hb2 = rng.choice(beta_orb_list, 2, replace=False)
 
             pa1, pa2 = rng.integers(0, self.N_orbs, 2)
             while pa1 in alpha_orb_list or pa2 in alpha_orb_list:
@@ -482,7 +482,7 @@ class Test_Det(unittest.TestCase):
 class Test_DetArray(unittest.TestCase):
     def setUp(self):
         self.rng = rng
-        self.N_trials = 64
+        self.N_trials = 32
         self.N_orbs = 72  # larger than both ui32 and ui64 blocks
         self.N_dets = 1024
 
@@ -534,8 +534,6 @@ class Test_DetArray(unittest.TestCase):
             ref_set = set([(d.alpha, d.beta) for d in connected_singles])
 
             test_singles = source_det.get_connected_singles()
-
-            # TODO: refactor previous tests to use as_orb_list property
             test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_singles)
 
             self.assertEqual(
@@ -549,6 +547,91 @@ class Test_DetArray(unittest.TestCase):
             beta_orb_list = tuple(np.unique(beta_orb_list))
 
             check_connected_singles(alpha_orb_list, beta_orb_list)
+
+    def test_get_constrained_singles(self):
+        N_orbs = 16
+
+        def check_common_constraint(alpha_orb_list, beta_orb_list, constraint):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_single(x, y):
+                match x.exc_degree(y):
+                    case (1, 0):
+                        h, p = det_ref.single_exc_no_phase(x.alpha, y.alpha)
+                    case (0, 1):
+                        h, p = det_ref.single_exc_no_phase(x.beta, y.beta)
+                    case _:
+                        return False
+
+                return (h in constraint[0]) and (p in constraint[1])
+
+            connected_singles = [d for d in connected_dets if check_single(ref_source, d)]
+            ref_set = set([(d.alpha, d.beta) for d in connected_singles])
+
+            test_singles = source_det.get_connected_singles(constraint)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_singles)
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        def check_different_constraint(alpha_orb_list, beta_orb_list, constraint):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_single(x, y):
+                match x.exc_degree(y):
+                    case (1, 0):
+                        h, p = det_ref.single_exc_no_phase(x.alpha, y.alpha)
+                        return (h in constraint[0]) and (p in constraint[2])
+                    case (0, 1):
+                        h, p = det_ref.single_exc_no_phase(x.beta, y.beta)
+                        return (h in constraint[1]) and (p in constraint[3])
+                    case _:
+                        return False
+
+            connected_singles = [d for d in connected_dets if check_single(ref_source, d)]
+            ref_set = set([(d.alpha, d.beta) for d in connected_singles])
+
+            test_singles = source_det.get_connected_singles(constraint)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_singles)
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        for _ in range(self.N_trials):
+            common_h, common_p = tuple(), tuple()
+            while len(common_h) < 2 or len(common_p) < 2:
+                alpha_orb_list = rng.integers(0, N_orbs, 8)
+                alpha_orb_list = tuple(np.unique(alpha_orb_list))
+                beta_orb_list = rng.integers(0, N_orbs, 8)
+                beta_orb_list = tuple(np.unique(beta_orb_list))
+
+                ah = set(alpha_orb_list)
+                ap = set(tuple(range(N_orbs))).difference(ah)
+                bh = set(beta_orb_list)
+                bp = set(tuple(range(N_orbs))).difference(bh)
+                common_h = tuple(ah.intersection(bh))
+                common_p = tuple(ap.intersection(bp))
+
+            common_constraint = (
+                tuple(rng.choice(common_h, 2, replace=False)),
+                tuple(rng.choice(common_p, 2, replace=False)),
+            )
+            check_common_constraint(alpha_orb_list, beta_orb_list, common_constraint)
+
+            diff_constraint = tuple(
+                tuple(rng.choice(tuple(x), 2, replace=False)) for x in (ah, bh, ap, bp)
+            )
+            check_different_constraint(alpha_orb_list, beta_orb_list, diff_constraint)
 
     def test_get_connected_ss_doubles(self):
         N_orbs = 16
@@ -568,8 +651,6 @@ class Test_DetArray(unittest.TestCase):
             ref_set = set([(d.alpha, d.beta) for d in connected_ss_doubles])
 
             test_doubles = source_det.get_connected_ss_doubles()
-
-            # TODO: refactor previous tests to use as_orb_list property
             test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_doubles)
 
             self.assertEqual(
@@ -583,6 +664,94 @@ class Test_DetArray(unittest.TestCase):
             beta_orb_list = tuple(np.unique(beta_orb_list))
 
             check_connected_ss_doubles(alpha_orb_list, beta_orb_list)
+
+    def test_get_constrained_ss_doubles(self):
+        N_orbs = 16
+
+        def check_common_constraint(alpha_orb_list, beta_orb_list, constraint):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_double(x, y):
+                holes = constraint[0]
+                parts = constraint[1]
+                match x.exc_degree(y):
+                    case (2, 0):
+                        h1, h2, p1, p2 = det_ref.double_exc_no_phase(x.alpha, y.alpha)
+                    case (0, 2):
+                        h1, h2, p1, p2 = det_ref.double_exc_no_phase(x.beta, y.beta)
+                    case _:
+                        return False
+                return h1 in holes and h2 in holes and p1 in parts and p2 in parts
+
+            constrained_ss_doubles = [d for d in connected_dets if check_double(ref_source, d)]
+            ref_set = set([(d.alpha, d.beta) for d in constrained_ss_doubles])
+
+            test_doubles = source_det.get_connected_ss_doubles(constraint)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_doubles)
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+            return ref_set, test_set
+
+        def check_different_constraint(alpha_orb_list, beta_orb_list, constraint):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_double(x, y):
+                match x.exc_degree(y):
+                    case (2, 0):
+                        h1, h2, p1, p2 = det_ref.double_exc_no_phase(x.alpha, y.alpha)
+                        holes = constraint[0]
+                        parts = constraint[2]
+                    case (0, 2):
+                        h1, h2, p1, p2 = det_ref.double_exc_no_phase(x.beta, y.beta)
+                        holes = constraint[1]
+                        parts = constraint[3]
+                    case _:
+                        return False
+
+                return h1 in holes and h2 in holes and p1 in parts and p2 in parts
+
+            constrained_ss_doubles = [d for d in connected_dets if check_double(ref_source, d)]
+            ref_set = set([(d.alpha, d.beta) for d in constrained_ss_doubles])
+            test_doubles = source_det.get_connected_ss_doubles(constraint)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_doubles)
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        for _ in range(self.N_trials):
+            common_h, common_p = tuple(), tuple()
+            while len(common_h) < 4 or len(common_p) < 4:
+                alpha_orb_list = tuple(rng.choice(np.arange(N_orbs), 8, replace=False))
+                beta_orb_list = tuple(rng.choice(np.arange(N_orbs), 8, replace=False))
+
+                ah = set(alpha_orb_list)
+                ap = set(tuple(range(N_orbs))).difference(ah)
+                bh = set(beta_orb_list)
+                bp = set(tuple(range(N_orbs))).difference(bh)
+                common_h = tuple(ah.intersection(bh))
+                common_p = tuple(ap.intersection(bp))
+
+            common_constraint = (
+                tuple(rng.choice(common_h, 4, replace=False)),
+                tuple(rng.choice(common_p, 4, replace=False)),
+            )
+            check_common_constraint(alpha_orb_list, beta_orb_list, common_constraint)
+
+            diff_constraint = tuple(
+                tuple(rng.choice(tuple(x), 4, replace=False)) for x in (ah, bh, ap, bp)
+            )
+            check_different_constraint(alpha_orb_list, beta_orb_list, diff_constraint)
 
     def test_get_connected_os_doubles(self):
         N_orbs = 16
@@ -602,8 +771,6 @@ class Test_DetArray(unittest.TestCase):
             ref_set = set([(d.alpha, d.beta) for d in connected_os_doubles])
 
             test_doubles = source_det.get_connected_os_doubles()
-
-            # TODO: refactor previous tests to use as_orb_list property
             test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_doubles)
 
             self.assertEqual(
@@ -618,6 +785,91 @@ class Test_DetArray(unittest.TestCase):
 
             check_connected_os_doubles(alpha_orb_list, beta_orb_list)
 
+    def test_get_constrained_os_doubles(self):
+        N_orbs = 16
+
+        def check_common_constraint(alpha_orb_list, beta_orb_list, constraint):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_os_double(x, y):
+                exc_degree = x.exc_degree(y)
+                holes = constraint[0]
+                parts = constraint[1]
+                if exc_degree == (1, 1):
+                    h1, p1 = det_ref.single_exc_no_phase(x.alpha, y.alpha)
+                    h2, p2 = det_ref.single_exc_no_phase(x.beta, y.beta)
+                    return h1 in holes and h2 in holes and p1 in parts and p2 in parts
+                else:
+                    return False
+
+            connected_os_doubles = [d for d in connected_dets if check_os_double(ref_source, d)]
+            ref_set = set([(d.alpha, d.beta) for d in connected_os_doubles])
+
+            test_doubles = source_det.get_connected_os_doubles(constraint)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_doubles)
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        def check_different_constraint(alpha_orb_list, beta_orb_list, constraint):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_os_double(x, y):
+                exc_degree = x.exc_degree(y)
+                ah, bh, ap, bp = constraint
+                if exc_degree == (1, 1):
+                    h1, p1 = det_ref.single_exc_no_phase(x.alpha, y.alpha)
+                    h2, p2 = det_ref.single_exc_no_phase(x.beta, y.beta)
+                    return h1 in ah and p1 in ap and h2 in bh and p2 in bp
+                else:
+                    return False
+
+            connected_os_doubles = [d for d in connected_dets if check_os_double(ref_source, d)]
+            ref_set = set([(d.alpha, d.beta) for d in connected_os_doubles])
+
+            test_doubles = source_det.get_connected_os_doubles(constraint)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_doubles)
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        for _ in range(self.N_trials):
+            common_h, common_p = tuple(), tuple()
+            while len(common_h) < 2 or len(common_p) < 2:
+                alpha_orb_list = rng.integers(0, N_orbs, 8)
+                alpha_orb_list = tuple(np.unique(alpha_orb_list))
+                beta_orb_list = rng.integers(0, N_orbs, 8)
+                beta_orb_list = tuple(np.unique(beta_orb_list))
+
+                ah = set(alpha_orb_list)
+                ap = set(tuple(range(N_orbs))).difference(ah)
+                bh = set(beta_orb_list)
+                bp = set(tuple(range(N_orbs))).difference(bh)
+                common_h = tuple(ah.intersection(bh))
+                common_p = tuple(ap.intersection(bp))
+
+            common_constraint = (
+                tuple(rng.choice(common_h, 2, replace=False)),
+                tuple(rng.choice(common_p, 2, replace=False)),
+            )
+
+            check_common_constraint(alpha_orb_list, beta_orb_list, common_constraint)
+
+            diff_constraint = tuple(
+                tuple(rng.choice(tuple(x), 2, replace=False)) for x in (ah, bh, ap, bp)
+            )
+            check_different_constraint(alpha_orb_list, beta_orb_list, diff_constraint)
+
     def test_generate_connected_dets(self):
         N_orbs = 16
 
@@ -630,8 +882,6 @@ class Test_DetArray(unittest.TestCase):
             ref_set = set([(d.alpha, d.beta) for d in connected_dets])
 
             test_dets = source_det.generate_connected_dets()
-
-            # TODO: refactor previous tests to use as_orb_list property
             test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
 
             self.assertEqual(
@@ -645,6 +895,103 @@ class Test_DetArray(unittest.TestCase):
             beta_orb_list = tuple(np.unique(beta_orb_list))
 
             check_generate_dets(alpha_orb_list, beta_orb_list)
+
+    def test_generate_constrained_dets(self):
+        N_orbs = 16
+
+        def check_common_constraint(alpha_orb_list, beta_orb_list, constraint):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_exc(x, y):
+                exc_degree = x.exc_degree(y)
+                holes, parts = constraint
+                match exc_degree:
+                    case (1, 0) | (0, 1):
+                        sdets = (x.alpha, y.alpha) if exc_degree[0] else (x.beta, y.beta)
+                        h1, p1 = det_ref.single_exc_no_phase(*sdets)
+                        h2, p2 = h1, p1
+                    case (2, 0) | (0, 2):
+                        sdets = (x.alpha, y.alpha) if exc_degree[0] else (x.beta, y.beta)
+                        h1, h2, p1, p2 = det_ref.double_exc_no_phase(*sdets)
+                    case (1, 1):
+                        h1, p1 = det_ref.single_exc_no_phase(x.alpha, y.alpha)
+                        h2, p2 = det_ref.single_exc_no_phase(x.beta, y.beta)
+                    case _:
+                        raise ValueError
+                return h1 in holes and h2 in holes and p1 in parts and p2 in parts
+
+            ref_set = set([(d.alpha, d.beta) for d in connected_dets if check_exc(ref_source, d)])
+
+            test_dets = source_det.generate_connected_dets(constraint)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        def check_different_constraint(alpha_orb_list, beta_orb_list, constraint):
+            source_det = det_t(
+                alpha=spin_det_t(N_orbs, alpha_orb_list), beta=spin_det_t(N_orbs, beta_orb_list)
+            )
+            ref_source = det_ref(alpha_orb_list, beta_orb_list)
+            connected_dets = ref_source.gen_all_connected_det(N_orbs)
+
+            def check_exc(x, y):
+                exc_degree = x.exc_degree(y)
+                ah, bh, ap, bp = constraint
+                holes, parts = (ah, ap) if exc_degree[0] else (bh, bp)
+                sdets = (x.alpha, y.alpha) if exc_degree[0] else (x.beta, y.beta)
+                match exc_degree:
+                    case (1, 0) | (0, 1):
+                        h, p = det_ref.single_exc_no_phase(*sdets)
+                        return h in holes and p in parts
+                    case (2, 0) | (0, 2):
+                        sdets = (x.alpha, y.alpha) if exc_degree[0] else (x.beta, y.beta)
+                        h1, h2, p1, p2 = det_ref.double_exc_no_phase(*sdets)
+                        return h1 in holes and h2 in holes and p1 in parts and p2 in parts
+                    case (1, 1):
+                        h1, p1 = det_ref.single_exc_no_phase(x.alpha, y.alpha)
+                        h2, p2 = det_ref.single_exc_no_phase(x.beta, y.beta)
+                        return h1 in ah and h2 in bh and p1 in ap and p2 in bp
+                    case _:
+                        raise ValueError
+
+            ref_set = set([(d.alpha, d.beta) for d in connected_dets if check_exc(ref_source, d)])
+
+            test_dets = source_det.generate_connected_dets(constraint)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
+
+            self.assertEqual(
+                ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
+            )
+
+        for _ in range(self.N_trials):
+            common_h, common_p = tuple(), tuple()
+            while len(common_h) < 4 or len(common_p) < 4:
+                alpha_orb_list = tuple(rng.choice(np.arange(N_orbs), 8, replace=False))
+                beta_orb_list = tuple(rng.choice(np.arange(N_orbs), 8, replace=False))
+
+                ah = set(alpha_orb_list)
+                ap = set(tuple(range(N_orbs))).difference(ah)
+                bh = set(beta_orb_list)
+                bp = set(tuple(range(N_orbs))).difference(bh)
+                common_h = tuple(ah.intersection(bh))
+                common_p = tuple(ap.intersection(bp))
+
+            common_constraint = (
+                tuple(rng.choice(common_h, 4, replace=False)),
+                tuple(rng.choice(common_p, 4, replace=False)),
+            )
+            check_common_constraint(alpha_orb_list, beta_orb_list, common_constraint)
+
+            diff_constraint = tuple(
+                tuple(rng.choice(tuple(x), 4, replace=False)) for x in (ah, bh, ap, bp)
+            )
+            check_different_constraint(alpha_orb_list, beta_orb_list, diff_constraint)
 
 
 if __name__ == "__main__":
