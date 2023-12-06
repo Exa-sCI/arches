@@ -340,34 +340,68 @@ class DetArray {
     ~DetArray() = default;
 };
 
-std::hash<mo_block_t> block_hash;
-
 template <> struct std::hash<spin_det_t> {
     // Implementing something quick a dirty for now along the lines of:
     // https://math.stackexchange.com/a/4146931
     // TODO: Profile this in particular! Or come up with another algorithm that is unique and fast
     // and has good dispersion.
     std::size_t operator()(spin_det_t const &s) const noexcept {
-        std::size_t m = ~0 >> (sizeof(std::size_t) * 8 - 19); // should be the Mersenne prime 2^19-1
-        std::size_t res = 0x402df854;                         // e
+        // std::hash<mo_block_t> block_hash;
+        // std::size_t m = ~((std::size_t)0) >>
+        //                 (sizeof(std::size_t) * 8 - 19); // should be the Mersenne prime 2^19-1
+        // std::size_t res = 0x5b174a16; // X0
+        std::size_t res = 0x77123456; // X0
+        std::size_t m = 0x402df854;   // e
         for (auto i = 0; i < s.N_blocks; i++) {
-            res = (block_hash(s.block_arr[i]) ^ res) * m;
+            res = (s.block_arr[i] ^ res) * m;
         }
         return res;
     }
 };
 
-std::hash<spin_det_t> spin_det_hash;
-
 template <> struct std::hash<det_t> {
     std::size_t operator()(det_t const &s) const noexcept {
-        std::size_t h1 = spin_det_hash(s.alpha);
-        std::size_t h2 = spin_det_hash(s.beta);
-        return h1 ^ (h2 << 1);
+        // std::hash<spin_det_t> spin_det_hash;
+        // std::size_t h1 = spin_det_hash(s.alpha);
+        // std::size_t h2 = spin_det_hash(s.beta);
+
+        // std::size_t m = 0x402df854; // e
+        // std::size_t n = 0x40490fdb; // pi
+        // return (h1 * m) ^ (h2 * n);
+
+        std::size_t res = 0x77123456; // X0
+        std::size_t m = 0x402df854;   // e
+        for (auto i = 0; i < s[0].N_blocks; i++) {
+            res = (s[0].block_arr[i] ^ res) * m;
+            res = (s[1].block_arr[i] ^ res) * m;
+        }
+        return res;
     }
 };
 
-std::hash<det_t> det_hash;
+class LinearUnorderedMap {
+  protected:
+    std::unordered_map<std::size_t, det_t> map;
+    std::hash<det_t> hash_f;
+
+  public:
+    LinearUnorderedMap() = default;
+    ~LinearUnorderedMap() = default;
+
+    int add_det(const det_t &d) {
+        // Hash is not perfect, but collisions are low
+        // If collides, use linear probing to augment hash_val
+        std::size_t hash_val = hash_f(d);
+        while (map.count(hash_val) == 1) {
+            if (map[hash_val] == d)
+                return 0;
+            hash_val++;
+        }
+
+        map[hash_val] = d;
+        return 1;
+    }
+};
 
 int compute_phase_single_excitation(spin_det_t d, idx_t h, idx_t p);
 int compute_phase_double_excitation(spin_det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
@@ -375,11 +409,13 @@ int compute_phase_double_excitation(det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t
 
 det_t exc_det(det_t &a, det_t &b);
 
-spin_det_t apply_single_excitation(spin_det_t s, idx_t hole, idx_t particle);
-det_t apply_single_excitation(det_t s, int spin, idx_t hole, idx_t particle);
+spin_det_t apply_single_excitation(spin_det_t det, idx_t h, idx_t p, bool &succcess);
+det_t apply_single_excitation(det_t det, int spin, idx_t h, idx_t p, bool &succcess);
 
-spin_det_t apply_double_excitation(spin_det_t det, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
-det_t apply_double_excitation(det_t det, int s1, int s2, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
+spin_det_t apply_double_excitation(spin_det_t det, idx_t h1, idx_t h2, idx_t p1, idx_t p2,
+                                   bool &success);
+det_t apply_double_excitation(det_t det, int s1, int s2, idx_t h1, idx_t h2, idx_t p1, idx_t p2,
+                              bool &success);
 
 typedef std::vector<idx_t> spin_constraint_t;
 typedef std::pair<spin_constraint_t, spin_constraint_t> exc_constraint_t;
@@ -416,19 +452,24 @@ std::vector<det_t> get_ss_doubles_by_exc_mask(det_t d, int spin, spin_constraint
 
 std::vector<det_t> get_all_singles(det_t d);
 
-std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t alpha_constraint, exc_constraint_t beta_constraint);
+std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t alpha_constraint,
+                                           exc_constraint_t beta_constraint);
 
 std::vector<det_t> get_os_doubles(det_t d, bool return_singles);
 
-std::vector<det_t> get_constrained_os_doubles(det_t d,exc_constraint_t alpha_constraint, exc_constraint_t beta_constraint, bool return_singles);
+std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t alpha_constraint,
+                                              exc_constraint_t beta_constraint,
+                                              bool return_singles);
 
 std::vector<det_t> get_ss_doubles(det_t d);
 
-std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t alpha_constraint, exc_constraint_t beta_constraint);
+std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t alpha_constraint,
+                                              exc_constraint_t beta_constraint);
 
-std::vector<det_t> get_all_connected_dets(det_t d);
+std::vector<det_t> get_all_connected_dets(det_t *d, idx_t N_dets);
 
-std::vector<det_t> get_constrained_connected_dets(det_t d, exc_constraint_t alpha_constraint, exc_constraint_t beta_constraint);
+std::vector<det_t> get_constrained_connected_dets(det_t d, exc_constraint_t alpha_constraint,
+                                                  exc_constraint_t beta_constraint);
 
 // This is way too slow for actual formation of explicit Hamiltonians, but it's easy to write!
 // Should get bilinear mappings so that we can iterate over known determinants and find connections

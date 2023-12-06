@@ -34,52 +34,71 @@ det_t exc_det(det_t &a, det_t &b) {
     return det_t(a[0] ^ b[0], a[1] ^ b[1]); // Does this work since I have the move defined?
 }
 
-spin_det_t apply_single_excitation(spin_det_t s, idx_t h, idx_t p) {
+spin_det_t apply_single_excitation(spin_det_t det, idx_t h, idx_t p, bool &success) {
     // assert(s[h] == 1);
     // assert(s[p] == 0);
+    success = det[h] && !det[p];
 
-    auto s2 = spin_det_t(s);
-    s2.set(h, 0);
-    s2.set(p, 1);
+    auto s2 = spin_det_t(det);
+    if (success) {
+        s2.set(h, 0);
+        s2.set(p, 1);
+    }
     return s2;
 }
 
-det_t apply_single_excitation(det_t s, int spin, idx_t h, idx_t p) {
+det_t apply_single_excitation(det_t det, int spin, idx_t h, idx_t p, bool &success) {
     // assert(s[spin][h] == 1);
     // assert(s[spin][p] == 0);
 
-    auto s2 = det_t(s);
-    // s2[spin][h] = 0;
-    // s2[spin][p] = 1;
-    s2[spin].set(h, 0);
-    s2[spin].set(p, 1);
+    success = det[spin][h] && !det[spin][p];
+
+    auto s2 = det_t(det);
+    if (success) {
+        s2[spin].set(h, 0);
+        s2[spin].set(p, 1);
+    }
     return s2;
 }
 
-spin_det_t apply_double_excitation(spin_det_t det, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
+spin_det_t apply_double_excitation(spin_det_t det, idx_t h1, idx_t h2, idx_t p1, idx_t p2,
+                                   bool &success) {
+
+    success = det[h1] && det[h2] && !det[p1] && !det[p2];
     auto res = spin_det_t(det);
-    res.set(h1, 0);
-    res.set(h2, 0);
-    res.set(p1, 1);
-    res.set(p2, 1);
+    if (success) {
+        res.set(h1, 0);
+        res.set(h2, 0);
+        res.set(p1, 1);
+        res.set(p2, 1);
+    }
     return res;
 }
 
-det_t apply_double_excitation(det_t det, int s1, int s2, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
+det_t apply_double_excitation(det_t det, int s1, int s2, idx_t h1, idx_t h2, idx_t p1, idx_t p2,
+                              bool &success) {
+
+    success = det[s1][h1] && det[s2][h2] && !det[s1][p1] && !det[s2][p2];
+
     auto res = det_t(det);
-    res[s1].set(h1, 0);
-    res[s2].set(h2, 0);
-    res[s1].set(p1, 1);
-    res[s2].set(p2, 1);
+    if (success) {
+        res[s1].set(h1, 0);
+        res[s2].set(h2, 0);
+        res[s1].set(p1, 1);
+        res[s2].set(p2, 1);
+    }
     return res;
 }
 
 std::vector<det_t> get_singles_by_exc_mask(det_t d, int spin, spin_constraint_t h,
                                            spin_constraint_t p) {
     std::vector<det_t> res;
+    bool success;
     for (auto &i : h) {
         for (auto &j : p) {
-            res.push_back(apply_single_excitation(d, spin, i, j));
+            det_t temp_det = apply_single_excitation(d, spin, i, j, success);
+            if (success)
+                res.push_back(temp_det);
         }
     }
     return res;
@@ -88,9 +107,12 @@ std::vector<det_t> get_singles_by_exc_mask(det_t d, int spin, spin_constraint_t 
 std::vector<spin_det_t> get_spin_singles_by_exc_mask(spin_det_t d, spin_constraint_t h,
                                                      spin_constraint_t p) {
     std::vector<spin_det_t> res;
+    bool success;
     for (auto &i : h) {
         for (auto &j : p) {
-            res.push_back(apply_single_excitation(d, i, j));
+            spin_det_t temp_det = apply_single_excitation(d, i, j, success);
+            if (success)
+                res.push_back(temp_det);
         }
     }
     return res;
@@ -101,12 +123,17 @@ std::vector<det_t> get_ss_doubles_by_exc_mask(det_t d, int spin, spin_constraint
 
     std::vector<det_t> res;
     // h, p are sorted so h1 < h2; p1 < p2 always
-    for (auto h1 = 0; h1 < h.size() - 1; h1++) {
-        for (auto h2 = h1 + 1; h2 < h.size(); h2++) {
-            for (auto p1 = 0; p1 < p.size() - 1; p1++) {
-                for (auto p2 = p1 + 1; p2 < p.size(); p2++) {
-                    res.push_back(
-                        apply_double_excitation(d, spin, spin, h[h1], h[h2], p[p1], p[p2]));
+    bool success;
+    int N_holes = h.size();
+    int N_parts = p.size();
+    for (auto h1 = 0; h1 < N_holes - 1; h1++) {
+        for (auto h2 = h1 + 1; h2 < N_holes; h2++) {
+            for (auto p1 = 0; p1 < N_parts - 1; p1++) {
+                for (auto p2 = p1 + 1; p2 < N_parts; p2++) {
+                    det_t temp_det =
+                        apply_double_excitation(d, spin, spin, h[h1], h[h2], p[p1], p[p2], success);
+                    if (success)
+                        res.push_back(temp_det);
                 }
             }
         }
@@ -290,29 +317,77 @@ std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t alpha_co
     return ss_doubles;
 }
 
-std::vector<det_t> get_all_connected_dets(det_t d) {
+void print(spin_det_t *det) {
+    auto N_orbs = det->N_mos;
+    for (auto i = 0; i < N_orbs; i++) {
+        std::cout << det->operator[](i);
+    }
+    std::cout << std::endl;
+}
+
+std::vector<det_t> get_all_connected_dets(det_t *d, idx_t N_dets) {
 
     std::vector<det_t> connected;
-    std::vector<det_t> singles_and_os_doubles = get_os_doubles(d, true);
-    std::vector<det_t> ss_doubles = get_ss_doubles(d);
+    LinearUnorderedMap hash_map = LinearUnorderedMap();
+    for (auto i = 0; i < N_dets; i++) {
+        hash_map.add_det(d[i]);
+    }
 
-    connected.insert(connected.end(), singles_and_os_doubles.begin(), singles_and_os_doubles.end());
-    connected.insert(connected.end(), ss_doubles.begin(), ss_doubles.end());
+    for (auto i = 0; i < N_dets; i++) {
+        auto &current_det = d[i];
+        std::vector<det_t> singles_and_os_doubles = get_os_doubles(current_det, true);
+        std::vector<det_t> ss_doubles = get_ss_doubles(current_det);
+
+        for (auto &new_det : singles_and_os_doubles) {
+            if (hash_map.add_det(new_det)) {
+                connected.push_back(new_det);
+            }
+        }
+
+        for (auto &new_det : ss_doubles) {
+            if (hash_map.add_det(new_det)) {
+                connected.push_back(new_det);
+            }
+        }
+    }
 
     return connected;
 }
 
-std::vector<det_t> get_constrained_connected_dets(det_t d, exc_constraint_t alpha_constraint,
+std::vector<det_t> get_constrained_connected_dets(det_t *d, idx_t N_dets,
+                                                  exc_constraint_t alpha_constraint,
                                                   exc_constraint_t beta_constraint) {
 
     std::vector<det_t> connected;
-    std::vector<det_t> singles_and_os_doubles =
-        get_constrained_os_doubles(d, alpha_constraint, beta_constraint, true);
-    std::vector<det_t> ss_doubles =
-        get_constrained_ss_doubles(d, alpha_constraint, beta_constraint);
+    LinearUnorderedMap hash_map = LinearUnorderedMap();
 
-    connected.insert(connected.end(), singles_and_os_doubles.begin(), singles_and_os_doubles.end());
-    connected.insert(connected.end(), ss_doubles.begin(), ss_doubles.end());
+    for (auto i = 0; i < N_dets; i++) {
+        hash_map.add_det(d[i]);
+    }
+
+    for (auto i = 0; i < N_dets; i++) {
+        auto &current_det = d[i];
+        std::vector<det_t> singles_and_os_doubles =
+            get_constrained_os_doubles(current_det, alpha_constraint, beta_constraint, true);
+        std::vector<det_t> ss_doubles =
+            get_constrained_ss_doubles(current_det, alpha_constraint, beta_constraint);
+
+        int count = 0;
+        for (auto &new_det : singles_and_os_doubles) {
+            if (hash_map.add_det(new_det))
+                connected.push_back(new_det);
+        }
+
+        count = 0;
+        if (ss_doubles.size()) {
+
+            for (auto &new_det : ss_doubles) {
+
+                if (hash_map.add_det(new_det))
+                    connected.push_back(new_det);
+            }
+        }
+    }
 
     return connected;
 }
@@ -377,12 +452,14 @@ int Dets_spin_det_t_phase_double_exc(spin_det_t *det, idx_t h1, idx_t h2, idx_t 
 }
 
 spin_det_t *Dets_spin_det_t_apply_single_exc(spin_det_t *det, idx_t h, idx_t p) {
-    return new spin_det_t(apply_single_excitation(*det, h, p));
+    bool success;
+    return new spin_det_t(apply_single_excitation(*det, h, p, success));
 }
 
 spin_det_t *Dets_spin_det_t_apply_double_exc(spin_det_t *det, idx_t h1, idx_t h2, idx_t p1,
                                              idx_t p2) {
-    return new spin_det_t(apply_double_excitation(*det, h1, h2, p1, p2));
+    bool success;
+    return new spin_det_t(apply_double_excitation(*det, h1, h2, p1, p2, success));
 }
 
 //// det_t
@@ -409,12 +486,14 @@ int Dets_det_t_phase_double_exc(det_t *det, idx_t h1, idx_t h2, idx_t p1, idx_t 
 det_t *Dets_det_t_exc_det(det_t *det_1, det_t *det_2) { return new det_t(exc_det(*det_1, *det_2)); }
 
 det_t *Dets_det_t_apply_single_exc(det_t *det, idx_t spin, idx_t h, idx_t p) {
-    return new det_t(apply_single_excitation(*det, spin, h, p));
+    bool success;
+    return new det_t(apply_single_excitation(*det, spin, h, p, success));
 }
 
 det_t *Dets_det_t_apply_double_exc(det_t *det, idx_t s1, idx_t s2, idx_t h1, idx_t h2, idx_t p1,
                                    idx_t p2) {
-    return new det_t(apply_double_excitation(*det, s1, s2, h1, h2, p1, p2));
+    bool success;
+    return new det_t(apply_double_excitation(*det, s1, s2, h1, h2, p1, p2, success));
 }
 
 //// DetArray
@@ -433,6 +512,7 @@ void Dets_DetArray_dtor(DetArray *arr) { delete arr; }
 
 idx_t Dets_DetArray_get_N_dets(DetArray *arr) { return arr->size; }
 idx_t Dets_DetArray_get_N_mos(DetArray *arr) { return arr->N_mos; }
+det_t *Dets_DetArray_get_arr_pointer(DetArray *arr) { return arr->arr; }
 
 // utilities
 
@@ -441,24 +521,24 @@ void Dets_DetArray_setitem(DetArray *arr, det_t *other, idx_t i) { arr->arr[i] =
 
 //// Det generation routines
 
-DetArray *Dets_get_connected_singles(det_t *source) {
+DetArray *Dets_get_connected_singles(det_t *source, idx_t N_dets) {
     return new DetArray(get_all_singles(*source));
 }
 
-DetArray *Dets_get_connected_same_spin_doubles(det_t *source) {
+DetArray *Dets_get_connected_same_spin_doubles(det_t *source, idx_t N_dets) {
     return new DetArray(get_ss_doubles(*source));
 }
 
-DetArray *Dets_get_connected_opp_spin_doubles(det_t *source) {
+DetArray *Dets_get_connected_opp_spin_doubles(det_t *source, idx_t N_dets) {
     return new DetArray(get_os_doubles(*source, false));
 }
 
-DetArray *Dets_get_connected_dets(det_t *source) {
-    return new DetArray(get_all_connected_dets(*source));
+DetArray *Dets_get_connected_dets(det_t *source, idx_t N_dets) {
+    return new DetArray(get_all_connected_dets(source, N_dets));
 }
 
-DetArray *Dets_get_constrained_singles(det_t *source, idx_t *h_a, idx_t N_h_a, idx_t *h_b,
-                                       idx_t N_h_b, idx_t *p_a, idx_t N_p_a, idx_t *p_b,
+DetArray *Dets_get_constrained_singles(det_t *source, idx_t N_dets, idx_t *h_a, idx_t N_h_a,
+                                       idx_t *h_b, idx_t N_h_b, idx_t *p_a, idx_t N_p_a, idx_t *p_b,
                                        idx_t N_p_b) {
     spin_constraint_t ah(h_a, h_a + N_h_a);
     spin_constraint_t ap(p_a, p_a + N_p_a);
@@ -471,9 +551,9 @@ DetArray *Dets_get_constrained_singles(det_t *source, idx_t *h_a, idx_t N_h_a, i
     return new DetArray(get_constrained_singles(*source, a, b));
 }
 
-DetArray *Dets_get_constrained_same_spin_doubles(det_t *source, idx_t *h_a, idx_t N_h_a, idx_t *h_b,
-                                                 idx_t N_h_b, idx_t *p_a, idx_t N_p_a, idx_t *p_b,
-                                                 idx_t N_p_b) {
+DetArray *Dets_get_constrained_same_spin_doubles(det_t *source, idx_t N_dets, idx_t *h_a,
+                                                 idx_t N_h_a, idx_t *h_b, idx_t N_h_b, idx_t *p_a,
+                                                 idx_t N_p_a, idx_t *p_b, idx_t N_p_b) {
     spin_constraint_t ah(h_a, h_a + N_h_a);
     spin_constraint_t ap(p_a, p_a + N_p_a);
     spin_constraint_t bh(h_b, h_b + N_h_b);
@@ -485,9 +565,9 @@ DetArray *Dets_get_constrained_same_spin_doubles(det_t *source, idx_t *h_a, idx_
     return new DetArray(get_constrained_ss_doubles(*source, a, b));
 }
 
-DetArray *Dets_get_constrained_opp_spin_doubles(det_t *source, idx_t *h_a, idx_t N_h_a, idx_t *h_b,
-                                                idx_t N_h_b, idx_t *p_a, idx_t N_p_a, idx_t *p_b,
-                                                idx_t N_p_b) {
+DetArray *Dets_get_constrained_opp_spin_doubles(det_t *source, idx_t N_dets, idx_t *h_a,
+                                                idx_t N_h_a, idx_t *h_b, idx_t N_h_b, idx_t *p_a,
+                                                idx_t N_p_a, idx_t *p_b, idx_t N_p_b) {
     spin_constraint_t ah(h_a, h_a + N_h_a);
     spin_constraint_t ap(p_a, p_a + N_p_a);
     spin_constraint_t bh(h_b, h_b + N_h_b);
@@ -499,8 +579,9 @@ DetArray *Dets_get_constrained_opp_spin_doubles(det_t *source, idx_t *h_a, idx_t
     return new DetArray(get_constrained_os_doubles(*source, a, b, false));
 }
 
-DetArray *Dets_get_constrained_dets(det_t *source, idx_t *h_a, idx_t N_h_a, idx_t *h_b, idx_t N_h_b,
-                                    idx_t *p_a, idx_t N_p_a, idx_t *p_b, idx_t N_p_b) {
+DetArray *Dets_get_constrained_dets(det_t *source, idx_t N_dets, idx_t *h_a, idx_t N_h_a,
+                                    idx_t *h_b, idx_t N_h_b, idx_t *p_a, idx_t N_p_a, idx_t *p_b,
+                                    idx_t N_p_b) {
     spin_constraint_t ah(h_a, h_a + N_h_a);
     spin_constraint_t ap(p_a, p_a + N_p_a);
     spin_constraint_t bh(h_b, h_b + N_h_b);
@@ -509,6 +590,6 @@ DetArray *Dets_get_constrained_dets(det_t *source, idx_t *h_a, idx_t N_h_a, idx_
     const exc_constraint_t a(ah, ap);
     const exc_constraint_t b(bh, bp);
 
-    return new DetArray(get_constrained_connected_dets(*source, a, b));
+    return new DetArray(get_constrained_connected_dets(source, N_dets, a, b));
 }
 }

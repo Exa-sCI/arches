@@ -245,7 +245,7 @@ class Test_SpinDet(unittest.TestCase):
 class Test_Det(unittest.TestCase):
     def setUp(self):
         self.rng = rng
-        self.N_trials = 1
+        self.N_trials = 64
         self.N_orbs = 72  # larger than both ui32 and ui64 blocks
 
     def test_constructor(self):
@@ -871,7 +871,7 @@ class Test_DetArray(unittest.TestCase):
             check_different_constraint(alpha_orb_list, beta_orb_list, diff_constraint)
 
     def test_generate_connected_dets(self):
-        N_orbs = 16
+        N_orbs = 72
 
         def check_generate_dets(alpha_orb_list, beta_orb_list):
             source_det = det_t(
@@ -888,10 +888,10 @@ class Test_DetArray(unittest.TestCase):
                 ref_set, test_set, msg=f"Failed for {alpha_orb_list} X {beta_orb_list}"
             )
 
-        for _ in range(self.N_trials):
-            alpha_orb_list = rng.integers(0, N_orbs, 4)
+        for N_occupied in [4, 6, 7, 17, 24]:
+            alpha_orb_list = rng.integers(0, N_orbs, N_occupied)
             alpha_orb_list = tuple(np.unique(alpha_orb_list))
-            beta_orb_list = rng.integers(0, N_orbs, 4)
+            beta_orb_list = rng.integers(0, N_orbs, N_occupied)
             beta_orb_list = tuple(np.unique(beta_orb_list))
 
             check_generate_dets(alpha_orb_list, beta_orb_list)
@@ -992,6 +992,136 @@ class Test_DetArray(unittest.TestCase):
                 tuple(rng.choice(tuple(x), 4, replace=False)) for x in (ah, bh, ap, bp)
             )
             check_different_constraint(alpha_orb_list, beta_orb_list, diff_constraint)
+
+    def test_generate_array_connected(self):
+        N_orbs = 32
+
+        def check_generate_array(alpha_orb_sets, beta_orb_sets):
+            ref_set = set()
+            for alpha_orbs, beta_orbs in zip(alpha_orb_sets, beta_orb_sets):
+                ref_source = det_ref(alpha_orbs, beta_orbs)
+                connected_dets = ref_source.gen_all_connected_det(N_orbs)
+                ref_set = ref_set.union(set([(d.alpha, d.beta) for d in connected_dets]))
+
+            source_arr = DetArray(len(alpha_orb_sets), N_orbs)
+            for i, (alpha_orbs, beta_orbs) in enumerate(zip(alpha_orb_sets, beta_orb_sets)):
+                source_arr[i] = det_t(
+                    alpha=spin_det_t(N_orbs, alpha_orbs), beta=spin_det_t(N_orbs, beta_orbs)
+                )
+            test_dets = source_arr.generate_connected_dets()
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
+
+            self.assertEqual(ref_set, test_set)
+
+        for _ in range(1):
+            for N_occupied in [4, 7, 17]:
+                alpha_orb_sets = []
+                beta_orb_sets = []
+                for _ in range(8):
+                    alpha_orb_sets.append(tuple(rng.choice(N_orbs, N_occupied, False)))
+                    beta_orb_sets.append(tuple(rng.choice(N_orbs, N_occupied, False)))
+
+                check_generate_array(alpha_orb_sets, beta_orb_sets)
+
+    def test_generate_array_constrained(self):
+        N_orbs = 16
+
+        def check_common_constraint(alpha_orb_sets, beta_orb_sets, constraint):
+            def check_exc(x, y):
+                exc_degree = x.exc_degree(y)
+                holes, parts = constraint
+                match exc_degree:
+                    case (1, 0) | (0, 1):
+                        sdets = (x.alpha, y.alpha) if exc_degree[0] else (x.beta, y.beta)
+                        h1, p1 = det_ref.single_exc_no_phase(*sdets)
+                        h2, p2 = h1, p1
+                    case (2, 0) | (0, 2):
+                        sdets = (x.alpha, y.alpha) if exc_degree[0] else (x.beta, y.beta)
+                        h1, h2, p1, p2 = det_ref.double_exc_no_phase(*sdets)
+                    case (1, 1):
+                        h1, p1 = det_ref.single_exc_no_phase(x.alpha, y.alpha)
+                        h2, p2 = det_ref.single_exc_no_phase(x.beta, y.beta)
+                    case _:
+                        raise ValueError
+                return h1 in holes and h2 in holes and p1 in parts and p2 in parts
+
+            ref_set = set()
+            for alpha_orbs, beta_orbs in zip(alpha_orb_sets, beta_orb_sets):
+                ref_source = det_ref(alpha_orbs, beta_orbs)
+                connected_dets = ref_source.gen_all_connected_det(N_orbs)
+                ref_set = ref_set.union(
+                    set([(d.alpha, d.beta) for d in connected_dets if check_exc(ref_source, d)])
+                )
+
+            source_arr = DetArray(len(alpha_orb_sets), N_orbs)
+            for i, (alpha_orbs, beta_orbs) in enumerate(zip(alpha_orb_sets, beta_orb_sets)):
+                source_arr[i] = det_t(
+                    alpha=spin_det_t(N_orbs, alpha_orbs), beta=spin_det_t(N_orbs, beta_orbs)
+                )
+            test_dets = source_arr.generate_connected_dets(constraint)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
+
+            self.assertEqual(ref_set, test_set)
+
+        def check_different_constraint(alpha_orb_sets, beta_orb_sets, constraint):
+            def check_exc(x, y):
+                exc_degree = x.exc_degree(y)
+                ah, bh, ap, bp = constraint
+                holes, parts = (ah, ap) if exc_degree[0] else (bh, bp)
+                sdets = (x.alpha, y.alpha) if exc_degree[0] else (x.beta, y.beta)
+                match exc_degree:
+                    case (1, 0) | (0, 1):
+                        h, p = det_ref.single_exc_no_phase(*sdets)
+                        return h in holes and p in parts
+                    case (2, 0) | (0, 2):
+                        sdets = (x.alpha, y.alpha) if exc_degree[0] else (x.beta, y.beta)
+                        h1, h2, p1, p2 = det_ref.double_exc_no_phase(*sdets)
+                        return h1 in holes and h2 in holes and p1 in parts and p2 in parts
+                    case (1, 1):
+                        h1, p1 = det_ref.single_exc_no_phase(x.alpha, y.alpha)
+                        h2, p2 = det_ref.single_exc_no_phase(x.beta, y.beta)
+                        return h1 in ah and h2 in bh and p1 in ap and p2 in bp
+                    case _:
+                        raise ValueError
+
+            ref_set = set()
+            for alpha_orbs, beta_orbs in zip(alpha_orb_sets, beta_orb_sets):
+                ref_source = det_ref(alpha_orbs, beta_orbs)
+                connected_dets = ref_source.gen_all_connected_det(N_orbs)
+                ref_set = ref_set.union(
+                    set([(d.alpha, d.beta) for d in connected_dets if check_exc(ref_source, d)])
+                )
+
+            source_arr = DetArray(len(alpha_orb_sets), N_orbs)
+            for i, (alpha_orbs, beta_orbs) in enumerate(zip(alpha_orb_sets, beta_orb_sets)):
+                source_arr[i] = det_t(
+                    alpha=spin_det_t(N_orbs, alpha_orbs), beta=spin_det_t(N_orbs, beta_orbs)
+                )
+            test_dets = source_arr.generate_connected_dets(constraint)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
+
+            self.assertEqual(ref_set, test_set)
+
+        for _ in range(8):
+            common_constraint = (
+                tuple(rng.choice(N_orbs, 4, replace=False)),
+                tuple(rng.choice(N_orbs, 4, replace=False)),
+            )
+            diff_constraint = (
+                tuple(rng.choice(N_orbs, 4, replace=False)),
+                tuple(rng.choice(N_orbs, 4, replace=False)),
+                tuple(rng.choice(N_orbs, 4, replace=False)),
+                tuple(rng.choice(N_orbs, 4, replace=False)),
+            )
+            for N_occupied in [4, 7, 9]:
+                alpha_orb_sets = []
+                beta_orb_sets = []
+                for _ in range(8):
+                    alpha_orb_sets.append(tuple(rng.choice(N_orbs, N_occupied, False)))
+                    beta_orb_sets.append(tuple(rng.choice(N_orbs, N_occupied, False)))
+
+                check_common_constraint(alpha_orb_sets, beta_orb_sets, common_constraint)
+                check_different_constraint(alpha_orb_sets, beta_orb_sets, diff_constraint)
 
 
 if __name__ == "__main__":
