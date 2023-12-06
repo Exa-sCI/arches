@@ -43,6 +43,7 @@ class Test_pt2_Kernels(unittest.TestCase):
     def setUpClass(cls):
         run_folder = pathlib.Path(__file__).parent.resolve()
         fp = run_folder.joinpath("../data/f2_631g.18det.fcidump")
+        cls.fp = fp
 
         _, _, J_oe, J_te = load_integrals(str(fp))
 
@@ -81,6 +82,11 @@ class Test_pt2_Kernels(unittest.TestCase):
         else:
             return [chunk for chunk in self.chunks if chunk.category == cat]
 
+    def get_ref_te_driver(self, cat):
+        fact = JChunkFactory(self.N_mos, cat, None)
+        ref_dict = {k: self.ref_J_te[k] for k in fact.idx_iter}
+        return Hamiltonian_two_electrons_integral_driven(FilteredDict(ref_dict))
+
     def launch_denom_kernel(self, kernel, chunk, ext_dets, res):
         kernel(
             chunk.J.p,
@@ -92,19 +98,57 @@ class Test_pt2_Kernels(unittest.TestCase):
             res.arr.p,
         )
 
-    def test_cat_A(self):
-        A_chunks = self.filter_chunks("A")
-        kernel = A_chunks[0].pt2_kernels[1]  # A only has denominator contribution
+    def _run_denom_test(self, cat):
+        chunk = self.filter_chunks(cat)[0]
+        kernel = chunk.pt2_kernels[1]
         pt2_d = self.LArray(N=self.ground_connected.N_dets, fill=0.0)
 
-        A_ref_dict = {k: self.ref_J_te[k] for k in JChunkFactory.A_idx_iter(self.N_mos)}
-        ref_driver = Hamiltonian_two_electrons_integral_driven(FilteredDict(A_ref_dict))
+        ref_driver = self.get_ref_te_driver(cat)
         ref_pt2_d = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_dets])
 
-        for chunk in A_chunks:
+        self.launch_denom_kernel(kernel, chunk, self.ground_connected, pt2_d)
+        self.assertTrue(np.allclose(ref_pt2_d, pt2_d.arr.np_arr, rtol=self.rtol, atol=self.atol))
+
+    def _run_batched_denom_test(self, cat, custom_batches=None):
+        if custom_batches is None:
+            chunks = self.filter_chunks(cat, batched=True)
+        else:
+            chunks = custom_batches
+
+        self.assertTrue(len(chunks) > 1)
+        kernel = chunks[0].pt2_kernels[1]  # A only has denominator contribution
+        pt2_d = self.LArray(N=self.ground_connected.N_dets, fill=0.0)
+
+        ref_driver = self.get_ref_te_driver(cat)
+        ref_pt2_d = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_dets])
+
+        for chunk in chunks:
             self.launch_denom_kernel(kernel, chunk, self.ground_connected, pt2_d)
 
         self.assertTrue(np.allclose(ref_pt2_d, pt2_d.arr.np_arr, rtol=self.rtol, atol=self.atol))
+
+    def test_cat_A(self):
+        self._run_denom_test("A")
+
+    def test_cat_A_batched(self):
+        ## since test dump only has 18 orbs, need to have smaller batches to test batched chunks for A
+        _, _, _, batched_chunks = load_integrals_into_chunks(
+            str(self.fp), FakeComm(0, 1), chunk_size=8, dtype=self.dtype
+        )
+        A_chunks = [chunk for chunk in batched_chunks if chunk.category == "A"]
+        self._run_batched_denom_test("A", A_chunks)
+
+    def test_cat_B(self):
+        self._run_denom_test("B")
+
+    def test_cat_B_batched(self):
+        self._run_batched_denom_test("B")
+
+    def test_cat_F_denom(self):
+        self._run_denom_test("F")
+
+    def test_cat_F_denom_batched(self):
+        self._run_batched_denom_test("F")
 
 
 class Test_pt2_Kernels_f32(Test_f32, Test_pt2_Kernels):

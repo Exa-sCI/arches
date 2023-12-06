@@ -112,15 +112,17 @@ template <class T>
 void A_pt2(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contributes to denominator of pt2 energy
 
-    // iterate over external determinants first since A chunk is almost always smaller
-    for (auto d_e = 0; d_e < N_ext; d_e++) {
-        auto &ext_det = psi_ext[d_e];
+    // Iterate over all integrals in chunk (should be N_orb integrals)
+    for (auto i = 0; i < N; i++) {
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+        idx_t q = c_idx.i;
 
-        // Iterate over all integrals in chunk (should be N_orb integrals)
-        // order of integrals in chunk is known by construction
-        for (auto i = 0; i < N; i++) {
+        // iterate over external determinants
+        for (auto d_e = 0; d_e < N_ext; d_e++) {
+            auto &ext_det = psi_ext[d_e];
+
             for (auto state = 0; state < N_states; state++) {
-                res[d_e + state] += ext_det[0][i] * ext_det[1][i] * J[i];
+                res[d_e + state] += ext_det[0][q] * ext_det[1][q] * J[i];
             }
         }
     }
@@ -131,7 +133,6 @@ B: J_qqrr has the following contributions (to the denominator):
     B_1) q_a -> q_a, r_b -> r_b
     B_2) r_a -> r_a, q_b -> q_b
 
-Contributions are part of combination terms
 */
 template <class T>
 void B_pt2(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
@@ -151,6 +152,9 @@ void B_pt2(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_
             for (auto state = 0; state < N_states; state++) {
                 res[d_e + state] += ext_det[0][q] * ext_det[0][r] * J[i];
                 res[d_e + state] += ext_det[1][q] * ext_det[1][r] * J[i];
+
+                res[d_e + state] += ext_det[0][q] * ext_det[1][r] * J[i];
+                res[d_e + state] += ext_det[0][r] * ext_det[1][q] * J[i];
             }
         }
     }
@@ -797,6 +801,9 @@ void H_B(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T
 
             H_v[idx] += det[0][q] * det[0][r] * J[i];
             H_v[idx] += det[1][q] * det[1][r] * J[i];
+
+            H_v[idx] += det[0][q] * det[1][r] * J[i];
+            H_v[idx] += det[0][r] * det[1][q] * J[i];
         }
     }
 }
