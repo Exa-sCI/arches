@@ -377,9 +377,6 @@ class JChunkFactory:
                 J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int64)
                 J_vals = np.fromiter(self.val_iter, count=-1, dtype=self.src_data.dtype)
                 chunk_size = J_ind.shape[0]
-                if self.category == "A":
-                    print(J_ind, J_vals)
-
                 new_chunk = JChunk(self.category, chunk_size, J_ind, J_vals)
                 chunks.append(new_chunk)
                 self._advance_batch()
@@ -399,8 +396,6 @@ class JChunkFactory:
         else:
             J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int64)
             J_vals = np.fromiter(self.val_iter, count=-1, dtype=self.src_data.dtype)
-            if self.category == "A":
-                print(J_ind, J_vals)
             chunk_size = J_ind.shape[0]
 
             return [JChunk(self.category, chunk_size, J_ind, J_vals, dtype=self.src_data.dtype)]
@@ -420,7 +415,7 @@ def load_integrals_into_chunks(
     fp, comm, comm_cat_map=default_comm_cat_map, chunk_size=-1, dtype=np.float64
 ):
     # Set-up IO
-    n_orb, E0, J_oe, J_te = load_integrals(fp)
+    n_orb, n_elec, E0, J_oe, J_te = load_integrals(fp, return_N_elec=True)
     J_oe_reader = IntegralDictReader(J_oe, dtype=dtype)
     J_te_reader = IntegralDictReader(J_te, dtype=dtype)
 
@@ -430,13 +425,11 @@ def load_integrals_into_chunks(
     chunks = []
     for cat in cats:
         if cat == "OE":
-            # fact = JChunkFactory(n_orb, cat, J_oe_reader, chunk_size, comm)
             fact = JChunkFactory(n_orb, cat, J_oe_reader, chunk_size, comm)
         else:
-            # fact = JChunkFactory(n_orb, cat, J_te_reader, chunk_size, comm)
             fact = JChunkFactory(n_orb, cat, J_te_reader, chunk_size, comm)
 
         # add new chunks and prune any empty chunks coming from bad distribution of integrals
         chunks += [chunk for chunk in fact.get_chunks() if chunk.chunk_size > 0]
 
-    return n_orb, E0, chunks
+    return n_orb, n_elec, E0, chunks

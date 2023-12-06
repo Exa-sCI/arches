@@ -221,7 +221,7 @@ class Test_IO(unittest.TestCase):
 
         N_orb_ref, E0_ref, ref_J_oe, ref_J_te = load_integrals(str(fp))
 
-        N_orb_test, E0_test, chunks = load_integrals_into_chunks(
+        N_orb_test, _, E0_test, chunks = load_integrals_into_chunks(
             str(fp), FakeComm(0, 1), dtype=self.dtype
         )
 
@@ -262,7 +262,7 @@ class Test_IO(unittest.TestCase):
 
         N_orb_ref, E0_ref, ref_J_oe, ref_J_te = load_integrals(str(fp))
 
-        N_orb_test, E0_test, chunks = load_integrals_into_chunks(
+        N_orb_test, _, E0_test, chunks = load_integrals_into_chunks(
             str(fp), FakeComm(0, 1), chunk_size=32
         )
 
