@@ -1,7 +1,7 @@
 import pathlib
 import warnings
 from ctypes import CDLL
-from itertools import combinations, combinations_with_replacement, cycle, islice
+from itertools import combinations, combinations_with_replacement, islice
 
 import numpy as np
 
@@ -377,7 +377,9 @@ class JChunkFactory:
                 J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int64)
                 J_vals = np.fromiter(self.val_iter, count=-1, dtype=self.src_data.dtype)
                 chunk_size = J_ind.shape[0]
-                new_chunk = JChunk(self.category, chunk_size, J_ind, J_vals)
+                new_chunk = JChunk(
+                    self.category, chunk_size, J_ind, J_vals, dtype=self.src_data.dtype
+                )
                 chunks.append(new_chunk)
                 self._advance_batch()
 

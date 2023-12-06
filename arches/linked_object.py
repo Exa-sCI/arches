@@ -308,7 +308,7 @@ class LinkedArray(LinkedHandle):
                 d = fill  # Assume fill is an appropriate pointer type
             return self._copy_ctor(idx_t(N), d)
         else:
-            return self._fill_ctor(idx_t(N), self.ctype(fill))
+            return self._fill_ctor(idx_t(N), self.M_array_type._ctype(fill))
 
     def destructor(self, handle):
         self._dtor(handle)
