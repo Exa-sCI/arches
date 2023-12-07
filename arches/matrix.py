@@ -638,18 +638,21 @@ for k in [f32, f64]:
     ap_ptr_return = getattr(lib_matrix, pfix + "get_ap_ptr" + sfix)
     ac_ptr_return = getattr(lib_matrix, pfix + "get_ac_ptr" + sfix)
     av_ptr_return = getattr(lib_matrix, pfix + "get_av_ptr" + sfix)
+    n_entries_return = getattr(lib_matrix, pfix + "get_n_entries" + sfix)
 
     ctor.argtypes = [idx_t, idx_t, idx_t_p, idx_t_p, k_p]
     dtor.argtypes = [handle_t]
     ap_ptr_return.argtypes = [handle_t]
     ac_ptr_return.argtypes = [handle_t]
     av_ptr_return.argtypes = [handle_t]
+    n_entries_return.argtypes = [handle_t]
 
     ctor.restype = handle_t
     dtor.restype = None
     ap_ptr_return.restype = idx_t_p
     ac_ptr_return.restype = idx_t_p
     av_ptr_return.restype = k_p
+    n_entries_return.restype = idx_t
 
 
 class SymCSRMatrix(AMatrix):
@@ -660,36 +663,44 @@ class SymCSRMatrix(AMatrix):
     _destructor_f32 = lib_matrix.SymCSRMatrix_dtor_f32
     _destructor_f64 = lib_matrix.SymCSRMatrix_dtor_f64
 
-    _get_ap_ptr_f32 = lib_matrix.SymCSRMatrix_get_ap_ptr_f32
-    _get_ac_ptr_f32 = lib_matrix.SymCSRMatrix_get_ac_ptr_f32
-    _get_av_ptr_f32 = lib_matrix.SymCSRMatrix_get_av_ptr_f32
-    _get_ap_ptr_f32 = lib_matrix.SymCSRMatrix_get_ap_ptr_f64
-    _get_ac_ptr_f32 = lib_matrix.SymCSRMatrix_get_ac_ptr_f64
-    _get_av_ptr_f32 = lib_matrix.SymCSRMatrix_get_av_ptr_f64
+    _get_A_p_ptr_f32 = lib_matrix.SymCSRMatrix_get_ap_ptr_f32
+    _get_A_p_ptr_f64 = lib_matrix.SymCSRMatrix_get_ap_ptr_f64
+
+    _get_A_c_ptr_f32 = lib_matrix.SymCSRMatrix_get_ac_ptr_f32
+    _get_A_c_ptr_f64 = lib_matrix.SymCSRMatrix_get_ac_ptr_f64
+
+    _get_A_v_ptr_f32 = lib_matrix.SymCSRMatrix_get_av_ptr_f32
+    _get_A_v_ptr_f64 = lib_matrix.SymCSRMatrix_get_av_ptr_f64
+
+    _get_n_entries_f32 = lib_matrix.SymCSRMatrix_get_n_entries_f32
+    _get_n_entries_f64 = lib_matrix.SymCSRMatrix_get_n_entries_f64
 
     _s_spgemm = lib_matrix.sym_csr_s_MM_mkl
     _d_spgemm = lib_matrix.sym_csr_d_MM_mkl
 
-    def __init__(self, m, n, dtype, A_p, A_c, A_v, handle=None):
+    def __init__(self, m, n, dtype, A_p=None, A_c=None, A_v=None, handle=None, **kwargs):
         """
         Args:
             A_p : row starts s.t. A_i lies in [A_p[i], A_i[i+1])
             A_c : col indices
             A_v : matrix values
         """
-        self.A_p = A_p
-        self.A_c = A_c
-        self.A_v = A_v
         super().__init__(
             handle=handle,
             m=m,
             n=n,
             dtype=dtype,
             ctype=np_type_map[dtype],
-            A_p=self.A_p,
-            A_c=self.A_c,
-            A_v=self.A_v,
+            A_p=A_p,
+            A_c=A_c,
+            A_v=A_v,
+            **kwargs,
         )
+
+        self.N_entries = self.get_N_entries(self.handle)
+        self.A_p = ManagedArray_idx_t(self.get_A_p_ptr(self.handle), self.m + 1, None)
+        self.A_c = ManagedArray_idx_t(self.get_A_c_ptr(self.handle), self.N_entries, None)
+        self.A_v = self._M_array_type(self.get_A_v_ptr(self.handle), self.N_entries, None)
 
     # Since SymCSR really only applies to the Hamiltonian, and always left-multiplies, don't need nearly as much
     # functionality to create new arrays and manage memory
@@ -741,6 +752,7 @@ class SymCSRMatrix(AMatrix):
         else:
             raise ValueError
 
+    @property
     def get_A_p_ptr(self):
         match self.dtype:
             case np.float32:
@@ -750,24 +762,37 @@ class SymCSRMatrix(AMatrix):
             case _:
                 raise NotImplementedError
 
+    @property
     def get_A_c_ptr(self):
         match self.dtype:
             case np.float32:
-                return self._get_A_p_ptr_f32
+                return self._get_A_c_ptr_f32
             case np.float64:
-                return self._get_A_p_ptr_f64
+                return self._get_A_c_ptr_f64
             case _:
                 raise NotImplementedError
 
+    @property
     def get_A_v_ptr(self):
         match self.dtype:
             case np.float32:
-                return self._get_A_p_ptr_f32
+                return self._get_A_v_ptr_f32
             case np.float64:
-                return self._get_A_p_ptr_f64
+                return self._get_A_v_ptr_f64
             case _:
                 raise NotImplementedError
 
+    @property
+    def get_N_entries(self):
+        match self.dtype:
+            case np.float32:
+                return self._get_n_entries_f32
+            case np.float64:
+                return self._get_n_entries_f64
+            case _:
+                raise NotImplementedError
+
+    @property
     def spgemm(self, op_A, op_B, alpha, A, B, beta, C):
         match self.dtype:
             case np.float32:

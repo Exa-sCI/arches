@@ -1,4 +1,5 @@
 #pragma once
+#include "determinant.h"
 #include "integral_indexing_utils.h"
 #include <algorithm>
 #include <memory>
@@ -90,14 +91,70 @@ template <class T> class SymCSRMatrix {
     };
 
     // copy constructor from unique ptr, using move semantics
-    SymCSRMatrix(idx_t M, idx_t N, std::unique_ptr<idx_t[]> arr_p, std::unique_ptr<idx_t[]> arr_c,
-                 std::unique_ptr<T[]> arr_v) {
+    SymCSRMatrix(idx_t M, idx_t N, std::unique_ptr<idx_t[]> &arr_p, std::unique_ptr<idx_t[]> &arr_c,
+                 std::unique_ptr<T[]> &arr_v) {
         m = M;
         n = N;
 
         A_p_ptr = std::move(arr_p);
         A_c_ptr = std::move(arr_c);
         A_v_ptr = std::move(arr_v);
+
+        A_p = A_p_ptr.get();
+        A_c = A_c_ptr.get();
+        A_v = A_v_ptr.get();
+    }
+
+    // This is way too slow for actual formation of explicit Hamiltonians, but it's easy to write!
+    // Should get bilinear mappings so that we can iterate over known determinants and find
+    // connections directly. Or, resort to on the fly generation of the Hamiltonian structure, which
+    // would need true expandable vectors inside the offloaded kernels
+    SymCSRMatrix(DetArray *psi_det) {
+        idx_t N_dets = psi_det->size;
+        m = N_dets;
+        n = N_dets;
+
+        std::vector<std::vector<idx_t>> csr_rows;
+        std::unique_ptr<idx_t[]> H_p(new idx_t[N_dets + 1]);
+        idx_t *H_p_p = H_p.get();
+        std::fill(H_p_p, H_p_p + N_dets + 1, 0);
+        // find non-zero entries
+        for (auto i = 0; i < N_dets; i++) {
+            det_t &d_row = psi_det->arr[i];
+
+            H_p[i + 1] += 1; // add H_ii
+            std::vector<idx_t> new_row(1, i);
+            csr_rows.emplace_back(std::move(new_row));
+            for (auto j = i + 1; j < N_dets; j++) {
+                det_t &d_col = psi_det->arr[j];
+
+                det_t exc = exc_det(d_row, d_col);
+                auto degree = (exc[0].count() + exc[1].count()) / 2;
+
+                if (degree <= 2) { // add H_ij
+                    csr_rows[i].push_back(j);
+                    H_p[i + 1] += 1;
+                }
+            }
+
+            H_p[i + 1] += H_p[i]; // adjust global row offset
+        }
+
+        // copy over from vector of vectors into single array
+        std::unique_ptr<idx_t[]> H_c(new idx_t[H_p[N_dets]]);
+        idx_t *H_c_p = H_c.get();
+        for (auto i = 0; i < N_dets; i++) {
+            std::copy(csr_rows[i].begin(), csr_rows[i].end(), H_c_p + H_p[i]);
+        }
+
+        // initialize values at 0
+        std::unique_ptr<T[]> H_v(new T[H_p[N_dets]]);
+        T *H_v_p = H_v.get();
+        std::fill(H_v_p, H_v_p + H_p[N_dets], (T)0.0);
+
+        A_p_ptr = std::move(H_p);
+        A_c_ptr = std::move(H_c);
+        A_v_ptr = std::move(H_v);
 
         A_p = A_p_ptr.get();
         A_c = A_c_ptr.get();
@@ -116,6 +173,7 @@ template <class T> class SymCSRMatrix {
         A_p = A_p_ptr.get();
         A_c = A_c_ptr.get();
         A_v = A_v_ptr.get();
+        return *this;
     };
 };
 

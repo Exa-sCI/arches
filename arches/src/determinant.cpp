@@ -3,6 +3,7 @@
 #endif
 #include <determinant.h>
 #include <doctest/doctest.h>
+#include <matrix.h>
 
 int compute_phase_single_excitation(spin_det_t d, idx_t h, idx_t p) {
     const auto &[i, j] = std::minmax(h, p);
@@ -591,5 +592,13 @@ DetArray *Dets_get_constrained_dets(det_t *source, idx_t N_dets, idx_t *h_a, idx
     const exc_constraint_t b(bh, bp);
 
     return new DetArray(get_constrained_connected_dets(source, N_dets, a, b));
+}
+
+SymCSRMatrix<float> *Dets_get_H_structure_naive_f32(DetArray *psi_det) {
+    return new SymCSRMatrix<float>(psi_det);
+}
+
+SymCSRMatrix<double> *Dets_get_H_structure_naive_f64(DetArray *psi_det) {
+    return new SymCSRMatrix<double>(psi_det);
 }
 }

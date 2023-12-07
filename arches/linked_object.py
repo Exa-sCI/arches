@@ -145,14 +145,24 @@ class ManagedArray(ABC):
 
     def __setitem__(self, k, v):
         if isinstance(k, slice):
+            if k.start is None:
+                start = 0
+            else:
+                start = k.start
+            if k.stop is None:
+                stop = self.size
+            else:
+                stop = k.stop
+
             if isinstance(v, np.ndarray):
                 d = v.ctypes.data_as(self.ptype)
             else:
                 d = v
+
             if k.step:
-                self.set_strided_range(self.p, k.start, k.stop, k.step, d)
+                self.set_strided_range(self.p, idx_t(start), idx_t(stop), idx_t(k.step), d)
             else:
-                self.set_range(self.p, k.start, k.stop, d)
+                self.set_range(self.p, idx_t(start), idx_t(stop), d)
         else:
             self.set_val(self.p, k, self.ctype(v))
 

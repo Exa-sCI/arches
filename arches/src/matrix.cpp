@@ -125,6 +125,9 @@ idx_t *SymCSRMatrix_get_ac_ptr_f64(SymCSRMatrix<double> *A) { return A->A_c; }
 
 float *SymCSRMatrix_get_av_ptr_f32(SymCSRMatrix<float> *A) { return A->A_v; }
 double *SymCSRMatrix_get_av_ptr_f64(SymCSRMatrix<double> *A) { return A->A_v; }
+
+idx_t SymCSRMatrix_get_n_entries_f32(SymCSRMatrix<float> *A) { return A->A_p[A->m]; }
+idx_t SymCSRMatrix_get_n_entries_f64(SymCSRMatrix<double> *A) { return A->A_p[A->m]; }
 }
 
 extern "C" {

@@ -15,6 +15,7 @@ from arches.linked_object import (
     idx_t,
     idx_t_p,
 )
+from arches.matrix import SymCSRMatrix
 
 run_folder = pathlib.Path(__file__).parent.resolve()
 lib_dets = CDLL(run_folder.joinpath("build/libdeterminant.so"))
@@ -115,6 +116,12 @@ lib_dets.Dets_DetArray_get_N_mos.restype = idx_t
 
 lib_dets.Dets_DetArray_get_arr_pointer.argtypes = [handle_t]
 lib_dets.Dets_DetArray_get_arr_pointer.restype = handle_t
+
+lib_dets.Dets_get_H_structure_naive_f32.argtypes = [handle_t, idx_t]
+lib_dets.Dets_get_H_structure_naive_f32.restype = handle_t
+
+lib_dets.Dets_get_H_structure_naive_f64.argtypes = [handle_t, idx_t]
+lib_dets.Dets_get_H_structure_naive_f64.restype = handle_t
 
 #### Generation routines
 for exc in ["singles", "same_spin_doubles", "opp_spin_doubles", "dets"]:
@@ -442,6 +449,23 @@ class DetArray(DetGenerator, LinkedHandle):
     @property
     def det_pointer(self):
         return self._det_pointer
+
+    def get_H_structure(self, dtype):
+        match dtype:
+            case np.float32:
+                res_handle = lib_dets.Dets_get_H_structure_naive_f32(
+                    self.handle, idx_t(self.N_dets)
+                )
+            case np.float64:
+                res_handle = lib_dets.Dets_get_H_structure_naive_f64(
+                    self.handle, idx_t(self.N_dets)
+                )
+            case _:
+                raise NotImplementedError
+
+        return SymCSRMatrix(
+            self.N_dets, self.N_dets, dtype=dtype, handle=res_handle, override_original=True
+        )
 
 
 class exc(ABC):
