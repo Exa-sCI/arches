@@ -1,6 +1,7 @@
 #pragma once
 #include <determinant.h>
 #include <integral_indexing_utils.h>
+#include <iostream>
 
 /*
  Kernels for performing integral driven calculations
@@ -599,16 +600,17 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
             // checks for same spin doubles
             // g_ii in (0,1,2,3) :
             // 0 - none, 1 - only alpha 2- only beta 3 - both alpha and beta
-            int g_11, g_22, g_33, g_44 = 0;
+            int g_11, g_22, g_33, g_44;
+            g_11 = g_22 = g_33 = g_44 = 0;
             for (auto spin = 0; spin < 2; spin++) {
-                g_11 = (spin + 1) *
-                       ((d_int[spin][q] && d_int[spin][r]) && (!d_int[spin][s] && !d_int[spin][t]));
-                g_22 = (spin + 1) *
-                       ((d_int[spin][s] && d_int[spin][t]) && (!d_int[spin][q] && !d_int[spin][r]));
-                g_33 = (spin + 1) *
-                       ((d_int[spin][q] && d_int[spin][t]) && (!d_int[spin][s] && !d_int[spin][r]));
-                g_44 = (spin + 1) *
-                       ((d_int[spin][r] && d_int[spin][s]) && (!d_int[spin][q] && !d_int[spin][t]));
+                g_11 += (spin + 1) * ((d_int[spin][q] && d_int[spin][r]) &&
+                                      (!d_int[spin][s] && !d_int[spin][t]));
+                g_22 += (spin + 1) * ((d_int[spin][s] && d_int[spin][t]) &&
+                                      (!d_int[spin][q] && !d_int[spin][r]));
+                g_33 += (spin + 1) * ((d_int[spin][q] && d_int[spin][t]) &&
+                                      (!d_int[spin][s] && !d_int[spin][r]));
+                g_44 += (spin + 1) * ((d_int[spin][r] && d_int[spin][s]) &&
+                                      (!d_int[spin][q] && !d_int[spin][t]));
             }
 
             if (!(g_aceg || g_bdfh ||
@@ -650,19 +652,23 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     }
                 case 0: { // scoped so that variable can initialize
                     // (0,2) : g_ii >= 2 is criterion for acceptance
-                    bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
-                    if (!aa_check)
+                    bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
+                    if (!bb_check)
                         continue;
 
                     // now must be one of g_11, g_22, g_33, g_44
                     if (g_11 >= 2) {
-                        phase = compute_phase_double_excitation(d_int[0], q, r, s, t);
+                        phase = compute_phase_double_excitation(d_int[1], q, r, s, t);
+                        phase = r < q ? -1 * phase : phase;
                     } else if (g_22 >= 2) {
-                        phase = compute_phase_double_excitation(d_int[0], s, t, q, r);
+                        phase = compute_phase_double_excitation(d_int[1], s, t, q, r);
+                        phase = r < q ? -1 * phase : phase;
                     } else if (g_33 >= 2) {
-                        phase = compute_phase_double_excitation(d_int[0], q, t, s, r);
+                        phase = compute_phase_double_excitation(d_int[1], q, t, s, r);
+                        phase = s < r ? -1 * phase : phase;
                     } else {
-                        phase = compute_phase_double_excitation(d_int[0], r, s, q, t);
+                        phase = compute_phase_double_excitation(d_int[1], r, s, q, t);
+                        phase = s < r ? -1 * phase : phase;
                     }
 
                     for (auto state = 0; state < N_states; state++) {
@@ -671,19 +677,23 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                 }
                 case 2: { // scoped so that variable can initialize
                     // (2,0) : g_ii % 2 is criterion for acceptance
-                    bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
-                    if (!bb_check)
+                    bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
+                    if (!aa_check)
                         continue;
 
                     // now must be one of g_11, g_22, g_33, g_44
                     if (g_11 % 2) {
-                        phase = compute_phase_double_excitation(d_int[1], q, r, s, t);
+                        phase = compute_phase_double_excitation(d_int[0], q, r, s, t);
+                        phase = r < q ? -1 * phase : phase;
                     } else if (g_22 % 2) {
-                        phase = compute_phase_double_excitation(d_int[1], s, t, q, r);
+                        phase = compute_phase_double_excitation(d_int[0], s, t, q, r);
+                        phase = r < q ? -1 * phase : phase;
                     } else if (g_33 % 2) {
-                        phase = compute_phase_double_excitation(d_int[1], q, t, s, r);
+                        phase = compute_phase_double_excitation(d_int[0], q, t, s, r);
+                        phase = s < r ? -1 * phase : phase;
                     } else {
-                        phase = compute_phase_double_excitation(d_int[1], r, s, q, t);
+                        phase = compute_phase_double_excitation(d_int[0], r, s, q, t);
+                        phase = s < r ? -1 * phase : phase;
                     }
                     for (auto state = 0; state < N_states; state++) {
                         res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
