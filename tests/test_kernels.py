@@ -46,8 +46,8 @@ class Test_pt2_Kernels(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         run_folder = pathlib.Path(__file__).parent.resolve()
-        # fp = run_folder.joinpath("../data/f2_631g.18det.fcidump")
-        fp = run_folder.joinpath("../data/nh3.5det.fcidump")
+        fp = run_folder.joinpath("../data/f2_631g.18det.fcidump")
+        # fp = run_folder.joinpath("../data/nh3.5det.fcidump")
         cls.fp = fp
 
         _, _, J_oe, J_te = load_integrals(str(fp))
@@ -161,7 +161,6 @@ class Test_pt2_Kernels(unittest.TestCase):
         chunk = self.filter_chunks(cat)[0]
         kernel = chunk.pt2_kernels[0]
         psi_coef = self.LArray(N=1, fill=1.0)
-        psi_coef.arr[0] = 1.0
         pt2_n = self.LArray(N=self.ground_connected.N_dets, fill=0.0)
 
         self.launch_num_kernel(

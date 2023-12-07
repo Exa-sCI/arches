@@ -179,7 +179,7 @@ for k, v in type_dict.items():
 
     empty_ctor = getattr(lib_array, pfix + "ctor_e" + sfix)
     fill_ctor = getattr(lib_array, pfix + "ctor_c" + sfix)
-    copy_ctor = getattr(lib_array, pfix + "ctor_c" + sfix)
+    copy_ctor = getattr(lib_array, pfix + "ctor_a" + sfix)
     dtor = getattr(lib_array, pfix + "dtor" + sfix)
     ptr_return = getattr(lib_array, pfix + "get_arr_ptr" + sfix)
 
@@ -303,6 +303,7 @@ class LinkedArray(LinkedHandle):
             return self._empty_ctor(idx_t(N))
         elif hasattr(fill, "__iter__"):
             if isinstance(fill, np.ndarray):
+                fill = fill.astype(self.M_array_type._dtype)
                 d = fill.ctypes.data_as(self.M_array_type._ptype)
             else:
                 d = fill  # Assume fill is an appropriate pointer type
