@@ -17,6 +17,10 @@ from arches.integral_indexing_utils import (
 from arches.integrals import JChunkFactory, load_integrals_into_chunks
 from arches.io import load_integrals
 from arches.linked_object import f32_p, idx_t
+from arches.matrix import DMatrix
+
+seed = 521392
+rng = np.random.default_rng(seed=seed)
 
 
 class FakeComm:
@@ -51,6 +55,8 @@ class Test_Kernel_Fixture(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.rng = rng
+
         run_folder = pathlib.Path(__file__).parent.resolve()
         fp = run_folder.joinpath("../data/nh3.5det.fcidump")
         # fp = run_folder.joinpath("../data/f2_631g.18det.fcidump")
@@ -59,7 +65,7 @@ class Test_Kernel_Fixture(unittest.TestCase):
 
         _, _, J_oe, J_te = load_integrals(str(fp))
 
-        N_orbs, N_elec, E0, chunks = load_integrals_into_chunks(
+        N_mos, N_elec, E0, chunks = load_integrals_into_chunks(
             str(fp), FakeComm(0, 1), dtype=cls.dtype
         )
 
@@ -67,7 +73,7 @@ class Test_Kernel_Fixture(unittest.TestCase):
             str(fp), FakeComm(0, 1), chunk_size=32, dtype=cls.dtype
         )
 
-        cls.N_mos = N_orbs
+        cls.N_mos = N_mos
         cls.E0 = E0
         cls.chunks = chunks
         cls.batched_chunks = batched_chunks
@@ -76,31 +82,15 @@ class Test_Kernel_Fixture(unittest.TestCase):
 
         max_orb = N_elec // 2
         ground_state = det_t(
-            N_orbs,
-            spin_det_t(N_orbs, occ=True, max_orb=max_orb),
-            spin_det_t(N_orbs, occ=True, max_orb=max_orb),
+            N_mos,
+            spin_det_t(N_mos, occ=True, max_orb=max_orb),
+            spin_det_t(N_mos, occ=True, max_orb=max_orb),
         )
 
         cls.ground_state = ground_state
-        cls.ground_connected = ground_state.generate_connected_dets()
-
-        alpha_orbs = ground_state.alpha.as_orb_list
-        beta_orbs = ground_state.beta.as_orb_list
-        h_constraint = alpha_orbs[-3:]
-        p_constraint = tuple(set([x for x in range(N_orbs)]).difference(set(h_constraint)))[-4:]
-
-        constraint = (h_constraint, p_constraint)
-        cls.ground_constrained = ground_state.generate_connected_dets(constraint)
-
-        cls.ref_ground_state = det_ref(alpha_orbs, beta_orbs)
-
-        cls.ref_dets = [
-            det_ref(d.alpha.as_orb_list, d.beta.as_orb_list) for d in cls.ground_connected
-        ]
-
-        cls.ref_constrained_dets = [
-            det_ref(d.alpha.as_orb_list, d.beta.as_orb_list) for d in cls.ground_constrained
-        ]
+        cls.alpha_orbs = cls.ground_state.alpha.as_orb_list
+        cls.beta_orbs = cls.ground_state.beta.as_orb_list
+        cls.ref_ground_state = det_ref(cls.alpha_orbs, cls.beta_orbs)
 
     def filter_chunks(self, cat, batched=False):
         if batched:
@@ -121,6 +111,13 @@ class Test_Kernel_Fixture(unittest.TestCase):
 
 class Test_pt2_Kernels(Test_Kernel_Fixture):
     __test__ = False
+
+    @classmethod
+    def setUpClass(cls):
+        super(Test_pt2_Kernels, cls).setUpClass()
+
+        cls.connected = cls.ground_state.generate_connected_dets()
+        cls.ref_dets = [det_ref(d.alpha.as_orb_list, d.beta.as_orb_list) for d in cls.connected]
 
     def launch_denom_kernel(self, kernel, chunk, ext_dets, res):
         kernel(
@@ -150,13 +147,13 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
     def run_denom_test(self, cat, verbose=False):
         chunk = self.filter_chunks(cat)[0]
         kernel = chunk.pt2_kernels[1]
-        pt2_d = self.LArray(N=self.ground_connected.N_dets, fill=0.0)
+        pt2_d = self.LArray(N=self.connected.N_dets, fill=0.0)
 
         ref_driver = self.get_ref_driver(cat)
 
         ref_pt2_d = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_dets])
 
-        self.launch_denom_kernel(kernel, chunk, self.ground_connected, pt2_d)
+        self.launch_denom_kernel(kernel, chunk, self.connected, pt2_d)
         self.assertTrue(np.allclose(ref_pt2_d, pt2_d.arr.np_arr, rtol=self.rtol, atol=self.atol))
 
     def run_batched_denom_test(self, cat, custom_batches=None):
@@ -167,13 +164,13 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
 
         self.assertTrue(len(chunks) > 1)
         kernel = chunks[0].pt2_kernels[1]
-        pt2_d = self.LArray(N=self.ground_connected.N_dets, fill=0.0)
+        pt2_d = self.LArray(N=self.connected.N_dets, fill=0.0)
 
         ref_driver = self.get_ref_driver(cat)
         ref_pt2_d = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_dets])
 
         for chunk in chunks:
-            self.launch_denom_kernel(kernel, chunk, self.ground_connected, pt2_d)
+            self.launch_denom_kernel(kernel, chunk, self.connected, pt2_d)
 
         self.assertTrue(np.allclose(ref_pt2_d, pt2_d.arr.np_arr, rtol=self.rtol, atol=self.atol))
 
@@ -193,11 +190,9 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
         chunk = self.filter_chunks(cat)[0]
         kernel = chunk.pt2_kernels[0]
         psi_coef = self.LArray(N=1, fill=1.0)
-        pt2_n = self.LArray(N=self.ground_connected.N_dets, fill=0.0)
+        pt2_n = self.LArray(N=self.connected.N_dets, fill=0.0)
 
-        self.launch_num_kernel(
-            kernel, chunk, self.ground_state, psi_coef, self.ground_connected, pt2_n
-        )
+        self.launch_num_kernel(kernel, chunk, self.ground_state, psi_coef, self.connected, pt2_n)
         self.assertTrue(np.allclose(ref_res, pt2_n.arr.np_arr, rtol=self.rtol, atol=self.atol))
 
     def run_batched_num_test(self, cat, verbose=False):
@@ -216,11 +211,11 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
         chunks = self.filter_chunks(cat, batched=True)
         kernel = chunks[0].pt2_kernels[0]
         psi_coef = self.LArray(N=1, fill=1.0)
-        pt2_n = self.LArray(N=self.ground_connected.N_dets, fill=0.0)
+        pt2_n = self.LArray(N=self.connected.N_dets, fill=0.0)
 
         for chunk in chunks:
             self.launch_num_kernel(
-                kernel, chunk, self.ground_state, psi_coef, self.ground_connected, pt2_n
+                kernel, chunk, self.ground_state, psi_coef, self.connected, pt2_n
             )
 
         self.assertTrue(np.allclose(ref_res, pt2_n.arr.np_arr, rtol=self.rtol, atol=self.atol))
@@ -305,7 +300,15 @@ class Test_H_Kernels(Test_Kernel_Fixture):
     @classmethod
     def setUpClass(cls):
         super(Test_H_Kernels, cls).setUpClass()
-        ref_dets = cls.ref_constrained_dets
+
+        h_constraint = cls.alpha_orbs[-3:]
+        p_constraint = tuple(set([x for x in range(cls.N_mos)]).difference(set(h_constraint)))[-4:]
+
+        constraint = (h_constraint, p_constraint)
+        cls.connected = cls.ground_state.generate_connected_dets(constraint)
+        cls.ref_dets = [det_ref(d.alpha.as_orb_list, d.beta.as_orb_list) for d in cls.connected]
+
+        ref_dets = cls.ref_dets
         N_ref_dets = len(ref_dets)
         ref_entries = []
         for i in range(N_ref_dets):
@@ -316,7 +319,7 @@ class Test_H_Kernels(Test_Kernel_Fixture):
 
         cls.ref_entries = ref_entries
 
-        cls.H_structure = cls.ground_constrained.get_H_structure(cls.dtype)
+        cls.H_structure = cls.connected.get_H_structure(cls.dtype)
 
     def test_H_structure(self):
         ref_set = set(self.ref_entries)
@@ -337,8 +340,8 @@ class Test_H_Kernels(Test_Kernel_Fixture):
             chunk.J.p,
             chunk.idx.p,
             idx_t(chunk.chunk_size),
-            self.ground_constrained.det_pointer,
-            idx_t(self.ground_constrained.N_dets),
+            self.connected.det_pointer,
+            idx_t(self.connected.N_dets),
             self.H_structure.A_p.p,
             self.H_structure.A_v.p,
         )
@@ -348,8 +351,8 @@ class Test_H_Kernels(Test_Kernel_Fixture):
             chunk.J.p,
             chunk.idx.p,
             idx_t(chunk.chunk_size),
-            self.ground_constrained.det_pointer,
-            idx_t(self.ground_constrained.N_dets),
+            self.connected.det_pointer,
+            idx_t(self.connected.N_dets),
             self.H_structure.A_p.p,
             self.H_structure.A_c.p,
             self.H_structure.A_v.p,
@@ -360,7 +363,7 @@ class Test_H_Kernels(Test_Kernel_Fixture):
         kernel = chunk.H_kernels[1]
 
         ref_driver = self.get_ref_driver(cat)
-        ref_H_ii = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_constrained_dets])
+        ref_H_ii = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_dets])
 
         # Clear out result since H_structure is cached
         for i in range(self.H_structure.m):
@@ -385,7 +388,7 @@ class Test_H_Kernels(Test_Kernel_Fixture):
         self.assertTrue(len(chunks) > 1)
 
         ref_driver = self.get_ref_driver(cat)
-        ref_H_ii = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_constrained_dets])
+        ref_H_ii = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_dets])
 
         # Clear out result since H_structure is cached
         for i in range(self.H_structure.m):
@@ -412,15 +415,15 @@ class Test_H_Kernels(Test_Kernel_Fixture):
             for i, j in self.ref_entries:
                 if i == j:
                     continue
-                det_I = self.ref_constrained_dets[i]
-                det_J = self.ref_constrained_dets[j]
+                det_I = self.ref_dets[i]
+                det_J = self.ref_dets[j]
                 ref_H_ij[i, j] += ref_driver.H_ij(det_I, det_J)
         else:
             for i, j in self.ref_entries:
                 if i == j:
                     continue
-                det_I = self.ref_constrained_dets[i]
-                det_J = self.ref_constrained_dets[j]
+                det_I = self.ref_dets[i]
+                det_J = self.ref_dets[j]
                 for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
                     ref_H_ij[i, j] += phase * ref_driver.H_ijkl_orbital(*idx)
 
@@ -450,15 +453,15 @@ class Test_H_Kernels(Test_Kernel_Fixture):
             for i, j in self.ref_entries:
                 if i == j:
                     continue
-                det_I = self.ref_constrained_dets[i]
-                det_J = self.ref_constrained_dets[j]
+                det_I = self.ref_dets[i]
+                det_J = self.ref_dets[j]
                 ref_H_ij[i, j] += ref_driver.H_ij(det_I, det_J)
         else:
             for i, j in self.ref_entries:
                 if i == j:
                     continue
-                det_I = self.ref_constrained_dets[i]
-                det_J = self.ref_constrained_dets[j]
+                det_I = self.ref_dets[i]
+                det_J = self.ref_dets[j]
                 for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
                     ref_H_ij[i, j] += phase * ref_driver.H_ijkl_orbital(*idx)
 
