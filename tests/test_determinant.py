@@ -1004,14 +1004,18 @@ class Test_DetArray(unittest.TestCase):
                 ref_set = ref_set.union(set([(d.alpha, d.beta) for d in connected_dets]))
 
             source_arr = DetArray(len(alpha_orb_sets), N_orbs)
+            source_set = []
             for i, (alpha_orbs, beta_orbs) in enumerate(zip(alpha_orb_sets, beta_orb_sets)):
                 source_arr[i] = det_t(
                     alpha=spin_det_t(N_orbs, alpha_orbs), beta=spin_det_t(N_orbs, beta_orbs)
                 )
-            test_dets = source_arr.generate_connected_dets()
-            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
+                source_set.append((alpha_orbs, beta_orbs))
 
+            test_dets = source_arr.generate_connected_dets()
+            source_set = set(source_set)
+            test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
             self.assertEqual(ref_set, test_set)
+            self.assertEqual(set(), test_set.intersection(source_set))
 
         for _ in range(1):
             for N_occupied in [4, 7, 17]:
@@ -1054,14 +1058,19 @@ class Test_DetArray(unittest.TestCase):
                 )
 
             source_arr = DetArray(len(alpha_orb_sets), N_orbs)
+            source_set = []
             for i, (alpha_orbs, beta_orbs) in enumerate(zip(alpha_orb_sets, beta_orb_sets)):
                 source_arr[i] = det_t(
                     alpha=spin_det_t(N_orbs, alpha_orbs), beta=spin_det_t(N_orbs, beta_orbs)
                 )
+                source_set.append((alpha_orbs, beta_orbs))
+
             test_dets = source_arr.generate_connected_dets(constraint)
+            source_set = set(source_set)
             test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
 
             self.assertEqual(ref_set, test_set)
+            self.assertEqual(set(), test_set.intersection(source_set))
 
         def check_different_constraint(alpha_orb_sets, beta_orb_sets, constraint):
             def check_exc(x, y):
@@ -1093,14 +1102,19 @@ class Test_DetArray(unittest.TestCase):
                 )
 
             source_arr = DetArray(len(alpha_orb_sets), N_orbs)
+            source_set = []
             for i, (alpha_orbs, beta_orbs) in enumerate(zip(alpha_orb_sets, beta_orb_sets)):
                 source_arr[i] = det_t(
                     alpha=spin_det_t(N_orbs, alpha_orbs), beta=spin_det_t(N_orbs, beta_orbs)
                 )
+                source_set.append((alpha_orbs, beta_orbs))
+
             test_dets = source_arr.generate_connected_dets(constraint)
+            source_set = set(source_set)
             test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in test_dets)
 
             self.assertEqual(ref_set, test_set)
+            self.assertEqual(set(), test_set.intersection(source_set))
 
         for _ in range(8):
             common_constraint = (
@@ -1122,6 +1136,17 @@ class Test_DetArray(unittest.TestCase):
 
                 check_common_constraint(alpha_orb_sets, beta_orb_sets, common_constraint)
                 check_different_constraint(alpha_orb_sets, beta_orb_sets, diff_constraint)
+
+    def test_connected_recursion(self):
+        N_orbs = 4
+        ground_state = det_t(
+            N_orbs, spin_det_t(N_orbs, occ=True, max_orb=2), spin_det_t(N_orbs, occ=True, max_orb=2)
+        )
+        c1 = ground_state.generate_connected_dets()
+        c1_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in c1)
+        c2 = c1.generate_connected_dets()
+        c2_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in c2)
+        self.assertEqual(c1_set.intersection(c2_set), set())
 
 
 if __name__ == "__main__":

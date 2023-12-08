@@ -318,20 +318,13 @@ std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t alpha_co
     return ss_doubles;
 }
 
-void print(spin_det_t *det) {
-    auto N_orbs = det->N_mos;
-    for (auto i = 0; i < N_orbs; i++) {
-        std::cout << det->operator[](i);
-    }
-    std::cout << std::endl;
-}
-
 std::vector<det_t> get_all_connected_dets(det_t *d, idx_t N_dets) {
 
     std::vector<det_t> connected;
     LinearUnorderedMap hash_map = LinearUnorderedMap();
+    int success;
     for (auto i = 0; i < N_dets; i++) {
-        hash_map.add_det(d[i]);
+        success = hash_map.add_det(d[i]);
     }
 
     for (auto i = 0; i < N_dets; i++) {
@@ -340,13 +333,15 @@ std::vector<det_t> get_all_connected_dets(det_t *d, idx_t N_dets) {
         std::vector<det_t> ss_doubles = get_ss_doubles(current_det);
 
         for (auto &new_det : singles_and_os_doubles) {
-            if (hash_map.add_det(new_det)) {
+            success = hash_map.add_det(new_det);
+            if (success) {
                 connected.push_back(new_det);
             }
         }
 
         for (auto &new_det : ss_doubles) {
-            if (hash_map.add_det(new_det)) {
+            success = hash_map.add_det(new_det);
+            if (success) {
                 connected.push_back(new_det);
             }
         }
@@ -362,8 +357,9 @@ std::vector<det_t> get_constrained_connected_dets(det_t *d, idx_t N_dets,
     std::vector<det_t> connected;
     LinearUnorderedMap hash_map = LinearUnorderedMap();
 
+    int success;
     for (auto i = 0; i < N_dets; i++) {
-        hash_map.add_det(d[i]);
+        success = hash_map.add_det(d[i]);
     }
 
     for (auto i = 0; i < N_dets; i++) {
@@ -373,19 +369,17 @@ std::vector<det_t> get_constrained_connected_dets(det_t *d, idx_t N_dets,
         std::vector<det_t> ss_doubles =
             get_constrained_ss_doubles(current_det, alpha_constraint, beta_constraint);
 
-        int count = 0;
         for (auto &new_det : singles_and_os_doubles) {
-            if (hash_map.add_det(new_det))
+            success = hash_map.add_det(new_det);
+            if (success) {
                 connected.push_back(new_det);
+            }
         }
 
-        count = 0;
-        if (ss_doubles.size()) {
-
-            for (auto &new_det : ss_doubles) {
-
-                if (hash_map.add_det(new_det))
-                    connected.push_back(new_det);
+        for (auto &new_det : ss_doubles) {
+            success = hash_map.add_det(new_det);
+            if (success) {
+                connected.push_back(new_det);
             }
         }
     }

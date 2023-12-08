@@ -166,18 +166,22 @@ class spin_det_t {
     bool operator<(const spin_det_t &other) const {
         // assert(N_blocks = other.N_blocks);
         idx_t i = 0;
-        bool success;
-        while ((success = this->block_arr[i] < other.block_arr[i]) && (i < N_blocks))
+        bool success = true;
+        while (success && (i < this->N_blocks)) {
+            success = this->block_arr[i] < other.block_arr[i];
             i++;
+        }
         return success;
     }
 
     bool operator==(const spin_det_t &other) const {
         // assert(N_blocks = other.N_blocks);
         idx_t i = 0;
-        bool success;
-        while ((success = block_arr[i] == other.block_arr[i]) && (i < N_blocks))
+        bool success = true;
+        while (success && (i < this->N_blocks)) {
+            success = this->block_arr[i] == other.block_arr[i];
             i++;
+        }
         return success;
     }
 
@@ -393,8 +397,9 @@ class LinearUnorderedMap {
         // If collides, use linear probing to augment hash_val
         std::size_t hash_val = hash_f(d);
         while (map.count(hash_val) == 1) {
-            if (map[hash_val] == d)
+            if (map[hash_val] == d) {
                 return 0;
+            }
             hash_val++;
         }
 
