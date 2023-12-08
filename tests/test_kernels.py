@@ -116,29 +116,46 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
     def setUpClass(cls):
         super(Test_pt2_Kernels, cls).setUpClass()
 
-        cls.connected = cls.ground_state.generate_connected_dets()
-        cls.ref_dets = [det_ref(d.alpha.as_orb_list, d.beta.as_orb_list) for d in cls.connected]
+        h_constraint = cls.alpha_orbs[-2:]
+        p_constraint = tuple(set([x for x in range(cls.N_mos)]).difference(set(cls.alpha_orbs)))[:2]
+        cls.dets_int = cls.ground_state.generate_connected_dets((h_constraint, p_constraint))
+
+        h_constraint = cls.alpha_orbs[-3:]
+        p_constraint = tuple(set([x for x in range(cls.N_mos)]).difference(set(cls.alpha_orbs)))[:4]
+        cls.dets_ext = cls.dets_int.generate_connected_dets((h_constraint, p_constraint))
+
+        cls.ref_int = [det_ref(d.alpha.as_orb_list, d.beta.as_orb_list) for d in cls.dets_int]
+        cls.ref_ext = [det_ref(d.alpha.as_orb_list, d.beta.as_orb_list) for d in cls.dets_ext]
+
+        print(set(cls.ref_int).intersection(set(cls.ref_ext)))
+        cls.N_states = 1
+        cls.N_int = cls.dets_int.N_dets
+        cls.N_ext = cls.dets_ext.N_dets
+        ref_psi_coef = rng.uniform(size=(cls.N_int, cls.N_states)).astype(cls.dtype)
+        ref_psi_coef = ref_psi_coef / np.linalg.norm(ref_psi_coef, axis=0)
+        cls.ref_psi_coef = ref_psi_coef
+        cls.test_psi_coef = DMatrix(cls.N_int, cls.N_states, ref_psi_coef, dtype=cls.dtype)
 
     def launch_denom_kernel(self, kernel, chunk, ext_dets, res):
         kernel(
             chunk.J.p,
             chunk.idx.p,
             idx_t(chunk.chunk_size),
-            idx_t(1),
+            idx_t(self.N_states),
             ext_dets.det_pointer,
             ext_dets.N_dets,
             res.arr.p,
         )
 
-    def launch_num_kernel(self, kernel, chunk, int_dets, psi_coef, ext_dets, res):
+    def launch_num_kernel(self, kernel, chunk, int_dets, ext_dets, res):
         kernel(
             chunk.J.p,
             chunk.idx.p,
             idx_t(chunk.chunk_size),
             int_dets.det_pointer,
-            psi_coef.arr.p,
+            self.test_psi_coef.arr.p,
             int_dets.N_dets,
-            idx_t(1),
+            idx_t(self.N_states),
             ext_dets.det_pointer,
             ext_dets.N_dets,
             res.arr.p,
@@ -147,14 +164,17 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
     def run_denom_test(self, cat, verbose=False):
         chunk = self.filter_chunks(cat)[0]
         kernel = chunk.pt2_kernels[1]
-        pt2_d = self.LArray(N=self.connected.N_dets, fill=0.0)
+        pt2_d = DMatrix(self.N_ext, self.N_states, dtype=self.dtype)
 
         ref_driver = self.get_ref_driver(cat)
 
-        ref_pt2_d = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_dets])
+        ref_pt2_d = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_ext])
 
-        self.launch_denom_kernel(kernel, chunk, self.connected, pt2_d)
-        self.assertTrue(np.allclose(ref_pt2_d, pt2_d.arr.np_arr, rtol=self.rtol, atol=self.atol))
+        self.launch_denom_kernel(kernel, chunk, self.dets_ext, pt2_d)
+        for k in range(self.N_states):
+            self.assertTrue(
+                np.allclose(ref_pt2_d, pt2_d.np_arr[:, k], rtol=self.rtol, atol=self.atol)
+            )
 
     def run_batched_denom_test(self, cat, custom_batches=None):
         if custom_batches is None:
@@ -164,61 +184,79 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
 
         self.assertTrue(len(chunks) > 1)
         kernel = chunks[0].pt2_kernels[1]
-        pt2_d = self.LArray(N=self.connected.N_dets, fill=0.0)
+        pt2_d = DMatrix(self.N_ext, self.N_states, dtype=self.dtype)
 
         ref_driver = self.get_ref_driver(cat)
-        ref_pt2_d = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_dets])
+        ref_pt2_d = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_ext])
 
         for chunk in chunks:
-            self.launch_denom_kernel(kernel, chunk, self.connected, pt2_d)
+            self.launch_denom_kernel(kernel, chunk, self.dets_ext, pt2_d)
 
-        self.assertTrue(np.allclose(ref_pt2_d, pt2_d.arr.np_arr, rtol=self.rtol, atol=self.atol))
+        for k in range(self.N_states):
+            self.assertTrue(
+                np.allclose(ref_pt2_d, pt2_d.np_arr[:, k], rtol=self.rtol, atol=self.atol)
+            )
 
     def run_num_test(self, cat):
         ref_driver = self.get_ref_driver(cat)
-        ref_res = np.zeros(len(self.ref_dets), dtype=self.dtype)
+        ref_res = np.zeros((self.N_ext, self.N_states), dtype=self.dtype)
 
-        det_I = self.ref_ground_state
         if cat == "OE":
-            for j, det_J in enumerate(self.ref_dets):
-                ref_res[j] += ref_driver.H_ij(det_I, det_J)
+            for i, det_I in enumerate(self.ref_int):
+                for j, det_J in enumerate(self.ref_ext):
+                    for k in range(self.N_states):
+                        ref_res[j, k] += self.ref_psi_coef[i, k] * ref_driver.H_ij(det_I, det_J)
         else:
-            for j, det_J in enumerate(self.ref_dets):
-                for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
-                    ref_res[j] += phase * ref_driver.H_ijkl_orbital(*idx)
+            for i, det_I in enumerate(self.ref_int):
+                for j, det_J in enumerate(self.ref_ext):
+                    if det_I == det_J:
+                        continue
+
+                    for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
+                        for k in range(self.N_states):
+                            ref_res[j, k] += (
+                                phase * self.ref_psi_coef[i, k] * ref_driver.H_ijkl_orbital(*idx)
+                            )
 
         chunk = self.filter_chunks(cat)[0]
         kernel = chunk.pt2_kernels[0]
-        psi_coef = self.LArray(N=1, fill=1.0)
-        pt2_n = self.LArray(N=self.connected.N_dets, fill=0.0)
+        pt2_n = DMatrix(self.N_ext, self.N_states, dtype=self.dtype)
 
-        self.launch_num_kernel(kernel, chunk, self.ground_state, psi_coef, self.connected, pt2_n)
-        self.assertTrue(np.allclose(ref_res, pt2_n.arr.np_arr, rtol=self.rtol, atol=self.atol))
+        self.launch_num_kernel(kernel, chunk, self.dets_int, self.dets_ext, pt2_n)
 
-    def run_batched_num_test(self, cat, verbose=False):
+        # if cat == "F":
+        #     test_arr = pt2_n.np_arr
+        #     for i in range(self.N_int):
+        #         for k in range(self.N_states):
+        #             print(f"{(i,k)} : {ref_res[i,k]:0.4e}, {test_arr[i,k]:0.4e}")
+        self.assertTrue(np.allclose(ref_res, pt2_n.np_arr, rtol=self.rtol, atol=self.atol))
+
+    def run_batched_num_test(self, cat):
         ref_driver = self.get_ref_driver(cat)
-        ref_res = np.zeros(len(self.ref_dets), dtype=self.dtype)
+        ref_res = np.zeros((self.N_ext, self.N_states), dtype=self.dtype)
 
-        det_I = self.ref_ground_state
         if cat == "OE":
-            for j, det_J in enumerate(self.ref_dets):
-                ref_res[j] += ref_driver.H_ij(det_I, det_J)
+            for i, det_I in enumerate(self.ref_int):
+                for j, det_J in enumerate(self.ref_ext):
+                    for k in range(self.N_states):
+                        ref_res[j, k] += self.ref_psi_coef[i, k] * ref_driver.H_ij(det_I, det_J)
         else:
-            for j, det_J in enumerate(self.ref_dets):
-                for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
-                    ref_res[j] += phase * ref_driver.H_ijkl_orbital(*idx)
+            for i, det_I in enumerate(self.ref_int):
+                for j, det_J in enumerate(self.ref_ext):
+                    for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
+                        for k in range(self.N_states):
+                            ref_res[j, k] += (
+                                phase * self.ref_psi_coef[i, k] * ref_driver.H_ijkl_orbital(*idx)
+                            )
 
         chunks = self.filter_chunks(cat, batched=True)
         kernel = chunks[0].pt2_kernels[0]
-        psi_coef = self.LArray(N=1, fill=1.0)
-        pt2_n = self.LArray(N=self.connected.N_dets, fill=0.0)
+        pt2_n = DMatrix(self.N_ext, self.N_states, dtype=self.dtype)
 
         for chunk in chunks:
-            self.launch_num_kernel(
-                kernel, chunk, self.ground_state, psi_coef, self.connected, pt2_n
-            )
+            self.launch_num_kernel(kernel, chunk, self.dets_int, self.dets_ext, pt2_n)
 
-        self.assertTrue(np.allclose(ref_res, pt2_n.arr.np_arr, rtol=self.rtol, atol=self.atol))
+        self.assertTrue(np.allclose(ref_res, pt2_n.np_arr, rtol=self.rtol, atol=self.atol))
 
     def test_cat_OE_denom(self):
         self.run_denom_test("OE")
@@ -230,7 +268,7 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
         self.run_num_test("OE")
 
     def test_cat_OE_num_batched(self):
-        self.run_batched_num_test("OE", True)
+        self.run_batched_num_test("OE")
 
     def test_cat_A(self):
         self.run_denom_test("A")

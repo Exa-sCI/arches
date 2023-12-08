@@ -33,7 +33,7 @@ void e_pt2_ii_OE(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, id
             auto &ext_det = psi_ext[det_j];
 
             for (auto state = 0; state < N_states; state++) {
-                res[det_j + state] += (ext_det.alpha[ij.i] + ext_det.beta[ij.i]) * J[i];
+                res[det_j * N_states + state] += (ext_det.alpha[ij.i] + ext_det.beta[ij.i]) * J[i];
             }
         }
     }
@@ -74,7 +74,7 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
 
                 // loop over states
                 for (auto state = 0; state < N_states; state++) {
-                    res[d_e + state] += phase * psi_coef[d_i + state] * J[i];
+                    res[d_e * N_states + state] += phase * psi_coef[d_i * N_states + state] * J[i];
                 }
             }
         }
@@ -123,7 +123,7 @@ void A_pt2(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_
             auto &ext_det = psi_ext[d_e];
 
             for (auto state = 0; state < N_states; state++) {
-                res[d_e + state] += ext_det[0][q] * ext_det[1][q] * J[i];
+                res[d_e * N_states + state] += ext_det[0][q] * ext_det[1][q] * J[i];
             }
         }
     }
@@ -151,11 +151,11 @@ void B_pt2(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_
             auto &ext_det = psi_ext[d_e];
 
             for (auto state = 0; state < N_states; state++) {
-                res[d_e + state] += ext_det[0][q] * ext_det[0][r] * J[i];
-                res[d_e + state] += ext_det[1][q] * ext_det[1][r] * J[i];
+                res[d_e * N_states + state] += ext_det[0][q] * ext_det[0][r] * J[i];
+                res[d_e * N_states + state] += ext_det[1][q] * ext_det[1][r] * J[i];
 
-                res[d_e + state] += ext_det[0][q] * ext_det[1][r] * J[i];
-                res[d_e + state] += ext_det[0][r] * ext_det[1][q] * J[i];
+                res[d_e * N_states + state] += ext_det[0][q] * ext_det[1][r] * J[i];
+                res[d_e * N_states + state] += ext_det[0][r] * ext_det[1][q] * J[i];
             }
         }
     }
@@ -241,16 +241,20 @@ void C_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                 if (c13 && exc[0][r] && exc[0][s]) {
                     phase = compute_phase_single_excitation(d_int[0], r, s);
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += q_a * psi_coef[d_i + state] * J[i] * phase;
-                        res[d_e + state] += q_b * psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            q_a * psi_coef[d_i * N_states + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            q_b * psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
 
                 if (c24 && exc[1][r] && exc[1][s]) {
                     phase = compute_phase_single_excitation(d_int[1], r, s);
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += q_a * psi_coef[d_i + state] * J[i] * phase;
-                        res[d_e + state] += q_b * psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            q_a * psi_coef[d_i * N_states + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            q_b * psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
             }
@@ -319,14 +323,16 @@ void D_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                 if (d13 && q_b && exc[0][q] && exc[0][r]) {
                     phase = compute_phase_single_excitation(d_int[0], q, r);
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
 
                 if (d24 && q_a && exc[1][q] && exc[1][r]) {
                     phase = compute_phase_single_excitation(d_int[1], q, r);
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
             }
@@ -420,14 +426,16 @@ void E_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     if (e_13 && q_a && exc[0][r] && exc[0][s]) {
                         phase = compute_phase_single_excitation(d_int[0], r, s);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase * -1;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase * -1;
                         }
                     }
 
                     if (e_24 && q_b && exc[1][r] && exc[1][s]) {
                         phase = compute_phase_single_excitation(d_int[1], r, s);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase * -1;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase * -1;
                         }
                     }
                 } else if (degree == 2) {
@@ -442,7 +450,8 @@ void E_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     if (exc[0][r] && exc[1][s]) {
                         phase = compute_phase_double_excitation(d_int, q, q, r, s);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase;
                         }
                     }
 
@@ -450,7 +459,8 @@ void E_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     if (exc[0][s] && exc[1][r]) {
                         phase = compute_phase_double_excitation(d_int, q, q, s, r);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase;
                         }
                     }
                 }
@@ -529,8 +539,9 @@ void F_pt2_denom(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, id
         for (auto d_e = 0; d_e < N_ext; d_e++) {
             det_t &d_ext = psi_ext[d_e];
             for (auto state = 0; state < N_states; state++) {
-                res[d_e + state] -= d_ext[0][q] * d_ext[0][r] * J[i]; // phase implicit in -=
-                res[d_e + state] -= d_ext[1][q] * d_ext[1][r] * J[i];
+                res[d_e * N_states + state] -=
+                    d_ext[0][q] * d_ext[0][r] * J[i]; // phase implicit in -=
+                res[d_e * N_states + state] -= d_ext[1][q] * d_ext[1][r] * J[i];
             }
         }
     }
@@ -638,7 +649,8 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     if (exc[0][q] && exc[0][s] && exc[1][r] && exc[1][t]) {
                         phase = compute_phase_double_excitation(d_int, q, r, s, t);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase;
                         }
                     }
 
@@ -646,7 +658,8 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     if (exc[0][r] && exc[0][t] && exc[1][q] && exc[1][s]) {
                         phase = compute_phase_double_excitation(d_int, r, q, t, s);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase;
                         }
                     }
                 case 0: { // scoped so that variable can initialize
@@ -671,7 +684,8 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     }
 
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
                 case 2: { // scoped so that variable can initialize
@@ -695,7 +709,8 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                         phase = r < s ? -1 * phase : phase;
                     }
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
                 }
