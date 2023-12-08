@@ -56,7 +56,7 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
                 continue;
 
             // loop over external determinants
-            for (auto d_e = 0; d_e < N; d_e++) {
+            for (auto d_e = 0; d_e < N_ext; d_e++) {
                 auto &d_ext = psi_ext[d_e];
 
                 det_t exc = exc_det(d_int, d_ext);
@@ -65,8 +65,8 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
                 if (degree_alpha + degree_beta != 1)
                     continue; // determinants not related by single exc
 
-                bool j_check = degree_alpha ? (!d_ext.alpha[ij.i] && d_ext.alpha[ij.j])
-                                            : (!d_ext.beta[ij.i] && d_ext.beta[ij.j]);
+                bool j_check = degree_alpha ? (!d_ext.alpha[ij.i] && d_ext.alpha[ij.j]) && i_alpha
+                                            : (!d_ext.beta[ij.i] && d_ext.beta[ij.j]) && i_beta;
                 if (!j_check)
                     continue; // integral doesn't apply
 
@@ -765,8 +765,8 @@ void H_OE_ij(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_
                 if (degree_alpha + degree_beta != 1)
                     continue; // determinants not related by single exc
 
-                bool j_check = degree_alpha ? (!d_col.alpha[ij.i] && d_col.alpha[ij.j])
-                                            : (!d_col.beta[ij.i] && d_col.beta[ij.j]);
+                bool j_check = degree_alpha ? (!d_col.alpha[ij.i] && d_col.alpha[ij.j]) && i_alpha
+                                            : (!d_col.beta[ij.i] && d_col.beta[ij.j]) && i_beta;
 
                 if (!j_check)
                     continue;

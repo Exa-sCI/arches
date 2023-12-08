@@ -8,7 +8,12 @@ from tqdm import tqdm
 from arches.determinant import det_t, spin_det_t
 from arches.drivers import Hamiltonian_one_electron, Hamiltonian_two_electrons_determinant_driven
 from arches.fundamental_types import Determinant as det_ref
-from arches.integral_indexing_utils import canonical_idx4, compound_idx4, compound_idx4_reverse
+from arches.integral_indexing_utils import (
+    canonical_idx4,
+    compound_idx2_reverse,
+    compound_idx4,
+    compound_idx4_reverse,
+)
 from arches.integrals import JChunkFactory, load_integrals_into_chunks
 from arches.io import load_integrals
 from arches.linked_object import f32_p, idx_t
@@ -103,10 +108,15 @@ class Test_Kernel_Fixture(unittest.TestCase):
         else:
             return [chunk for chunk in self.chunks if chunk.category == cat]
 
-    def get_ref_te_driver(self, cat):
+    def get_ref_driver(self, cat):
         fact = JChunkFactory(self.N_mos, cat, None)
-        ref_dict = {k: self.ref_J_te[k] for k in fact.idx_iter}
-        return Hamiltonian_two_electrons_determinant_driven(FilteredDict(ref_dict))
+
+        if cat == "OE":
+            ref_dict = {compound_idx2_reverse(k): self.ref_J_oe[k] for k in fact.idx_iter}
+            return Hamiltonian_one_electron(FilteredDict(ref_dict), 0.0)
+        else:
+            ref_dict = {k: self.ref_J_te[k] for k in fact.idx_iter}
+            return Hamiltonian_two_electrons_determinant_driven(FilteredDict(ref_dict))
 
 
 class Test_pt2_Kernels(Test_Kernel_Fixture):
@@ -137,12 +147,13 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
             res.arr.p,
         )
 
-    def run_denom_test(self, cat):
+    def run_denom_test(self, cat, verbose=False):
         chunk = self.filter_chunks(cat)[0]
         kernel = chunk.pt2_kernels[1]
         pt2_d = self.LArray(N=self.ground_connected.N_dets, fill=0.0)
 
-        ref_driver = self.get_ref_te_driver(cat)
+        ref_driver = self.get_ref_driver(cat)
+
         ref_pt2_d = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_dets])
 
         self.launch_denom_kernel(kernel, chunk, self.ground_connected, pt2_d)
@@ -158,7 +169,7 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
         kernel = chunks[0].pt2_kernels[1]
         pt2_d = self.LArray(N=self.ground_connected.N_dets, fill=0.0)
 
-        ref_driver = self.get_ref_te_driver(cat)
+        ref_driver = self.get_ref_driver(cat)
         ref_pt2_d = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_dets])
 
         for chunk in chunks:
@@ -167,13 +178,17 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
         self.assertTrue(np.allclose(ref_pt2_d, pt2_d.arr.np_arr, rtol=self.rtol, atol=self.atol))
 
     def run_num_test(self, cat):
-        ref_driver = self.get_ref_te_driver(cat)
+        ref_driver = self.get_ref_driver(cat)
         ref_res = np.zeros(len(self.ref_dets), dtype=self.dtype)
 
         det_I = self.ref_ground_state
-        for j, det_J in enumerate(self.ref_dets):
-            for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
-                ref_res[j] += phase * ref_driver.H_ijkl_orbital(*idx)
+        if cat == "OE":
+            for j, det_J in enumerate(self.ref_dets):
+                ref_res[j] += ref_driver.H_ij(det_I, det_J)
+        else:
+            for j, det_J in enumerate(self.ref_dets):
+                for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
+                    ref_res[j] += phase * ref_driver.H_ijkl_orbital(*idx)
 
         chunk = self.filter_chunks(cat)[0]
         kernel = chunk.pt2_kernels[0]
@@ -185,14 +200,18 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
         )
         self.assertTrue(np.allclose(ref_res, pt2_n.arr.np_arr, rtol=self.rtol, atol=self.atol))
 
-    def run_batched_num_test(self, cat):
-        ref_driver = self.get_ref_te_driver(cat)
+    def run_batched_num_test(self, cat, verbose=False):
+        ref_driver = self.get_ref_driver(cat)
         ref_res = np.zeros(len(self.ref_dets), dtype=self.dtype)
 
         det_I = self.ref_ground_state
-        for j, det_J in enumerate(self.ref_dets):
-            for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
-                ref_res[j] += phase * ref_driver.H_ijkl_orbital(*idx)
+        if cat == "OE":
+            for j, det_J in enumerate(self.ref_dets):
+                ref_res[j] += ref_driver.H_ij(det_I, det_J)
+        else:
+            for j, det_J in enumerate(self.ref_dets):
+                for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
+                    ref_res[j] += phase * ref_driver.H_ijkl_orbital(*idx)
 
         chunks = self.filter_chunks(cat, batched=True)
         kernel = chunks[0].pt2_kernels[0]
@@ -203,7 +222,20 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
             self.launch_num_kernel(
                 kernel, chunk, self.ground_state, psi_coef, self.ground_connected, pt2_n
             )
+
         self.assertTrue(np.allclose(ref_res, pt2_n.arr.np_arr, rtol=self.rtol, atol=self.atol))
+
+    def test_cat_OE_denom(self):
+        self.run_denom_test("OE")
+
+    def test_cat_OE_denom_batched(self):
+        self.run_batched_denom_test("OE")
+
+    def test_cat_OE_num(self):
+        self.run_num_test("OE")
+
+    def test_cat_OE_num_batched(self):
+        self.run_batched_num_test("OE", True)
 
     def test_cat_A(self):
         self.run_denom_test("A")
@@ -243,7 +275,7 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
     def test_cat_F_num(self):
         self.run_num_test("F")
 
-    def test_cat_F_batched(self):
+    def test_cat_F_num_batched(self):
         self.run_batched_num_test("F")
 
     def test_cat_F_denom(self):
@@ -327,7 +359,7 @@ class Test_H_Kernels(Test_Kernel_Fixture):
         chunk = self.filter_chunks(cat)[0]
         kernel = chunk.H_kernels[1]
 
-        ref_driver = self.get_ref_te_driver(cat)
+        ref_driver = self.get_ref_driver(cat)
         ref_H_ii = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_constrained_dets])
 
         # Clear out result since H_structure is cached
@@ -352,7 +384,7 @@ class Test_H_Kernels(Test_Kernel_Fixture):
         kernel = chunks[0].H_kernels[1]
         self.assertTrue(len(chunks) > 1)
 
-        ref_driver = self.get_ref_te_driver(cat)
+        ref_driver = self.get_ref_driver(cat)
         ref_H_ii = np.array([ref_driver.H_ii(det_J) for det_J in self.ref_constrained_dets])
 
         # Clear out result since H_structure is cached
@@ -373,16 +405,24 @@ class Test_H_Kernels(Test_Kernel_Fixture):
     def run_ij_test(self, cat):
         chunk = self.filter_chunks(cat)[0]
         kernel = chunk.H_kernels[0]
-        ref_driver = self.get_ref_te_driver(cat)
+        ref_driver = self.get_ref_driver(cat)
 
         ref_H_ij = np.zeros((self.H_structure.m, self.H_structure.m), dtype=self.dtype)
-        for i, j in self.ref_entries:
-            if i == j:
-                continue
-            det_I = self.ref_constrained_dets[i]
-            det_J = self.ref_constrained_dets[j]
-            for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
-                ref_H_ij[i, j] += phase * ref_driver.H_ijkl_orbital(*idx)
+        if cat == "OE":
+            for i, j in self.ref_entries:
+                if i == j:
+                    continue
+                det_I = self.ref_constrained_dets[i]
+                det_J = self.ref_constrained_dets[j]
+                ref_H_ij[i, j] += ref_driver.H_ij(det_I, det_J)
+        else:
+            for i, j in self.ref_entries:
+                if i == j:
+                    continue
+                det_I = self.ref_constrained_dets[i]
+                det_J = self.ref_constrained_dets[j]
+                for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
+                    ref_H_ij[i, j] += phase * ref_driver.H_ijkl_orbital(*idx)
 
         # Clear out result since H_structure is cached
         for i in range(self.H_structure.N_entries):
@@ -403,16 +443,24 @@ class Test_H_Kernels(Test_Kernel_Fixture):
     def run_batched_ij_test(self, cat):
         chunks = self.filter_chunks(cat)
         kernel = chunks[0].H_kernels[0]
-        ref_driver = self.get_ref_te_driver(cat)
+        ref_driver = self.get_ref_driver(cat)
 
         ref_H_ij = np.zeros((self.H_structure.m, self.H_structure.m), dtype=self.dtype)
-        for i, j in self.ref_entries:
-            if i == j:
-                continue
-            det_I = self.ref_constrained_dets[i]
-            det_J = self.ref_constrained_dets[j]
-            for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
-                ref_H_ij[i, j] += phase * ref_driver.H_ijkl_orbital(*idx)
+        if cat == "OE":
+            for i, j in self.ref_entries:
+                if i == j:
+                    continue
+                det_I = self.ref_constrained_dets[i]
+                det_J = self.ref_constrained_dets[j]
+                ref_H_ij[i, j] += ref_driver.H_ij(det_I, det_J)
+        else:
+            for i, j in self.ref_entries:
+                if i == j:
+                    continue
+                det_I = self.ref_constrained_dets[i]
+                det_J = self.ref_constrained_dets[j]
+                for idx, phase in ref_driver.H_ij_indices(det_I, det_J):
+                    ref_H_ij[i, j] += phase * ref_driver.H_ijkl_orbital(*idx)
 
         # Clear out result since H_structure is cached
         for i in range(self.H_structure.N_entries):
@@ -431,6 +479,18 @@ class Test_H_Kernels(Test_Kernel_Fixture):
                 test_H_ij[i, j] = val
 
         self.assertTrue(np.allclose(ref_H_ij, test_H_ij, atol=self.atol, rtol=self.rtol))
+
+    def test_cat_OE_ii(self):
+        self.run_ii_test("OE")
+
+    def test_cat_OE_ii_batched(self):
+        self.run_batched_ii_test("OE")
+
+    def test_cat_OE_ij(self):
+        self.run_ij_test("OE")
+
+    def test_cat_OE_ij_batched(self):
+        self.run_batched_ij_test("OE")
 
     def test_cat_A(self):
         self.run_ii_test("A")
@@ -467,17 +527,17 @@ class Test_H_Kernels(Test_Kernel_Fixture):
     def test_cat_E_batched(self):
         self.run_batched_ij_test("E")
 
-    def test_cat_F_ij(self):
-        self.run_ij_test("F")
-
-    def test_cat_F_ij_batched(self):
-        self.run_batched_ij_test("F")
-
     def test_cat_F_ii(self):
         self.run_ii_test("F")
 
     def test_cat_F_ii_batched(self):
         self.run_batched_ii_test("F")
+
+    def test_cat_F_ij(self):
+        self.run_ij_test("F")
+
+    def test_cat_F_ij_batched(self):
+        self.run_batched_ij_test("F")
 
     def test_cat_G(self):
         self.run_ij_test("G")
