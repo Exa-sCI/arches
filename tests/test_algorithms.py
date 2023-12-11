@@ -36,13 +36,7 @@ class Test_BMGS(unittest.TestCase):
         for _ in range(self.N_trials):
             temp = rng.normal(0, 1, size=(self.m, self.n)).astype(self.dtype)
             X = DMatrix(self.m, self.n, temp, dtype=self.dtype)
-            for block_size in [
-                1,
-                2,
-                4,
-                8,
-                16,
-            ]:
+            for block_size in [1, 2, 4, 8, 16]:
                 Q, R, T = bmgs_h(X, block_size)
                 self.assertTrue(
                     np.allclose((Q @ R).np_arr, X.np_arr, atol=self.atol, rtol=self.rtol)
@@ -56,10 +50,38 @@ class Test_BMGS(unittest.TestCase):
                     )
                 )
                 self.assertTrue(self.check_orthogonality(Q.np_arr, self.n))
-                print(f"{block_size} passed")
 
     def test_bmgs_h_with_restart(self):
-        pass
+        for _ in range(self.N_trials):
+            temp_0 = rng.normal(0, 1, size=(self.m, self.n)).astype(self.dtype)
+            X0 = DMatrix(self.m, self.n, temp_0, dtype=self.dtype)
+            for block_size in [1, 2, 4, 8, 16]:
+                Q0, R0, T0 = bmgs_h(X0, block_size)
+
+                temp_1 = rng.normal(0, 1, size=(self.m, self.n)).astype(self.dtype)
+                ref_res = np.hstack([temp_0, temp_1]).astype(self.dtype)
+                temp_1 = np.hstack([Q0.np_arr, temp_1]).astype(self.dtype)
+
+                X1 = DMatrix(self.m, self.n * 2, temp_1, dtype=self.dtype)
+                Q, R, T = bmgs_h(X1, block_size, Q0, R0, T0, debug=False)
+
+                self.assertTrue(
+                    np.allclose(
+                        (Q @ R).np_arr,
+                        ref_res,
+                        atol=self.atol,
+                        rtol=self.rtol,
+                    )
+                )
+                self.assertTrue(self.check_orthogonality(Q.np_arr, self.n))
+                self.assertTrue(
+                    np.allclose(
+                        T.np_arr,
+                        np.linalg.inv(np.triu((Q.T @ Q).np_arr)),
+                        atol=self.atol,
+                        rtol=self.rtol,
+                    )
+                )
 
 
 class Test_BMGS_f32(Test_f32, Test_BMGS):
