@@ -8,7 +8,7 @@ from scipy.linalg import lapack
 
 from arches.fundamental_types import Determinant
 from arches.integrals import JChunk
-from arches.matrix import AMatrix, diagonalize
+from arches.matrix import AMatrix, DMatrix, diagonalize
 
 
 def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
@@ -32,20 +32,21 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
         T_0 (array) : (s*p) by (s*p) matrix, initial T matrix s.t. T = (triu(Q.T @ Q))^-1
     """
 
-    m, n = X.shape
+    m = X.m
+    n = X.n
     s = n // p
 
     # preallocate Q, R, and T
-    Q = np.zeros_like(X)
-    R = np.zeros((n, n))
-    T = np.zeros((n, n))
+    Q = DMatrix(m, n, dtype=X.dtype)
+    R = DMatrix(n, n, dtype=X.dtype)
+    T = DMatrix(n, n, dtype=X.dtype)
 
+    T_block = DMatrix(p, p, np.eye(p, dtype=X.dtype), dtype=X.dtype)
     if (Q_0 is None) or (R_0 is None) or (T_0 is None):
-        Q_0, R_0 = np.linalg.qr(X[:, :p], mode="reduced")
-        T_0 = np.eye(p)
-        Q[:, :p] = Q_0
-        R[:p, :p] = R_0
-        T[:p, :p] = T_0
+        Q_0, R_0 = np.linalg.qr(X[:, :p].np_arr, mode="reduced")
+        Q[:, :p] = DMatrix(*Q_0.shape, Q_0, dtype=X.dtype)
+        R[:p, :p] = DMatrix(*R_0.shape, R_0, dtype=X.dtype)
+        T[:p, :p] = T_block
         s_idx = 1
     else:
         # infer start step from size of input guesses
@@ -63,7 +64,11 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
         H_k = T[a, a].T @ H_k
 
         Y_k = X[:, b] - Q[:, a] @ H_k
-        Q_kk, R_kk = np.linalg.qr(Y_k, mode="reduced")  # any fast, stable QR can replace this
+        Q_kk, R_kk = np.linalg.qr(
+            Y_k.np_arr, mode="reduced"
+        )  # any fast, stable QR can replace this
+        Q_kk = DMatrix(*Q_kk.shape, Q_kk, dtype=X.dtype)
+        R_kk = DMatrix(*R_kk.shape, R_kk, dtype=X.dtype)
         F_k = Q[:, a].T @ Q_kk
         G_k = -T[a, a] @ F_k
 
@@ -73,7 +78,7 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
         R[b, b] = R_kk
 
         T[a, b] = G_k
-        T[b, b] = np.eye(p)
+        T[b, b] = T_block
 
     return Q, R, T
 
@@ -154,7 +159,7 @@ def davidson_par_0(
     """
     Implementation of the Davidson diagonalization algorithm in parallel.
 
-    Assumes each worker i has partial component of H s.t. H = \sum_i H_i
+    Assumes each worker i has partial component of H s.t. H = \\sum_i H_i
 
     Assume that subspace is small enough that diagonalization/BMGS are fast enough locally
     to outspeed communicating
@@ -237,10 +242,6 @@ def davidson_par_0(
         V_k, R_k, T_k = bmgs_h(np.hstack([V_k, V_kk]), l // 2, V_k, R_k, T_k)
 
 
-def get_connected_dets(int_dets: Iterable[Determinant]) -> Iterable[Determinant]:
-    raise NotImplementedError
-
-
 def cipsi(
     E0,
     int_dets,
@@ -252,7 +253,7 @@ def cipsi(
     exc_constraints=None,
     **kwargs,
 ):
-    ext_dets = get_connected_dets(int_dets, exc_constraints)
+    ext_dets = int_dets.get_connected_dets(exc_constraints)
 
     e_pt2_n = np.array(
         len(ext_dets)

@@ -200,13 +200,126 @@ void gemm_kernel(char op_a, char op_b, idx_t m, idx_t n, idx_t k, T alpha, T *A,
     }
 };
 
-template <class T> void ApB(T *A, T *B, T *C, idx_t m, idx_t n) {
-    for (auto i = 0; i < m * n; i++)
-        C[i] = A[i] + B[i];
+template <class T>
+void ApB(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A, const idx_t lda,
+         T *B, const idx_t ldb, T *C, const idx_t ldc) {
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    C[i * ldc + j] = A[i * lda + j] + B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] + B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] + B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    C[i * ldc + j] = A[i * lda + j] + B[i * ldb + j];
+                }
+            }
+        }
+    }
 };
 
-template <class T> void AmB(T *A, T *B, T *C, idx_t m, idx_t n) {
-    for (auto i = 0; i < m * n; i++)
-        C[i] = A[i] - B[i];
-    ;
+template <class T>
+void AmB(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A, const idx_t lda,
+         T *B, const idx_t ldb, T *C, const idx_t ldc) {
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    C[i * ldc + j] = A[i * lda + j] - B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] - B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] - B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    C[i * ldc + j] = A[i * lda + j] - B[i * ldb + j];
+                }
+            }
+        }
+    }
+}
+
+template <class T>
+void set_submatrix(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A,
+                   const idx_t lda, const T *B, const idx_t ldb) {
+
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    A[i * lda + j] = B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    A[ia * lda + ja] = B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    A[ia * lda + ja] = B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    A[i * lda + j] = B[i * ldb + j];
+                }
+            }
+        }
+    }
 }

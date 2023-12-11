@@ -3,8 +3,7 @@ from abc import abstractmethod
 from ctypes import CDLL, c_char
 
 import numpy as np
-
-# from mpi4py import MPI
+from mpi4py import MPI
 from scipy.linalg import lapack as la
 
 from arches.linked_object import (
@@ -164,8 +163,8 @@ for k in [f32, f64]:
     sd = {f32: "s", f64: "d"}
     ApB = getattr(lib_matrix, pfix + sd[k] + "ApB")
     AmB = getattr(lib_matrix, pfix + sd[k] + "AmB")
-    ApB.argtypes = [k_p, k_p, k_p, idx_t, idx_t]
-    AmB.argtypes = [k_p, k_p, k_p, idx_t, idx_t]
+    ApB.argtypes = [c_char, c_char, idx_t, idx_t, k_p, idx_t, k_p, idx_t, k_p, idx_t]
+    AmB.argtypes = [c_char, c_char, idx_t, idx_t, k_p, idx_t, k_p, idx_t, k_p, idx_t]
     ApB.restype = None
     AmB.restype = None
 
@@ -460,14 +459,27 @@ class DMatrix(AMatrix):
                 if len(t) != 2:
                     raise ValueError("Wrong number of dimensions indexed.")
 
-                if t[0].step is not None or t[1].step is not None:
-                    raise NotImplementedError("Strided slicing of matrices not supported.")
+                match t[0]:
+                    case slice():
+                        if t[0].step is not None:
+                            raise NotImplementedError("Strided slicing of matrices not supported.")
 
-                row_start = 0 if t[0].start is None else t[0].start
-                row_stop = self.m if t[0].stop is None else t[0].stop
+                        row_start = 0 if t[0].start is None else t[0].start
+                        row_stop = self.m if t[0].stop is None else t[0].stop
+                    case int():
+                        row_start = t[0]
+                        row_stop = t[0] + 1
 
-                col_start = 0 if t[1].start is None else t[1].start
-                col_stop = self.n if t[1].stop is None else t[1].stop
+                match t[1]:
+                    case slice():
+                        if t[1].step is not None:
+                            raise NotImplementedError("Strided slicing of matrices not supported.")
+
+                        col_start = 0 if t[1].start is None else t[1].start
+                        col_stop = self.n if t[1].stop is None else t[1].stop
+                    case int():
+                        col_start = t[1]
+                        col_stop = t[1] + 1
             case _:
                 raise ValueError
 
@@ -545,7 +557,25 @@ class DMatrix(AMatrix):
             raise TypeError
 
         C = DMatrix(self.m, self.n, dtype=self.dtype)
-        self.ApB(self.arr.p, B.arr.p, C.arr.p, self.m, self.n)
+        op_A = "t" if self.transposed else "n"
+        op_B = "t" if B.transposed else "n"
+        # TODO: switch to m, k, m for col-ordered
+        lda = self.max_row_rank if self.transposed else self.max_col_rank
+        ldb = B.max_row_rank if B.transposed else B.max_col_rank
+        ldc = C.max_col_rank  # if C in registry is transposed, this breaks
+
+        self.ApB(
+            c_char(op_A.encode("utf-8")),
+            c_char(op_B.encode("utf-8")),
+            self.m,
+            self.n,
+            self.arr.p,
+            lda,
+            B.arr.p,
+            ldb,
+            C.arr.p,
+            ldc,
+        )
         return C
 
     def __iadd__(self, B):
@@ -558,7 +588,24 @@ class DMatrix(AMatrix):
         if self.dtype != B.dtype:
             raise TypeError
 
-        self.ApB(self.arr.p, B.arr.p, self.arr.p, self.m, self.n)
+        op_A = "t" if self.transposed else "n"
+        op_B = "t" if B.transposed else "n"
+        # TODO: switch to m, k, m for col-ordered
+        lda = self.max_row_rank if self.transposed else self.max_col_rank
+        ldb = B.max_row_rank if B.transposed else B.max_col_rank
+
+        self.ApB(
+            c_char(op_A.encode("utf-8")),
+            c_char(op_B.encode("utf-8")),
+            self.m,
+            self.n,
+            self.arr.p,
+            lda,
+            B.arr.p,
+            ldb,
+            self.arr.p,
+            lda,
+        )
         return self
 
     def __sub__(self, B):
@@ -572,7 +619,27 @@ class DMatrix(AMatrix):
             raise TypeError
 
         C = DMatrix(self.m, self.n, dtype=self.dtype)
-        self.AmB(self.arr.p, B.arr.p, C.arr.p, self.m, self.n)
+
+        op_A = "t" if self.transposed else "n"
+        op_B = "t" if B.transposed else "n"
+        # TODO: switch to m, k, m for col-ordered
+        lda = self.max_row_rank if self.transposed else self.max_col_rank
+        ldb = B.max_row_rank if B.transposed else B.max_col_rank
+        ldc = C.max_col_rank  # if C in registry is transposed, this breaks
+
+        self.AmB(
+            c_char(op_A.encode("utf-8")),
+            c_char(op_B.encode("utf-8")),
+            self.m,
+            self.n,
+            self.arr.p,
+            lda,
+            B.arr.p,
+            ldb,
+            C.arr.p,
+            ldc,
+        )
+
         return C
 
     def __isub__(self, B):
@@ -585,8 +652,29 @@ class DMatrix(AMatrix):
         if self.dtype != B.dtype:
             raise TypeError
 
-        self.AmB(self.arr.p, B.arr.p, self.arr.p, self.m, self.n)
+        op_A = "t" if self.transposed else "n"
+        op_B = "t" if B.transposed else "n"
+        # TODO: switch to m, k, m for col-ordered
+        lda = self.max_row_rank if self.transposed else self.max_col_rank
+        ldb = B.max_row_rank if B.transposed else B.max_col_rank
+
+        self.AmB(
+            c_char(op_A.encode("utf-8")),
+            c_char(op_B.encode("utf-8")),
+            self.m,
+            self.n,
+            self.arr.p,
+            lda,
+            B.arr.p,
+            ldb,
+            self.arr.p,
+            lda,
+        )
         return self
+
+    def __neg__(self):
+        res = DMatrix(self.m, self.n, dtype=self.dtype)
+        return res - self
 
     def __matmul__(self, B):
         """Left-multiply against matrix B."""

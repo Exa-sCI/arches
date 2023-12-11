@@ -62,10 +62,22 @@ void sym_csr_d_MM_mkl(const double alpha, idx_t *A_rows, idx_t *A_cols, double *
     mkl_sparse_destroy(csrA);
 }
 
-void DMatrix_sApB(float *A, float *B, float *C, idx_t m, idx_t n) { ApB(A, B, C, m, n); }
-void DMatrix_dApB(double *A, double *B, double *C, idx_t m, idx_t n) { ApB(A, B, C, m, n); }
-void DMatrix_sAmB(float *A, float *B, float *C, idx_t m, idx_t n) { AmB(A, B, C, m, n); }
-void DMatrix_dAmB(double *A, double *B, double *C, idx_t m, idx_t n) { AmB(A, B, C, m, n); }
+void DMatrix_sApB(const char op_A, const char op_B, const idx_t m, const idx_t n, float *A,
+                  const idx_t lda, float *B, const idx_t ldb, float *C, const idx_t ldc) {
+    ApB(op_A, op_B, m, n, A, lda, B, ldb, C, ldc);
+}
+void DMatrix_sAmB(const char op_A, const char op_B, const idx_t m, const idx_t n, float *A,
+                  const idx_t lda, float *B, const idx_t ldb, float *C, const idx_t ldc) {
+    AmB(op_A, op_B, m, n, A, lda, B, ldb, C, ldc);
+}
+void DMatrix_dApB(const char op_A, const char op_B, const idx_t m, const idx_t n, double *A,
+                  const idx_t lda, double *B, const idx_t ldb, double *C, const idx_t ldc) {
+    ApB(op_A, op_B, m, n, A, lda, B, ldb, C, ldc);
+}
+void DMatrix_dAmB(const char op_A, const char op_B, const idx_t m, const idx_t n, double *A,
+                  const idx_t lda, double *B, const idx_t ldb, double *C, const idx_t ldc) {
+    AmB(op_A, op_B, m, n, A, lda, B, ldb, C, ldc);
+}
 }
 
 // ctypes handler interfacing
@@ -135,83 +147,12 @@ extern "C" {
 // TODO: would love to not have our own version of this: at least MKL should have copy utilities
 void DMatrix_set_submatrix_f32(const char op_A, const char op_B, const idx_t m, const idx_t n,
                                float *A, const idx_t lda, const float *B, const idx_t ldb) {
-
-    if (op_A == 'n') {
-        if (op_B == 'n') {
-            for (auto i = 0; i < m; i++) {
-                for (auto j = 0; j < n; j++) {
-                    A[i * lda + j] = B[i * ldb + j];
-                }
-            }
-        } else if (op_B == 't') {
-            idx_t ib = 0;
-            idx_t jb = 0;
-            for (auto ia = 0; ia < m; ia++, jb++) {
-                for (auto ja = 0; ja < n; ja++, ib++) {
-                    A[ia * lda + ja] = B[ib * ldb + jb];
-                }
-                ib -= n;
-            }
-        }
-
-    } else if (op_A == 't') {
-        if (op_B == 'n') {
-            idx_t ia = 0;
-            idx_t ja = 0;
-            for (auto ib = 0; ib < m; ja++, ib++) {
-                for (auto jb = 0; jb < n; ia++, jb++) {
-                    A[ia * lda + ja] = B[ib * ldb + jb];
-                }
-                ia -= n;
-            }
-        } else if (op_B == 't') {
-            for (auto i = 0; i < n; i++) {
-                for (auto j = 0; j < m; j++) {
-                    A[i * lda + j] = B[i * ldb + j];
-                }
-            }
-        }
-    }
+    set_submatrix(op_A, op_B, m, n, A, lda, B, ldb);
 }
 
 void DMatrix_set_submatrix_f64(const char op_A, const char op_B, const idx_t m, const idx_t n,
                                double *A, const idx_t lda, const double *B, const idx_t ldb) {
 
-    if (op_A == 'n') {
-        if (op_B == 'n') {
-            for (auto i = 0; i < m; i++) {
-                for (auto j = 0; j < n; j++) {
-                    A[i * lda + j] = B[i * ldb + j];
-                }
-            }
-        } else if (op_B == 't') {
-            idx_t ib = 0;
-            idx_t jb = 0;
-            for (auto ia = 0; ia < m; ia++, jb++) {
-                for (auto ja = 0; ja < n; ja++, ib++) {
-                    A[ia * lda + ja] = B[ib * ldb + jb];
-                }
-                ib -= n;
-            }
-        }
-
-    } else if (op_A == 't') {
-        if (op_B == 'n') {
-            idx_t ia = 0;
-            idx_t ja = 0;
-            for (auto ib = 0; ib < m; ja++, ib++) {
-                for (auto jb = 0; jb < n; ia++, jb++) {
-                    A[ia * lda + ja] = B[ib * ldb + jb];
-                }
-                ia -= n;
-            }
-        } else if (op_B == 't') {
-            for (auto i = 0; i < n; i++) {
-                for (auto j = 0; j < m; j++) {
-                    A[i * lda + j] = B[i * ldb + j];
-                }
-            }
-        }
-    }
+    set_submatrix(op_A, op_B, m, n, A, lda, B, ldb);
 }
 }
