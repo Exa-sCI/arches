@@ -615,6 +615,18 @@ class Test_DMatrix(unittest.TestCase):
             check_rt(sslice, dslice)
             check_bt(sslice, dslice)
 
+    def test_neg(self):
+        row_rank = 64
+        col_rank = 32
+        A_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+        A_test = DMatrix(row_rank, col_rank, A_ref, dtype=self.dtype)
+        B_test = -A_test
+        C_test = A_test + B_test
+
+        self.assertTrue(
+            np.allclose(np.zeros((row_rank, col_rank), dtype=self.dtype), C_test.np_arr)
+        )
+
 
 class Test_DMatrix_f32(Test_f32, Test_DMatrix):
     __test__ = True
