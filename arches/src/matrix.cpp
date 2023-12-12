@@ -25,6 +25,50 @@ void dgemm_mkl(char op_a, char op_b, idx_t m, idx_t n, idx_t k, double alpha, co
     cblas_dgemm(layout, trans_A, trans_B, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
 }
 
+DMatrix<float> *sqr_mkl(const idx_t m, const idx_t n, float *A, const idx_t lda) {
+    CBLAS_LAYOUT layout = CblasRowMajor;
+    idx_t k = std::min(m, n);
+    std::unique_ptr<float[]> tau(new float[k]);
+
+    // Perform QR factorization
+    LAPACKE_sgeqrf(layout, m, n, A, lda, tau.get());
+
+    // Extract R from A
+    DMatrix<float> *R = new DMatrix<float>(n, n, 0.0);
+    for (auto i = 0; i < n; i++) {
+        for (auto j = i; j < n; j++) {
+            R->A[i * n + j] = A[i * lda + j];
+        }
+    }
+
+    // Form explicit Q in columns of A
+    LAPACKE_sorgqr(layout, m, n, k, A, lda, tau.get());
+
+    return R;
+}
+
+DMatrix<double> *dqr_mkl(const idx_t m, const idx_t n, double *A, const idx_t lda) {
+    CBLAS_LAYOUT layout = CblasRowMajor;
+    idx_t k = std::min(m, n);
+    std::unique_ptr<double[]> tau(new double[k]);
+
+    // Perform QR factorization
+    LAPACKE_dgeqrf(layout, m, n, A, lda, tau.get());
+
+    // Extract R from A
+    DMatrix<double> *R = new DMatrix<double>(n, n, 0.0);
+    for (auto i = 0; i < n; i++) {
+        for (auto j = i; j < n; j++) {
+            R->A[i * n + j] = A[i * lda + j];
+        }
+    }
+
+    // Form explicit Q in columns of A
+    LAPACKE_dorgqr(layout, m, n, k, A, lda, tau.get());
+
+    return R;
+}
+
 void sym_csr_s_MM_mkl(const float alpha, idx_t *A_rows, idx_t *A_cols, float *A_vals,
                       const float *B, const float beta, float *C, const idx_t M, const idx_t K,
                       const idx_t N) {

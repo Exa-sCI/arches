@@ -13,7 +13,9 @@ from arches.linked_object import (
     ManagedArray_f64,
     ManagedArray_idx_t,
     f32,
+    f32_p,
     f64,
+    f64_p,
     handle_t,
     idx_t,
     idx_t_p,
@@ -246,6 +248,7 @@ class DMatrix(AMatrix):
         max_col_rank=None,
         row_offset=0,
         col_offset=0,
+        **kwargs,
     ):
         """
         Args:
@@ -261,7 +264,9 @@ class DMatrix(AMatrix):
 
         # call constructor via super to initialize handles and typing
         # anything that needs to be passed to the constructor needs to be passed as a kwarg
-        super().__init__(handle=handle, m=m, n=n, dtype=dtype, ctype=np_type_map[dtype], arr=arr)
+        super().__init__(
+            handle=handle, m=m, n=n, dtype=dtype, ctype=np_type_map[dtype], arr=arr, **kwargs
+        )
 
         if max_row_rank is None:
             self.max_row_rank = m
@@ -298,6 +303,10 @@ class DMatrix(AMatrix):
             return self._f_ctor["copy"](
                 idx_t(m), idx_t(n), arr.ctypes.data_as(type_dict[self.ctype][1])
             )
+        elif isinstance(arr, DMatrix):
+            if m != arr.m or n != arr.n:
+                raise ValueError
+            return self._f_ctor["copy"](idx_t(m), idx_t(n), arr.arr.p)
         else:
             # use constant fill constructor
             return self._f_ctor["fill"](idx_t(m), idx_t(n), self.ctype(arr))
@@ -1056,3 +1065,30 @@ def diagonalize(X):
     syevr = la.get_lapack_funcs("syevr", dtype=X.dtype)
     L, Z, _, _, _ = syevr(X)
     return L, Z
+
+
+for k in [f32, f64]:
+    sd = {f32: "s", f64: "d"}
+    name = sd[k] + "qr_mkl"
+    f = getattr(lib_matrix, name)
+    k_p = type_dict[k][1]
+    f.argtypes = [idx_t, idx_t, k_p, idx_t]
+    f.restype = handle_t
+
+
+def qr_factorization(X):
+    """Factorize X into Q @ R
+
+    X will be overwritten with Q
+
+    """
+    lda = X.max_col_rank
+    match X.dtype:
+        case np.float32:
+            res_handle = lib_matrix.sqr_mkl(X.m, X.n, X.arr.p, lda)
+        case np.float64:
+            res_handle = lib_matrix.dqr_mkl(X.m, X.n, X.arr.p, lda)
+        case _:
+            raise NotImplementedError
+
+    return DMatrix(X.n, X.n, dtype=X.dtype, handle=res_handle, override_original=True)

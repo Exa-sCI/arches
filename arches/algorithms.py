@@ -6,9 +6,8 @@ import numpy as np
 from mpi4py import MPI
 from scipy.linalg import lapack
 
-from arches.fundamental_types import Determinant
 from arches.integrals import JChunk
-from arches.matrix import AMatrix, DMatrix, diagonalize
+from arches.matrix import AMatrix, DMatrix, diagonalize, qr_factorization
 
 
 def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
@@ -43,14 +42,17 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
 
     T_block = DMatrix(p, p, np.eye(p, dtype=X.dtype), dtype=X.dtype)
     if (Q_0 is None) or (R_0 is None) or (T_0 is None):
-        Q_0, R_0 = np.linalg.qr(X[:, :p].np_arr, mode="reduced")
-        Q[:, :p] = DMatrix(*Q_0.shape, Q_0, dtype=X.dtype)
-        R[:p, :p] = DMatrix(*R_0.shape, R_0, dtype=X.dtype)
+        Q_0 = DMatrix(X.m, p, dtype=X.dtype)
+        Q_0[:, :] = X[:, :p]
+        R_0 = qr_factorization(Q_0)
+
+        Q[:, :p] = Q_0
+        R[:p, :p] = R_0
         T[:p, :p] = T_block
         s_idx = 1
     else:
         # infer start step from size of input guesses
-        s_idx = Q_0.shape[1] // p
+        s_idx = Q_0.n // p
         ss = slice(int(s_idx * p))
         Q[:, ss] = Q_0
         R[ss, ss] = R_0
@@ -64,18 +66,14 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
         H_k = T[a, a].T @ H_k
 
         Y_k = X[:, b] - Q[:, a] @ H_k
-        Q_kk, R_kk = np.linalg.qr(
-            Y_k.np_arr, mode="reduced"
-        )  # any fast, stable QR can replace this
-        Q_kk = DMatrix(*Q_kk.shape, Q_kk, dtype=X.dtype)
-        R_kk = DMatrix(*R_kk.shape, R_kk, dtype=X.dtype)
-        F_k = Q[:, a].T @ Q_kk
+        R_k = qr_factorization(Y_k)
+        F_k = Q[:, a].T @ Y_k
         G_k = -T[a, a] @ F_k
 
-        Q[:, b] = Q_kk
+        Q[:, b] = Y_k
 
         R[a, b] = H_k
-        R[b, b] = R_kk
+        R[b, b] = R_k
 
         T[a, b] = G_k
         T[b, b] = T_block

@@ -63,8 +63,7 @@ class Test_BMGS(unittest.TestCase):
                 temp_1 = np.hstack([Q0.np_arr, temp_1]).astype(self.dtype)
 
                 X1 = DMatrix(self.m, self.n * 2, temp_1, dtype=self.dtype)
-                Q, R, T = bmgs_h(X1, block_size, Q0, R0, T0, debug=False)
-
+                Q, R, T = bmgs_h(X1, block_size, Q0, R0, T0)
                 self.assertTrue(
                     np.allclose(
                         (Q @ R).np_arr,
