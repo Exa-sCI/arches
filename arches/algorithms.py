@@ -100,11 +100,12 @@ def davidson(
     Implementation of the Davidson diagonalization algorithm in serial,
     with blocked eigenvector prediction and BMGS.
     """
+    V_k = DMatrix(H.m, l, dtype=H.dtype)
     if V_0 is None:
-        V_k = DMatrix(H.m, l, dtype=H.dtype)
         V_k[:l, :l] = DMatrix.eye(l, dtype=H.dtype)
     else:
-        V_k = V_0
+        V_k[: V_0.m, :l] = V_0[:, :l]
+        V_k[V_0.m : V_0.m + l, :l] = DMatrix.eye(l, dtype=H.dtype)
 
     bmgs_R_k = DMatrix.eye(l, dtype=H.dtype)
     bmgs_T_k = DMatrix.eye(l, dtype=H.dtype)
@@ -138,13 +139,13 @@ def davidson(
             early_exit = True
             print(f"Davidson has converged with tolerance {tol:0.4e} in {k+1} iterations")
             for i in range(N_states):
-                print(f"Energy of state {i} : {w.arr[i]} Ha. Residual {r_norms[i]}")
+                print(f"Energy of state {i} : {w.arr[i]:0.6e} Ha. Residual {r_norms[i]:0.6e}")
 
         elif k == max_iter - 1:
             early_exit = True
             print("Davidson has hit max number of iterations. Exiting early.")
             for i in range(N_states):
-                print(f"Energy of state {i} : {w.arr[i]} Ha. Residual {r_norms[i]}")
+                print(f"Energy of state {i} : {w.arr[i]:0.6e} Ha. Residual {r_norms[i]:0.6e}")
 
         if early_exit:
             # TODO: This works okay in this case because __setitem__ does the bounds checks,
@@ -155,7 +156,10 @@ def davidson(
 
             psi = DMatrix(Q_k.m, N_states, dtype=H.dtype)
             psi[:, :] = Q_k[:, :N_states]
-            return E, psi
+
+            V_0 = DMatrix(H.m, l, dtype=H.dtype)
+            V_0[: H.m, :] = V_k @ Q_k[:, :l]
+            return E, psi, V_0
 
         ### Calculate next batch of trial vectors
         V_trial = DMatrix(H.m, l, dtype=H.dtype)

@@ -689,6 +689,17 @@ class Test_DMatrix(unittest.TestCase):
             np.allclose(np.zeros((row_rank, col_rank), dtype=self.dtype), C_test.np_arr)
         )
 
+    def test_column2norm(self):
+        row_rank = 64
+        col_rank = 32
+        for _ in range(self.N_trials):
+            A_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+            A_test = DMatrix(row_rank, col_rank, A_ref, dtype=self.dtype)
+            test_norms = A_test.column_2norm()
+            test_norms = test_norms.arr.np_arr
+            ref_norms = np.linalg.norm(A_ref, axis=0)
+            self.assertTrue(np.allclose(test_norms, ref_norms, atol=self.atol, rtol=self.rtol))
+
 
 class Test_DMatrix_f32(Test_f32, Test_DMatrix):
     __test__ = True

@@ -122,7 +122,6 @@ class Test_Davidson(unittest.TestCase):
     def get_random_spd_matrix(self):
         Q = self.rng.normal(size=(self.m, self.m)).astype(self.dtype)
         evals = np.sort(self.rng.uniform(0.5, 10, size=(self.m)))
-        # L = np.diag(np.arange(self.m) + 1)
         L = np.diag(evals)
 
         QD = DMatrix(self.m, self.m, Q, dtype=self.dtype)
@@ -160,11 +159,11 @@ class Test_Davidson(unittest.TestCase):
             self.assertTrue(np.all(evals > 0))
 
             H = DMatrix(self.m, self.m, H, dtype=self.dtype)
-            L, Q = davidson(H, l=8, max_subspace_rank=128)
+            L, Q, _ = davidson(H, l=8, max_subspace_rank=128)
 
             self.assertTrue(self.check_orthogonality(Q.np_arr, Q.n))
             self.assertTrue(
-                np.isclose(L.arr[0], np.min(evals)), msg=f"{L.arr[0]} : {np.min(evals)}"
+                np.isclose(L.arr[0], np.min(evals)), msg=f"{L.arr[0]:0.6e} : {np.min(evals):0.6e}"
             )
 
     def test_tridiag_preconditioner(self):
@@ -175,15 +174,69 @@ class Test_Davidson(unittest.TestCase):
             self.assertTrue(np.all(evals > 0))
 
             H = DMatrix(self.m, self.m, H, dtype=self.dtype)
-            L, Q = davidson(H, l=8, max_subspace_rank=128, pc="T")
+            L, Q, _ = davidson(H, l=8, max_subspace_rank=128, pc="T")
 
             self.assertTrue(self.check_orthogonality(Q.np_arr, Q.n))
             self.assertTrue(
-                np.isclose(L.arr[0], np.min(evals)), msg=f"{L.arr[0]} : {np.min(evals)}"
+                np.isclose(L.arr[0], np.min(evals)), msg=f"{L.arr[0]:0.6e} : {np.min(evals):0.6e}"
             )
 
-    def test_multi_state(self):
-        pass
+    def test_restart(self):
+        for n in range(self.N_trials):
+            rrank = self.m // 2
+            ss = slice(0, rrank)
+
+            H = self.get_random_spd_matrix()
+            reduced_revals, _ = np.linalg.eigh(H[ss, ss])
+            full_evals, _ = np.linalg.eigh(H)
+            self.assertTrue(np.allclose(H, H.T, atol=self.atol, rtol=self.rtol))
+            self.assertTrue(np.all(full_evals > 0))
+            print("\n##################################")
+            print(f"Initial size: {rrank}")
+            H0 = DMatrix(rrank, rrank, H[ss, ss], dtype=self.dtype)
+            L0, Q0, V0 = davidson(H0, max_iter=200, l=8, max_subspace_rank=64)
+
+            self.assertTrue(self.check_orthogonality(Q0.np_arr, Q0.n))
+            self.assertTrue(
+                np.isclose(L0.arr[0], np.min(reduced_revals)),
+                msg=f"{L0.arr[0]} : {np.min(reduced_revals)}",
+            )
+
+            print(f"\nRunning full size {self.m} from scratch")
+            H1 = DMatrix(self.m, self.m, H, dtype=self.dtype)
+            L1, Q1, _ = davidson(H1, V_0=None, max_iter=200, l=8, max_subspace_rank=128)
+            self.assertTrue(self.check_orthogonality(Q1.np_arr, Q1.n))
+            self.assertTrue(
+                np.isclose(L1.arr[0], np.min(full_evals)),
+                msg=f"{L1.arr[0]:0.6e} : {np.min(full_evals):0.6e}",
+            )
+
+            print(f"\nRunning full size {self.m} with restart")
+            H1 = DMatrix(self.m, self.m, H, dtype=self.dtype)
+            L1, Q1, _ = davidson(H1, V_0=V0, max_iter=200, l=8, max_subspace_rank=128)
+            self.assertTrue(self.check_orthogonality(Q1.np_arr, Q1.n))
+            self.assertTrue(
+                np.isclose(L1.arr[0], np.min(full_evals)),
+                msg=f"{L1.arr[0]:0.6e} : {np.min(full_evals):0.6e}",
+            )
+
+    def test_multiple_states(self):
+        N_states = 4
+        for n in range(self.N_trials):
+            H = self.get_random_spd_matrix()
+            evals, _ = np.linalg.eigh(H)
+            self.assertTrue(np.allclose(H, H.T, atol=self.atol, rtol=self.rtol))
+            self.assertTrue(np.all(evals > 0))
+
+            H = DMatrix(self.m, self.m, H, dtype=self.dtype)
+            L, Q, _ = davidson(H, max_iter=500, N_states=N_states, l=8, max_subspace_rank=128)
+
+            self.assertTrue(self.check_orthogonality(Q.np_arr, Q.n))
+
+            for i in range(N_states):
+                self.assertTrue(
+                    np.isclose(L.arr[i], evals[i]), msg=f"{L.arr[i]:0.6e} : {evals[i]:0.6e}"
+                )
 
 
 class Test_Davidson_f32(Test_f32, Test_Davidson):

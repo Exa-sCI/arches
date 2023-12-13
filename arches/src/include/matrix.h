@@ -448,7 +448,7 @@ template <class T> void column_2norm(const idx_t m, const idx_t n, T *A, const i
             res[j] += A[i * lda + j] * A[i * lda + j];
         }
     }
-    for (auto j = 0; j < n; j++) {
-        res[j] = (T)sqrt(res[j]);
-    }
+
+    std::transform(res, res + n, res,
+                   [](T x) { return static_cast<T>(sqrt(static_cast<double>(x))); });
 }

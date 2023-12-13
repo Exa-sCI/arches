@@ -119,15 +119,34 @@ Constructors and destructors for simple arrays for the following types
 extern "C" {
 
 // Empty constructors
-LArray<float> *LArray_ctor_e_f32(idx_t n) { return new LArray<float>(n); }
-LArray<double> *LArray_ctor_e_f64(idx_t n) { return new LArray<double>(n); }
-LArray<long int> *LArray_ctor_e_i32(idx_t n) { return new LArray<long int>(n); }
-LArray<long long int> *LArray_ctor_e_i64(idx_t n) { return new LArray<long long int>(n); }
-LArray<unsigned long int> *LArray_ctor_e_ui32(idx_t n) { return new LArray<unsigned long int>(n); }
-LArray<unsigned long long int> *LArray_ctor_e_ui64(idx_t n) {
-    return new LArray<unsigned long long int>(n);
+LArray<float> *LArray_ctor_e_f32(idx_t n) {
+    float fill = 0.0;
+    return new LArray<float>(n, fill);
 }
-LArray<idx_t> *LArray_ctor_e_idx_t(idx_t n) { return new LArray<idx_t>(n); }
+LArray<double> *LArray_ctor_e_f64(idx_t n) {
+    double fill = 0.0;
+    return new LArray<double>(n, fill);
+}
+LArray<long int> *LArray_ctor_e_i32(idx_t n) {
+    int fill = 0;
+    return new LArray<long int>(n, fill);
+}
+LArray<long long int> *LArray_ctor_e_i64(idx_t n) {
+    long long int fill = 0;
+    return new LArray<long long int>(n, fill);
+}
+LArray<unsigned long int> *LArray_ctor_e_ui32(idx_t n) {
+    unsigned long int fill = 0;
+    return new LArray<unsigned long int>(n, fill);
+}
+LArray<unsigned long long int> *LArray_ctor_e_ui64(idx_t n) {
+    unsigned long long int fill = 0;
+    return new LArray<unsigned long long int>(n, fill);
+}
+LArray<idx_t> *LArray_ctor_e_idx_t(idx_t n) {
+    idx_t fill = 0;
+    return new LArray<idx_t>(n, fill);
+}
 
 // Fill constructors
 LArray<float> *LArray_ctor_c_f32(idx_t n, float fill_val) { return new LArray<float>(n, fill_val); }

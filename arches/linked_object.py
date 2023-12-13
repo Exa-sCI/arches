@@ -161,6 +161,8 @@ class ManagedArray(ABC):
                     d = v.p
                 case LinkedArray():
                     d = v.arr.p
+                case _:
+                    raise NotImplementedError
 
             if k.step:
                 self.set_strided_range(self.p, idx_t(start), idx_t(stop), idx_t(k.step), d)
@@ -319,12 +321,12 @@ class LinkedArray(LinkedHandle):
     def constructor(self, N, fill=None, **kwargs):
         if fill is None:
             return self._empty_ctor(idx_t(N))
-        elif hasattr(fill, "__iter__"):
+        elif isinstance(fill, np.ndarray) or isinstance(fill, LinkedArray):
             if isinstance(fill, np.ndarray):
                 fill = fill.astype(self.M_array_type._dtype)
                 d = fill.ctypes.data_as(self.M_array_type._ptype)
             else:
-                d = fill  # Assume fill is an appropriate pointer type
+                d = fill.arr.p  # Assume fill is an appropriate pointer type
             return self._copy_ctor(idx_t(N), d)
         else:
             return self._fill_ctor(idx_t(N), self.M_array_type._ctype(fill))
@@ -435,6 +437,10 @@ class LinkedArray(LinkedHandle):
                 self._idiv_c(self.ctype(b), self.arr.p, self.arr.p, self.N)
 
         return self
+
+    def __neg__(self):
+        res = self.allocate_result(self.N)
+        return res - self
 
     def ipow2(self):
         self._ipow2(self.arr.p, self.N)
