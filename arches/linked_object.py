@@ -154,10 +154,13 @@ class ManagedArray(ABC):
             else:
                 stop = k.stop
 
-            if isinstance(v, np.ndarray):
-                d = v.ctypes.data_as(self.ptype)
-            else:
-                d = v
+            match v:
+                case np.ndarray:
+                    d = v.ctypes.data_as(self.ptype)
+                case ManagedArray():
+                    d = v.p
+                case LinkedArray():
+                    d = v.arr.p
 
             if k.step:
                 self.set_strided_range(self.p, idx_t(start), idx_t(stop), idx_t(k.step), d)
@@ -217,6 +220,11 @@ for k, v in type_dict.items():
     ipow2 = getattr(lib_array, pfix + "ipow2" + sfix)
     ipow2.argtypes = [k_p, idx_t]
     ipow2.restype = None
+
+    if k in [f32, f64]:
+        reset_near_zeros = getattr(lib_array, pfix + "reset_near_zeros" + sfix)
+        reset_near_zeros.argtypes = [k_p, idx_t, k, k]
+        reset_near_zeros.restype = None
 
 
 class ManagedArray_i32(ManagedArray):
@@ -332,45 +340,9 @@ class LinkedArray(LinkedHandle):
     def M_array_type(self):
         return self._M_array_type
 
-    @singledispatchmethod
-    @staticmethod
-    def _add(b, a, c, N):  # b needs to be first arg to single dispatch over constant vs arr
-        raise NotImplementedError
-
-    @singledispatchmethod
-    @staticmethod
-    def _iadd(b, a, N):
-        raise NotImplementedError
-
-    @singledispatchmethod
-    @staticmethod
-    def _sub(b, a, c, N):
-        raise NotImplementedError
-
-    @singledispatchmethod
-    @staticmethod
-    def _isub(b, a, N):
-        raise NotImplementedError
-
-    @singledispatchmethod
-    @staticmethod
-    def _mul(b, a, c, N):
-        raise NotImplementedError
-
-    @singledispatchmethod
-    @staticmethod
-    def _imul(b, a, N):
-        raise NotImplementedError
-
-    @singledispatchmethod
-    @staticmethod
-    def _div(b, a, c, N):
-        raise NotImplementedError
-
-    @singledispatchmethod
-    @staticmethod
-    def _idiv(b, a, N):
-        raise NotImplementedError
+    @property
+    def ctype(self):
+        return self.arr.ctype
 
     def __add__(self, b):
         res = self.allocate_result(self.N)
@@ -380,7 +352,7 @@ class LinkedArray(LinkedHandle):
             case ManagedArray():
                 self._add(b.p, self.arr.p, res.arr.p, self.N)
             case self.dtype:  # maybe need to track python scalar types
-                self._add(self.ctype(b), self.arr.p, res.arr.p, self.N)
+                self._add_c(self.ctype(b), self.arr.p, res.arr.p, self.N)
 
         return res
 
@@ -391,7 +363,7 @@ class LinkedArray(LinkedHandle):
             case ManagedArray():
                 self._iadd(b.p, self.arr.p, self.arr.p, self.N)
             case self.dtype:  # maybe need to track python scalar types
-                self._iadd(self.ctype(b), self.arr.p, self.arr.p, self.N)
+                self._iadd_c(self.ctype(b), self.arr.p, self.arr.p, self.N)
 
         return self
 
@@ -403,7 +375,7 @@ class LinkedArray(LinkedHandle):
             case ManagedArray():
                 self._sub(b.p, self.arr.p, res.arr.p, self.N)
             case self.dtype:  # maybe need to track python scalar types
-                self._sub(self.ctype(b), self.arr.p, res.arr.p, self.N)
+                self._sub_c(self.ctype(b), self.arr.p, res.arr.p, self.N)
 
         return res
 
@@ -414,7 +386,7 @@ class LinkedArray(LinkedHandle):
             case ManagedArray():
                 self._isub(b.p, self.arr.p, self.arr.p, self.N)
             case self.dtype:  # maybe need to track python scalar types
-                self._isub(self.ctype(b), self.arr.p, self.arr.p, self.N)
+                self._isub_c(self.ctype(b), self.arr.p, self.arr.p, self.N)
 
         return self
 
@@ -426,7 +398,7 @@ class LinkedArray(LinkedHandle):
             case ManagedArray():
                 self._mul(b.p, self.arr.p, res.arr.p, self.N)
             case self.dtype:  # maybe need to track python scalar types
-                self._mul(self.ctype(b), self.arr.p, res.arr.p, self.N)
+                self._mul_c(self.ctype(b), self.arr.p, res.arr.p, self.N)
 
         return res
 
@@ -437,7 +409,7 @@ class LinkedArray(LinkedHandle):
             case ManagedArray():
                 self._imul(b.p, self.arr.p, self.arr.p, self.N)
             case self.dtype:  # maybe need to track python scalar types
-                self._imul(self.ctype(b), self.arr.p, self.arr.p, self.N)
+                self._imul_c(self.ctype(b), self.arr.p, self.arr.p, self.N)
 
         return self
 
@@ -449,7 +421,7 @@ class LinkedArray(LinkedHandle):
             case ManagedArray():
                 self._div(b.p, self.arr.p, res.arr.p, self.N)
             case self.dtype:  # maybe need to track python scalar types
-                self._div(self.ctype(b), self.arr.p, res.arr.p, self.N)
+                self._div_c(self.ctype(b), self.arr.p, res.arr.p, self.N)
 
         return res
 
@@ -460,7 +432,7 @@ class LinkedArray(LinkedHandle):
             case ManagedArray():
                 self._idiv(b.p, self.arr.p, self.arr.p, self.N)
             case self.dtype:  # maybe need to track python scalar types
-                self._idiv(self.ctype(b), self.arr.p, self.arr.p, self.N)
+                self._idiv_c(self.ctype(b), self.arr.p, self.arr.p, self.N)
 
         return self
 
@@ -471,6 +443,9 @@ class LinkedArray(LinkedHandle):
     def allocate_result(cls, N):
         return cls(N)
 
+    def reset_near_zeros(self, tol, rval):
+        self._reset_near_zeros(self.arr.p, self.N, (self.ctype)(tol), (self.ctype)(rval))
+
 
 class LinkedArray_i32(LinkedArray):
     _M_array_type = ManagedArray_i32
@@ -480,12 +455,6 @@ class LinkedArray_i32(LinkedArray):
     _dtor = lib_array.LArray_dtor_i32
     _get_arr_ptr = lib_array.LArray_get_arr_ptr_i32
     _ipow2 = lib_array.LArray_ipow2_i32
-
-    # TODO: will all of these derived types conflict with eachother?
-    for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
-        _method = getattr(LinkedArray, "_" + op)
-        _method.register(i32_p, getattr(lib_array, "LArray_" + op + "_i32"))
-        _method.register(i32, getattr(lib_array, "LArray_" + op + "_c_i32"))
 
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
@@ -499,12 +468,6 @@ class LinkedArray_i64(LinkedArray):
     _dtor = lib_array.LArray_dtor_i64
     _get_arr_ptr = lib_array.LArray_get_arr_ptr_i64
     _ipow2 = lib_array.LArray_ipow2_i64
-
-    # TODO: will all of these derived types conflict with eachother?
-    for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
-        _method = getattr(LinkedArray, "_" + op)
-        _method.register(i64_p, getattr(lib_array, "LArray_" + op + "_i64"))
-        _method.register(i64, getattr(lib_array, "LArray_" + op + "_c_i64"))
 
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
@@ -522,12 +485,6 @@ class LinkedArray_ui32(LinkedArray):
     _get_arr_ptr = lib_array.LArray_get_arr_ptr_ui32
     _ipow2 = lib_array.LArray_ipow2_ui32
 
-    # TODO: will all of these derived types conflict with eachother?
-    for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
-        _method = getattr(LinkedArray, "_" + op)
-        _method.register(ui32_p, getattr(lib_array, "LArray_" + op + "_ui32"))
-        _method.register(ui32, getattr(lib_array, "LArray_" + op + "_c_ui32"))
-
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
 
@@ -541,12 +498,6 @@ class LinkedArray_ui64(LinkedArray):
     _get_arr_ptr = lib_array.LArray_get_arr_ptr_ui64
     _ipow2 = lib_array.LArray_ipow2_ui64
 
-    # TODO: will all of these derived types conflict with eachother?
-    for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
-        _method = getattr(LinkedArray, "_" + op)
-        _method.register(ui64_p, getattr(lib_array, "LArray_" + op + "_ui64"))
-        _method.register(ui64, getattr(lib_array, "LArray_" + op + "_c_ui64"))
-
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
 
@@ -559,12 +510,7 @@ class LinkedArray_f32(LinkedArray):
     _dtor = lib_array.LArray_dtor_f32
     _get_arr_ptr = lib_array.LArray_get_arr_ptr_f32
     _ipow2 = lib_array.LArray_ipow2_f32
-
-    # TODO: will all of these derived types conflict with eachother?
-    for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
-        _method = getattr(LinkedArray, "_" + op)
-        _method.register(f32_p, getattr(lib_array, "LArray_" + op + "_f32"))
-        _method.register(f32, getattr(lib_array, "LArray_" + op + "_c_f32"))
+    _reset_near_zeros = lib_array.LArray_reset_near_zeros_f32
 
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
@@ -578,12 +524,42 @@ class LinkedArray_f64(LinkedArray):
     _dtor = lib_array.LArray_dtor_f64
     _get_arr_ptr = lib_array.LArray_get_arr_ptr_f64
     _ipow2 = lib_array.LArray_ipow2_f64
-
-    # TODO: will all of these derived types conflict with eachother?
-    for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
-        _method = getattr(LinkedArray, "_" + op)
-        _method.register(f64_p, getattr(lib_array, "LArray_" + op + "_f64"))
-        _method.register(f64, getattr(lib_array, "LArray_" + op + "_c_f64"))
+    _reset_near_zeros = lib_array.LArray_reset_near_zeros_f64
 
     def __init__(self, N, fill=None, handle=None, **kwargs):
         super().__init__(N=N, fill=fill, handle=handle)
+
+
+for op in ["add", "iadd", "sub", "isub", "mul", "imul", "div", "idiv"]:
+    setattr(LinkedArray_i32, "_" + op, getattr(lib_array, "LArray_" + op + "_i32"))
+    setattr(LinkedArray_i32, "_" + op + "_c", getattr(lib_array, "LArray_" + op + "_c_i32"))
+    setattr(LinkedArray_i64, "_" + op, getattr(lib_array, "LArray_" + op + "_i64"))
+    setattr(LinkedArray_i64, "_" + op + "_c", getattr(lib_array, "LArray_" + op + "_c_i64"))
+
+    setattr(LinkedArray_ui32, "_" + op, getattr(lib_array, "LArray_" + op + "_ui32"))
+    setattr(LinkedArray_ui32, "_" + op + "_c", getattr(lib_array, "LArray_" + op + "_c_ui32"))
+    setattr(LinkedArray_ui64, "_" + op, getattr(lib_array, "LArray_" + op + "_ui64"))
+    setattr(LinkedArray_ui64, "_" + op + "_c", getattr(lib_array, "LArray_" + op + "_c_f32"))
+
+    setattr(LinkedArray_f32, "_" + op, getattr(lib_array, "LArray_" + op + "_f32"))
+    setattr(LinkedArray_f32, "_" + op + "_c", getattr(lib_array, "LArray_" + op + "_c_f32"))
+    setattr(LinkedArray_f64, "_" + op, getattr(lib_array, "LArray_" + op + "_f64"))
+    setattr(LinkedArray_f64, "_" + op + "_c", getattr(lib_array, "LArray_" + op + "_c_f64"))
+
+
+def get_LArray(dtype):
+    match dtype:
+        case np.float32:
+            return LinkedArray_f32
+        case np.float64:
+            return LinkedArray_f64
+        case np.int32:
+            return LinkedArray_i32
+        case np.int64:
+            return LinkedArray_i64
+        case np.uint32:
+            return LinkedArray_ui32
+        case np.uint64:
+            return LinkedArray_ui64
+        case _:
+            raise NotImplementedError

@@ -510,3 +510,20 @@ void LArray_idiv_c_f64(double *a, const double b, const idx_t N) { div_LArray(a,
 
 // complex 128
 }
+
+// Misc utilities
+extern "C" {
+
+void LArray_reset_near_zeros_f32(float *a, const idx_t N, float tol, float r_val) {
+    for (auto i = 0; i < N; i++) {
+        if (a[i] < tol)
+            a[i] = r_val;
+    }
+}
+void LArray_reset_near_zeros_f64(double *a, const idx_t N, double tol, double r_val) {
+    for (auto i = 0; i < N; i++) {
+        if (a[i] < tol)
+            a[i] = r_val;
+    }
+}
+}
