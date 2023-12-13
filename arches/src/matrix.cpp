@@ -31,6 +31,34 @@ void ssyevd_mkl(const idx_t n, float *A, const idx_t lda, float *w) {
                    [](const double &x) { return static_cast<float>(x); });
 }
 
+void sgtsv_mkl(const idx_t n, float *d, float *e, float *b, const idx_t ldb) {
+    CBLAS_LAYOUT layout = CblasRowMajor;
+
+    std::unique_ptr<float[]> du(new float[n - 1]);
+    std::copy(e, e + n - 1, du.get());
+
+    long long status = LAPACKE_sgtsv(layout, n, (idx_t)1, du.get(), d, e, b, ldb);
+
+    if (status < 0)
+        std::cout << "in sgtsv: parameter " << status << " had an illegal value" << std::endl;
+    if (status > 0)
+        std::cout << "in sgtsv: diag element  " << status << " is exactly zero " << std::endl;
+}
+
+void dgtsv_mkl(const idx_t n, double *d, double *e, double *b, const idx_t ldb) {
+    CBLAS_LAYOUT layout = CblasRowMajor;
+
+    std::unique_ptr<double[]> du(new double[n - 1]);
+    std::copy(e, e + n - 1, du.get());
+
+    long long status = LAPACKE_dgtsv(layout, n, (idx_t)1, du.get(), d, e, b, ldb);
+
+    if (status < 0)
+        std::cout << "in dgtsv: parameter " << status << " had an illegal value" << std::endl;
+    if (status > 0)
+        std::cout << "in dgtsv: diag element  " << status << " is exactly zero " << std::endl;
+}
+
 void sgemm_mkl(char op_a, char op_b, idx_t m, idx_t n, idx_t k, float alpha, const float *A,
                idx_t lda, const float *B, idx_t ldb, float beta, float *C, idx_t ldc) {
 
@@ -261,6 +289,16 @@ void DMatrix_extract_diagonal_f32(const idx_t m, const DMatrix<float> *A, const 
 void DMatrix_extract_diagonal_f64(const idx_t m, const DMatrix<double> *A, const idx_t lda,
                                   double *res) {
     extract_dense_diagonal(m, A->A, lda, res);
+}
+
+void DMatrix_extract_superdiagonal_f32(const idx_t m, const DMatrix<float> *A, const idx_t lda,
+                                       float *res) {
+    extract_dense_superdiagonal(m, A->A, lda, res);
+}
+
+void DMatrix_extract_superdiagonal_f64(const idx_t m, const DMatrix<double> *A, const idx_t lda,
+                                       double *res) {
+    extract_dense_superdiagonal(m, A->A, lda, res);
 }
 
 void DMatrix_column_2norm_f32(const idx_t m, const idx_t n, const DMatrix<float> *A,

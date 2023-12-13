@@ -175,13 +175,22 @@ for k in [f32, f64]:
     submat_assign.argtypes = [c_char, c_char, idx_t, idx_t, k_p, idx_t, k_p, idx_t]
     submat_assign.restype = None
 
-    fill_diagonal = getattr(lib_matrix, pfix + "fill_diagonal" + sfix)
-    fill_diagonal.argtypes = [idx_t, handle_t, idx_t, k_p]
-    fill_diagonal.restype = None
+    for diag_op in ["fill_", "extract_", "extract_super"]:
+        f_diag_op = getattr(lib_matrix, pfix + diag_op + "diagonal" + sfix)
+        f_diag_op.argtypes = [idx_t, handle_t, idx_t, k_p]
+        f_diag_op.restype = None
 
-    extract_diagonal = getattr(lib_matrix, pfix + "extract_diagonal" + sfix)
-    extract_diagonal.argtypes = [idx_t, handle_t, idx_t, k_p]
-    extract_diagonal.restype = None
+    # fill_diagonal = getattr(lib_matrix, pfix + "fill_diagonal" + sfix)
+    # fill_diagonal.argtypes = [idx_t, handle_t, idx_t, k_p]
+    # fill_diagonal.restype = None
+
+    # extract_diagonal = getattr(lib_matrix, pfix + "extract_diagonal" + sfix)
+    # extract_diagonal.argtypes = [idx_t, handle_t, idx_t, k_p]
+    # extract_diagonal.restype = None
+
+    # extract_sdiagonal = getattr(lib_matrix, pfix + "extract_superdiagonal" + sfix)
+    # extract_sdiagonal.argtypes = [idx_t, handle_t, idx_t, k_p]
+    # extract_sdiagonal.restype = None
 
     column_2norm = getattr(lib_matrix, pfix + "column_2norm" + sfix)
     column_2norm.argtypes = [idx_t, idx_t, handle_t, idx_t, k_p]
@@ -247,6 +256,9 @@ class DMatrix(AMatrix):
 
     _extract_diagonal_f32 = lib_matrix.DMatrix_extract_diagonal_f32
     _extract_diagonal_f64 = lib_matrix.DMatrix_extract_diagonal_f64
+
+    _extract_superdiagonal_f32 = lib_matrix.DMatrix_extract_superdiagonal_f32
+    _extract_superdiagonal_f64 = lib_matrix.DMatrix_extract_superdiagonal_f64
 
     _column_2norm_f32 = lib_matrix.DMatrix_column_2norm_f32
     _column_2norm_f64 = lib_matrix.DMatrix_column_2norm_f64
@@ -403,21 +415,33 @@ class DMatrix(AMatrix):
             case _:
                 raise NotImplementedError
 
-    def extract_diagonal(self, res):
-        if not isinstance(res, LinkedArray):
-            raise TypeError
-
-        if res.arr.size != self.m:
-            raise ValueError
-
+    def extract_diagonal(self):
         lda = self.max_col_rank
         match self.dtype:
             case np.float32:
+                res = LinkedArray_f32(self.m)
                 self._extract_diagonal_f32(idx_t(self.m), self.handle, idx_t(lda), res.arr.p)
             case np.float64:
+                res = LinkedArray_f64(self.m)
                 self._extract_diagonal_f64(idx_t(self.m), self.handle, idx_t(lda), res.arr.p)
             case _:
                 raise NotImplementedError
+
+        return res
+
+    def extract_superdiagonal(self):
+        lda = self.max_col_rank
+        match self.dtype:
+            case np.float32:
+                res = LinkedArray_f32(self.m - 1)
+                self._extract_superdiagonal_f32(idx_t(self.m), self.handle, idx_t(lda), res.arr.p)
+            case np.float64:
+                res = LinkedArray_f64(self.m - 1)
+                self._extract_superdiagonal_f64(idx_t(self.m), self.handle, idx_t(lda), res.arr.p)
+            case _:
+                raise NotImplementedError
+
+        return res
 
     def column_2norm(self):
         lda = self.max_col_rank
@@ -1226,6 +1250,10 @@ for k in [f32, f64]:
     f_syevd.argtypes = [idx_t, k_p, idx_t, k_p]
     f_syevd.restype = None
 
+    f_gtsv = getattr(lib_matrix, sd[k] + "gtsv_mkl")
+    f_gtsv.argtypes = [idx_t, k_p, k_p, k_p, idx_t]
+    f_gtsv.restype = None
+
 
 def qr_factorization(X):
     """Factorize X into Q @ R
@@ -1268,4 +1296,20 @@ def diagonalize(X):
         case np.float64:
             w = LinkedArray_f64(X.n)
             lib_matrix.dsyevd_mkl(idx_t(X.n), X.arr.p, idx_t(lda), w.arr.p)
+        case _:
+            raise NotImplementedError
     return w
+
+
+def gtsv(d, e, b):
+    if (d.N != (e.N + 1)) or (d.N != b.m):
+        raise ValueError
+
+    ldb = b.max_col_rank
+    match b.dtype:
+        case np.float32:
+            lib_matrix.sgtsv_mkl(idx_t(d.N), d.arr.p, e.arr.p, b.arr.p, idx_t(ldb))
+        case np.float64:
+            lib_matrix.dgtsv_mkl(idx_t(d.N), d.arr.p, e.arr.p, b.arr.p, idx_t(ldb))
+        case _:
+            raise NotImplementedError

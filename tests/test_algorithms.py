@@ -168,7 +168,19 @@ class Test_Davidson(unittest.TestCase):
             )
 
     def test_tridiag_preconditioner(self):
-        pass
+        for n in range(self.N_trials):
+            H = self.get_random_spd_matrix()
+            evals, _ = np.linalg.eigh(H)
+            self.assertTrue(np.allclose(H, H.T, atol=self.atol, rtol=self.rtol))
+            self.assertTrue(np.all(evals > 0))
+
+            H = DMatrix(self.m, self.m, H, dtype=self.dtype)
+            L, Q = davidson(H, l=8, max_subspace_rank=128, pc="T")
+
+            self.assertTrue(self.check_orthogonality(Q.np_arr, Q.n))
+            self.assertTrue(
+                np.isclose(L.arr[0], np.min(evals)), msg=f"{L.arr[0]} : {np.min(evals)}"
+            )
 
     def test_multi_state(self):
         pass

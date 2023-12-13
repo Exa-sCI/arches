@@ -8,7 +8,7 @@ from scipy.linalg import lapack
 
 from arches.integrals import JChunk
 from arches.linked_object import get_LArray
-from arches.matrix import AMatrix, DMatrix, diagonalize, qr_factorization
+from arches.matrix import AMatrix, DMatrix, diagonalize, gtsv, qr_factorization
 
 
 def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
@@ -109,14 +109,9 @@ def davidson(
     bmgs_R_k = DMatrix.eye(l, dtype=H.dtype)
     bmgs_T_k = DMatrix.eye(l, dtype=H.dtype)
     N = H.m
-    C_d = get_LArray(H.dtype)(N)
-    H.extract_diagonal(C_d)
+    C_d = H.extract_diagonal()
     if pc == "T":
-        C_sd = np.zeros(N - 1)
-        for i in range(N - 1):
-            C_sd[i] = H[i, i + 1]
-
-        ptsvx = lapack.get_lapack_funcs("ptsvx", dtype=H.dtype)
+        C_sd = H.extract_superdiagonal()
 
     max_subspace_rank = min(max_subspace_rank, H.m)
     for k in range(max_iter):
@@ -173,9 +168,16 @@ def davidson(
                 C_ki.reset_near_zeros(np.finfo(H.dtype).eps, 1.0)
                 V_trial[:, i] = R_k[:, i] / C_ki
             elif pc == "T":  # tridiagonal preconditioner
-                C_d_i = np.ones(N) * w.arr[i] - C_d
-                res = ptsvx(C_d_i, C_sd, R_k[:, i])
-                V_trial[:, i] = res[0]
+                C_d_i = get_LArray(C_d.arr.dtype)(N, fill=w.arr[i]) - C_d
+                C_d_i.reset_near_zeros(np.finfo(H.dtype).eps, 1.0)
+                C_sd_i = get_LArray(C_d.arr.dtype)(
+                    N - 1, fill=C_sd
+                )  # need a copy since gtsv overwrites array
+                # TODO: I believe the tridiagonal preconditioner should get -C_sd,
+                # but it seems to fare better with +C_sd on random matrices...
+                # C_sd_i = -C_sd
+                gtsv(C_d_i, C_sd_i, R_k[:, i])  # solution written into R_k
+                V_trial[:, i] = R_k[:, i]
 
         ### Form new orthonormal subspace
         reset_subspace = V_k.n + l >= max_subspace_rank

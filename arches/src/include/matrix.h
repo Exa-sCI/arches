@@ -420,9 +420,25 @@ template <class T> void extract_dense_diagonal(const idx_t m, const T *A, const 
 }
 
 template <class T>
+void extract_dense_superdiagonal(const idx_t m, const T *A, const idx_t lda, T *res) {
+    for (auto i = 0; i < m - 1; i++) {
+        res[i] = A[i * lda + i + 1];
+    }
+}
+
+template <class T>
 void extract_sparse_diagonal(const idx_t m, const idx_t *A_p, const T *A_v, T *res) {
     for (auto i = 0; i < m; i++) {
         res[i] = A_v[A_p[i]];
+    }
+}
+
+template <class T>
+void extract_sparse_superdiagonal(const idx_t m, const idx_t *A_p, const idx_t *A_c, const T *A_v,
+                                  T *res) {
+    for (auto i = 0; i < m; i++) {
+        if (A_c[A_p[i] + 1] == i + 1)
+            res[i] = A_v[A_p[i] + 1];
     }
 }
 
