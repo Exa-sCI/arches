@@ -7,6 +7,9 @@ from mpi4py import MPI
 from scipy.linalg import lapack as la
 
 from arches.linked_object import (
+    LinkedArray,
+    LinkedArray_f32,
+    LinkedArray_f64,
     LinkedHandle,
     ManagedArray,
     ManagedArray_f32,
@@ -163,16 +166,26 @@ for k in [f32, f64]:
 
     ## Matrix operations
     sd = {f32: "s", f64: "d"}
-    ApB = getattr(lib_matrix, pfix + sd[k] + "ApB")
-    AmB = getattr(lib_matrix, pfix + sd[k] + "AmB")
-    ApB.argtypes = [c_char, c_char, idx_t, idx_t, k_p, idx_t, k_p, idx_t, k_p, idx_t]
-    AmB.argtypes = [c_char, c_char, idx_t, idx_t, k_p, idx_t, k_p, idx_t, k_p, idx_t]
-    ApB.restype = None
-    AmB.restype = None
+    for op in ["ApB", "AmB", "AtB", "AdB"]:  # elementwise +, -, *, /
+        c_op = getattr(lib_matrix, pfix + sd[k] + op)
+        c_op.argtypes = [c_char, c_char, idx_t, idx_t, k_p, idx_t, k_p, idx_t, k_p, idx_t]
+        c_op.restype = None
 
     submat_assign = getattr(lib_matrix, pfix + "set_submatrix" + sfix)
     submat_assign.argtypes = [c_char, c_char, idx_t, idx_t, k_p, idx_t, k_p, idx_t]
     submat_assign.restype = None
+
+    fill_diagonal = getattr(lib_matrix, pfix + "fill_diagonal" + sfix)
+    fill_diagonal.argtypes = [idx_t, handle_t, idx_t, k_p]
+    fill_diagonal.restype = None
+
+    extract_diagonal = getattr(lib_matrix, pfix + "extract_diagonal" + sfix)
+    extract_diagonal.argtypes = [idx_t, handle_t, idx_t, k_p]
+    extract_diagonal.restype = None
+
+    column_2norm = getattr(lib_matrix, pfix + "column_2norm" + sfix)
+    column_2norm.argtypes = [idx_t, idx_t, handle_t, idx_t, k_p]
+    column_2norm.restype = None
 
     for cfig in ["mkl"]:
         gemm = getattr(lib_matrix, sd[k] + "gemm_" + cfig)
@@ -229,12 +242,25 @@ class DMatrix(AMatrix):
     _set_submatrix_f32 = lib_matrix.DMatrix_set_submatrix_f32
     _set_submatrix_f64 = lib_matrix.DMatrix_set_submatrix_f64
 
+    _fill_diagonal_f32 = lib_matrix.DMatrix_fill_diagonal_f32
+    _fill_diagonal_f64 = lib_matrix.DMatrix_fill_diagonal_f64
+
+    _extract_diagonal_f32 = lib_matrix.DMatrix_extract_diagonal_f32
+    _extract_diagonal_f64 = lib_matrix.DMatrix_extract_diagonal_f64
+
+    _column_2norm_f32 = lib_matrix.DMatrix_column_2norm_f32
+    _column_2norm_f64 = lib_matrix.DMatrix_column_2norm_f64
+
     _sgemm = lib_matrix.sgemm_mkl
     _dgemm = lib_matrix.dgemm_mkl
     _sApB = lib_matrix.DMatrix_sApB
     _dApB = lib_matrix.DMatrix_dApB
     _sAmB = lib_matrix.DMatrix_sAmB
     _dAmB = lib_matrix.DMatrix_dAmB
+    _sAtB = lib_matrix.DMatrix_sAtB
+    _dAtB = lib_matrix.DMatrix_dAtB
+    _sAdB = lib_matrix.DMatrix_sAdB
+    _dAdB = lib_matrix.DMatrix_dAdB
 
     def __init__(
         self,
@@ -361,6 +387,56 @@ class DMatrix(AMatrix):
             case _:
                 raise NotImplementedError
 
+    def fill_diagonal(self, fill):
+        if not isinstance(fill, LinkedArray):
+            raise TypeError
+
+        if fill.arr.size != self.m:
+            raise ValueError
+
+        lda = self.max_col_rank
+        match self.dtype:
+            case np.float32:
+                self._fill_diagonal_f32(idx_t(self.m), self.handle, idx_t(lda), fill.arr.p)
+            case np.float64:
+                self._fill_diagonal_f64(idx_t(self.m), self.handle, idx_t(lda), fill.arr.p)
+            case _:
+                raise NotImplementedError
+
+    def extract_diagonal(self, res):
+        if not isinstance(res, LinkedArray):
+            raise TypeError
+
+        if res.arr.size != self.m:
+            raise ValueError
+
+        lda = self.max_col_rank
+        match self.dtype:
+            case np.float32:
+                self._extract_diagonal_f32(idx_t(self.m), self.handle, idx_t(lda), res.arr.p)
+            case np.float64:
+                self._extract_diagonal_f64(idx_t(self.m), self.handle, idx_t(lda), res.arr.p)
+            case _:
+                raise NotImplementedError
+
+    def column_2norm(self):
+        lda = self.max_col_rank
+        match self.dtype:
+            case np.float32:
+                res = LinkedArray_f32(self.n)
+                self._column_2norm_f32(
+                    idx_t(self.m), idx_t(self.n), self.handle, idx_t(lda), res.arr.p
+                )
+            case np.float64:
+                res = LinkedArray_f64(self.n)
+                self._column_2norm_f64(
+                    idx_t(self.m), idx_t(self.n), self.handle, idx_t(lda), res.arr.p
+                )
+            case _:
+                raise NotImplementedError
+
+        return res
+
     @property
     def gemm(self):
         match self.dtype:
@@ -388,6 +464,26 @@ class DMatrix(AMatrix):
                 return self._sAmB
             case np.float64:
                 return self._dAmB
+            case _:
+                raise NotImplementedError
+
+    @property
+    def AtB(self):
+        match self.dtype:
+            case np.float32:
+                return self._sAtB
+            case np.float64:
+                return self._dAtB
+            case _:
+                raise NotImplementedError
+
+    @property
+    def AdB(self):
+        match self.dtype:
+            case np.float32:
+                return self._sAdB
+            case np.float64:
+                return self._dAdB
             case _:
                 raise NotImplementedError
 
@@ -553,25 +649,48 @@ class DMatrix(AMatrix):
             ldb,
         )
 
+    def _parse_op_args(self, B):
+        op_A = "t" if self.transposed else "n"
+        lda = self.max_row_rank if self.transposed else self.max_col_rank
+        match B:
+            case DMatrix():
+                if self.transposed or B.transposed:
+                    raise NotImplementedError
+
+                # check shape compatibility
+                if (self.m != B.m) or (self.n != B.n):
+                    raise ValueError
+
+                if self.dtype != B.dtype:
+                    raise TypeError
+
+                op_B = "t" if B.transposed else "n"
+
+                # TODO: switch to m, k, m for col-ordered
+                ldb = B.max_row_rank if B.transposed else B.max_col_rank
+            case LinkedArray():
+                if self.dtype != B.arr.dtype:
+                    raise TypeError
+                if self.m == 1:
+                    if not (self.n == B.N):
+                        raise ValueError
+                elif self.n == 1:
+                    if not (self.m == B.N):
+                        raise ValueError
+                else:
+                    raise ValueError
+                op_B = "n"
+                ldb = 1
+            case _:
+                raise NotImplementedError
+
+        return op_A, op_B, lda, ldb
+
     def __add__(self, B):
-        # should work okay if they're both tranposed but do not rely on that
-        if self.transposed or B.transposed:
-            raise NotImplementedError
-
-        # check shape compatibility
-        if (self.m != B.m) or (self.n != B.n):
-            raise ValueError
-
-        if self.dtype != B.dtype:
-            raise TypeError
+        op_A, op_B, lda, ldb = self._parse_op_args(B)
 
         C = DMatrix(self.m, self.n, dtype=self.dtype)
-        op_A = "t" if self.transposed else "n"
-        op_B = "t" if B.transposed else "n"
-        # TODO: switch to m, k, m for col-ordered
-        lda = self.max_row_rank if self.transposed else self.max_col_rank
-        ldb = B.max_row_rank if B.transposed else B.max_col_rank
-        ldc = C.max_col_rank  # if C in registry is transposed, this breaks
+        ldc = C.max_col_rank
 
         self.ApB(
             c_char(op_A.encode("utf-8")),
@@ -588,20 +707,7 @@ class DMatrix(AMatrix):
         return C
 
     def __iadd__(self, B):
-        if self.transposed or B.transposed:
-            raise NotImplementedError
-
-        if (self.m != B.m) or (self.n != B.n):
-            raise ValueError
-
-        if self.dtype != B.dtype:
-            raise TypeError
-
-        op_A = "t" if self.transposed else "n"
-        op_B = "t" if B.transposed else "n"
-        # TODO: switch to m, k, m for col-ordered
-        lda = self.max_row_rank if self.transposed else self.max_col_rank
-        ldb = B.max_row_rank if B.transposed else B.max_col_rank
+        op_A, op_B, lda, ldb = self._parse_op_args(B)
 
         self.ApB(
             c_char(op_A.encode("utf-8")),
@@ -618,23 +724,10 @@ class DMatrix(AMatrix):
         return self
 
     def __sub__(self, B):
-        if self.transposed or B.transposed:
-            raise NotImplementedError
-
-        if (self.m != B.m) or (self.n != B.n):
-            raise ValueError
-
-        if self.dtype != B.dtype:
-            raise TypeError
+        op_A, op_B, lda, ldb = self._parse_op_args(B)
 
         C = DMatrix(self.m, self.n, dtype=self.dtype)
-
-        op_A = "t" if self.transposed else "n"
-        op_B = "t" if B.transposed else "n"
-        # TODO: switch to m, k, m for col-ordered
-        lda = self.max_row_rank if self.transposed else self.max_col_rank
-        ldb = B.max_row_rank if B.transposed else B.max_col_rank
-        ldc = C.max_col_rank  # if C in registry is transposed, this breaks
+        ldc = C.max_col_rank
 
         self.AmB(
             c_char(op_A.encode("utf-8")),
@@ -652,22 +745,85 @@ class DMatrix(AMatrix):
         return C
 
     def __isub__(self, B):
-        if self.transposed or B.transposed:
-            raise NotImplementedError
-
-        if (self.m != B.m) or (self.n != B.n):
-            raise ValueError
-
-        if self.dtype != B.dtype:
-            raise TypeError
-
-        op_A = "t" if self.transposed else "n"
-        op_B = "t" if B.transposed else "n"
-        # TODO: switch to m, k, m for col-ordered
-        lda = self.max_row_rank if self.transposed else self.max_col_rank
-        ldb = B.max_row_rank if B.transposed else B.max_col_rank
+        op_A, op_B, lda, ldb = self._parse_op_args(B)
 
         self.AmB(
+            c_char(op_A.encode("utf-8")),
+            c_char(op_B.encode("utf-8")),
+            self.m,
+            self.n,
+            self.arr.p,
+            lda,
+            B.arr.p,
+            ldb,
+            self.arr.p,
+            lda,
+        )
+        return self
+
+    def __mul__(self, B):
+        op_A, op_B, lda, ldb = self._parse_op_args(B)
+
+        C = DMatrix(self.m, self.n, dtype=self.dtype)
+        ldc = C.max_col_rank
+
+        self.AtB(
+            c_char(op_A.encode("utf-8")),
+            c_char(op_B.encode("utf-8")),
+            self.m,
+            self.n,
+            self.arr.p,
+            lda,
+            B.arr.p,
+            ldb,
+            C.arr.p,
+            ldc,
+        )
+
+        return C
+
+    def __imul__(self, B):
+        op_A, op_B, lda, ldb = self._parse_op_args(B)
+
+        self.AtB(
+            c_char(op_A.encode("utf-8")),
+            c_char(op_B.encode("utf-8")),
+            self.m,
+            self.n,
+            self.arr.p,
+            lda,
+            B.arr.p,
+            ldb,
+            self.arr.p,
+            lda,
+        )
+        return self
+
+    def __truediv__(self, B):
+        op_A, op_B, lda, ldb = self._parse_op_args(B)
+
+        C = DMatrix(self.m, self.n, dtype=self.dtype)
+        ldc = C.max_col_rank
+
+        self.AdB(
+            c_char(op_A.encode("utf-8")),
+            c_char(op_B.encode("utf-8")),
+            self.m,
+            self.n,
+            self.arr.p,
+            lda,
+            B.arr.p,
+            ldb,
+            C.arr.p,
+            ldc,
+        )
+
+        return C
+
+    def __itruediv__(self, B):
+        op_A, op_B, lda, ldb = self._parse_op_args(B)
+
+        self.AdB(
             c_char(op_A.encode("utf-8")),
             c_char(op_B.encode("utf-8")),
             self.m,
@@ -722,6 +878,17 @@ class DMatrix(AMatrix):
         )
 
         return C
+
+    @classmethod
+    def eye(cls, l, dtype=np.float64):
+        res = DMatrix(l, l, dtype=dtype)
+        match dtype:
+            case np.float32:
+                temp = LinkedArray_f32(l, fill=1.0)
+            case np.float64:
+                temp = LinkedArray_f64(l, fill=1.0)
+        res.fill_diagonal(temp)
+        return res
 
 
 ### Register C++ library functions for all SymCSRMatrix utilies
@@ -1048,32 +1215,16 @@ class RowDistMatrix(DistMatrix):
 Linear algebra routines
 """
 
-
-def diagonalize(X):
-    """Diagonalize matrix and return eigenbasis and corresponding eigenvalues
-
-        diagonalize s.t. Z @ L @ Z.T = A
-    Args:
-        X (array) : (symmetric) matrix to be diagonalized
-
-    Returns:
-        L (array) : eigenvalues of X
-        Z (array) : eigenbasis of X
-
-
-    """
-    syevr = la.get_lapack_funcs("syevr", dtype=X.dtype)
-    L, Z, _, _, _ = syevr(X)
-    return L, Z
-
-
 for k in [f32, f64]:
     sd = {f32: "s", f64: "d"}
-    name = sd[k] + "qr_mkl"
-    f = getattr(lib_matrix, name)
     k_p = type_dict[k][1]
-    f.argtypes = [idx_t, idx_t, k_p, idx_t]
-    f.restype = handle_t
+    f_qr = getattr(lib_matrix, sd[k] + "qr_mkl")
+    f_qr.argtypes = [idx_t, idx_t, k_p, idx_t]
+    f_qr.restype = handle_t
+
+    f_syevd = getattr(lib_matrix, sd[k] + "syevd_mkl")
+    f_syevd.argtypes = [idx_t, k_p, idx_t, k_p]
+    f_syevd.restype = None
 
 
 def qr_factorization(X):
@@ -1092,3 +1243,29 @@ def qr_factorization(X):
             raise NotImplementedError
 
     return DMatrix(X.n, X.n, dtype=X.dtype, handle=res_handle, override_original=True)
+
+
+def diagonalize(X):
+    """Diagonalize matrix and return eigenbasis and corresponding eigenvalues
+
+        diagonalize s.t. Z @ L @ Z.T = A
+    Args:
+        X (array) : (symmetric) matrix to be diagonalized
+
+    Returns:
+        L (array) : eigenvalues of X
+        Z (array) : eigenbasis of X
+
+
+    """
+    lda = X.max_col_rank
+    if X.m != X.n:
+        raise ValueError
+    match X.dtype:
+        case np.float32:
+            w = LinkedArray_f32(X.n)
+            lib_matrix.ssyevd_mkl(idx_t(X.n), X.arr.p, idx_t(lda), w.arr.p)
+        case np.float64:
+            w = LinkedArray_f64(X.n)
+            lib_matrix.dsyevd_mkl(idx_t(X.n), X.arr.p, idx_t(lda), w.arr.p)
+    return w

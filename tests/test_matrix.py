@@ -206,6 +206,68 @@ class Test_DMatrix(unittest.TestCase):
             shape = self.rng.integers(8, 32, 2)
             check_isub(shape)
 
+    def test_mul(self):
+        def check_mul(shape):
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
+
+            A_test = DMatrix(shape[0], shape[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape[0], shape[1], B_ref, dtype=self.dtype)
+
+            self.assertTrue(np.allclose(A_ref * B_ref, (A_test * B_test).np_arr))
+
+        for _ in range(self.N_trials):
+            shape = self.rng.integers(8, 32, 2)
+            check_mul(shape)
+
+    def test_imul(self):
+        def check_imul(shape):
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
+
+            A_test = DMatrix(shape[0], shape[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape[0], shape[1], B_ref, dtype=self.dtype)
+
+            A_ref *= B_ref
+            A_test *= B_test
+
+            self.assertTrue(np.allclose(A_ref, A_test.np_arr))
+
+        for _ in range(self.N_trials):
+            shape = self.rng.integers(8, 32, 2)
+            check_imul(shape)
+
+    def test_truediv(self):
+        def check_truediv(shape):
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
+
+            A_test = DMatrix(shape[0], shape[1], A_ref)
+            B_test = DMatrix(shape[0], shape[1], B_ref)
+
+            self.assertTrue(np.allclose(A_ref / B_ref, (A_test / B_test).np_arr))
+
+        for _ in range(self.N_trials):
+            shape = self.rng.integers(8, 32, 2)
+            check_truediv(shape)
+
+    def test_itruediv(self):
+        def check_itruediv(shape):
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
+
+            A_test = DMatrix(shape[0], shape[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape[0], shape[1], B_ref, dtype=self.dtype)
+
+            A_ref /= B_ref
+            A_test /= B_test
+
+            self.assertTrue(np.allclose(A_ref, A_test.np_arr))
+
+        for _ in range(self.N_trials):
+            shape = self.rng.integers(8, 32, 2)
+            check_itruediv(shape)
+
     def test_subslice_get_shape_error(self):
         row_rank = 64
         col_rank = 32

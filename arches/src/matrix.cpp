@@ -5,6 +5,32 @@
 // ctypes matrix routine interfaces
 extern "C" {
 
+void dsyevd_mkl(const idx_t n, double *A, const idx_t lda, double *w) {
+    CBLAS_LAYOUT layout = CblasRowMajor;
+
+    long long status = LAPACKE_dsyevd(layout, 'v', 'U', n, A, lda, w);
+
+    if (status < 0)
+        std::cout << "in dysevd: parameter " << status << " had an illegal value" << std::endl;
+    if (status > 0)
+        std::cout << "in dysevd: failed to compute eigenvalue. status:  " << status << std::endl;
+}
+
+void ssyevd_mkl(const idx_t n, float *A, const idx_t lda, float *w) {
+    std::unique_ptr<double[]> A_temp(new double[lda * n]);
+    std::unique_ptr<double[]> w_temp(new double[n]);
+
+    std::transform(A, A + lda * n, A_temp.get(),
+                   [](const float &x) { return static_cast<double>(x); });
+
+    dsyevd_mkl(n, A_temp.get(), lda, w_temp.get());
+
+    std::transform(A_temp.get(), A_temp.get() + lda * n, A,
+                   [](const double &x) { return static_cast<float>(x); });
+    std::transform(w_temp.get(), w_temp.get() + n, w,
+                   [](const double &x) { return static_cast<float>(x); });
+}
+
 void sgemm_mkl(char op_a, char op_b, idx_t m, idx_t n, idx_t k, float alpha, const float *A,
                idx_t lda, const float *B, idx_t ldb, float beta, float *C, idx_t ldc) {
 
@@ -122,6 +148,23 @@ void DMatrix_dAmB(const char op_A, const char op_B, const idx_t m, const idx_t n
                   const idx_t lda, double *B, const idx_t ldb, double *C, const idx_t ldc) {
     AmB(op_A, op_B, m, n, A, lda, B, ldb, C, ldc);
 }
+
+void DMatrix_sAtB(const char op_A, const char op_B, const idx_t m, const idx_t n, float *A,
+                  const idx_t lda, float *B, const idx_t ldb, float *C, const idx_t ldc) {
+    AtB(op_A, op_B, m, n, A, lda, B, ldb, C, ldc);
+}
+void DMatrix_sAdB(const char op_A, const char op_B, const idx_t m, const idx_t n, float *A,
+                  const idx_t lda, float *B, const idx_t ldb, float *C, const idx_t ldc) {
+    AdB(op_A, op_B, m, n, A, lda, B, ldb, C, ldc);
+}
+void DMatrix_dAtB(const char op_A, const char op_B, const idx_t m, const idx_t n, double *A,
+                  const idx_t lda, double *B, const idx_t ldb, double *C, const idx_t ldc) {
+    AtB(op_A, op_B, m, n, A, lda, B, ldb, C, ldc);
+}
+void DMatrix_dAdB(const char op_A, const char op_B, const idx_t m, const idx_t n, double *A,
+                  const idx_t lda, double *B, const idx_t ldb, double *C, const idx_t ldc) {
+    AdB(op_A, op_B, m, n, A, lda, B, ldb, C, ldc);
+}
 }
 
 // ctypes handler interfacing
@@ -198,5 +241,35 @@ void DMatrix_set_submatrix_f64(const char op_A, const char op_B, const idx_t m, 
                                double *A, const idx_t lda, const double *B, const idx_t ldb) {
 
     set_submatrix(op_A, op_B, m, n, A, lda, B, ldb);
+}
+
+void DMatrix_fill_diagonal_f32(const idx_t m, DMatrix<float> *A, const idx_t lda,
+                               const float *fill) {
+    fill_diagonal(m, A->A, lda, fill);
+}
+
+void DMatrix_fill_diagonal_f64(const idx_t m, DMatrix<double> *A, const idx_t lda,
+                               const double *fill) {
+    fill_diagonal(m, A->A, lda, fill);
+}
+
+void DMatrix_extract_diagonal_f32(const idx_t m, const DMatrix<float> *A, const idx_t lda,
+                                  float *res) {
+    extract_dense_diagonal(m, A->A, lda, res);
+}
+
+void DMatrix_extract_diagonal_f64(const idx_t m, const DMatrix<double> *A, const idx_t lda,
+                                  double *res) {
+    extract_dense_diagonal(m, A->A, lda, res);
+}
+
+void DMatrix_column_2norm_f32(const idx_t m, const idx_t n, const DMatrix<float> *A,
+                              const idx_t lda, float *res) {
+    column_2norm(m, n, A->A, lda, res);
+}
+
+void DMatrix_column_2norm_f64(const idx_t m, const idx_t n, const DMatrix<double> *A,
+                              const idx_t lda, double *res) {
+    column_2norm(m, n, A->A, lda, res);
 }
 }

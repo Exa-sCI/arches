@@ -2,6 +2,7 @@
 #include "determinant.h"
 #include "integral_indexing_utils.h"
 #include <algorithm>
+#include <math.h>
 #include <memory>
 
 // typedef long int idx_t;
@@ -283,6 +284,88 @@ void AmB(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A, c
 }
 
 template <class T>
+void AtB(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A, const idx_t lda,
+         T *B, const idx_t ldb, T *C, const idx_t ldc) {
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    C[i * ldc + j] = A[i * lda + j] * B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] * B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] * B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    C[i * ldc + j] = A[i * lda + j] * B[i * ldb + j];
+                }
+            }
+        }
+    }
+};
+
+template <class T>
+void AdB(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A, const idx_t lda,
+         T *B, const idx_t ldb, T *C, const idx_t ldc) {
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    C[i * ldc + j] = A[i * lda + j] / B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] / B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] / B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    C[i * ldc + j] = A[i * lda + j] / B[i * ldb + j];
+                }
+            }
+        }
+    }
+}
+
+template <class T>
 void set_submatrix(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A,
                    const idx_t lda, const T *B, const idx_t ldb) {
 
@@ -321,5 +404,35 @@ void set_submatrix(const char op_A, const char op_B, const idx_t m, const idx_t 
                 }
             }
         }
+    }
+}
+
+template <class T> void fill_diagonal(const idx_t m, T *A, const idx_t lda, const T *fill) {
+    for (auto i = 0; i < m; i++) {
+        A[i * lda + i] = fill[i];
+    }
+}
+
+template <class T> void extract_dense_diagonal(const idx_t m, const T *A, const idx_t lda, T *res) {
+    for (auto i = 0; i < m; i++) {
+        res[i] = A[i * lda + i];
+    }
+}
+
+template <class T>
+void extract_sparse_diagonal(const idx_t m, const idx_t *A_p, const T *A_v, T *res) {
+    for (auto i = 0; i < m; i++) {
+        res[i] = A_v[A_p[i]];
+    }
+}
+
+template <class T> void column_2norm(const idx_t m, const idx_t n, T *A, const idx_t lda, T *res) {
+    for (auto i = 0; i < m; i++) {
+        for (auto j = 0; j < n; j++) {
+            res[j] += A[i * lda + j] * A[i * lda + j];
+        }
+    }
+    for (auto j = 0; j < n; j++) {
+        res[j] = (T)sqrt(res[j]);
     }
 }
