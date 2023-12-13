@@ -7,6 +7,7 @@ from mpi4py import MPI
 from scipy.linalg import lapack
 
 from arches.integrals import JChunk
+from arches.linked_object import get_LArray
 from arches.matrix import AMatrix, DMatrix, diagonalize, qr_factorization
 
 
@@ -81,21 +82,35 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
     return Q, R, T
 
 
-def davidson(H, *args, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-6, **kwargs):  # noqa: E741
+def davidson(
+    H,
+    *args,
+    V_0=None,
+    N_states=1,
+    l=32,
+    pc="D",
+    max_subspace_rank=256,
+    max_iter=100,
+    tol=1e-6,
+    rtol=1e-4,
+    atol=1e-6,
+    **kwargs,
+):  # noqa: E741
     """
     Implementation of the Davidson diagonalization algorithm in serial,
     with blocked eigenvector prediction and BMGS.
     """
     if V_0 is None:
-        V_k = np.zeros((H.shape[0], l))
-        V_k[:l, :l] = np.eye(l)
+        V_k = DMatrix(H.m, l, dtype=H.dtype)
+        V_k[:l, :l] = DMatrix.eye(l, dtype=H.dtype)
     else:
         V_k = V_0
 
-    R_k = np.eye(l)
-    T_k = np.eye(l)
-    N = H.shape[0]
-    C_d = np.diag(H)
+    bmgs_R_k = DMatrix.eye(l, dtype=H.dtype)
+    bmgs_T_k = DMatrix.eye(l, dtype=H.dtype)
+    N = H.m
+    C_d = get_LArray(H.dtype)(N)
+    H.extract_diagonal(C_d)
     if pc == "T":
         C_sd = np.zeros(N - 1)
         for i in range(N - 1):
@@ -103,52 +118,80 @@ def davidson(H, *args, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-
 
         ptsvx = lapack.get_lapack_funcs("ptsvx", dtype=H.dtype)
 
+    max_subspace_rank = min(max_subspace_rank, H.m)
     for k in range(max_iter):
         ### Project Hamiltonian onto subspace spanned by V_k
+        # S_k -> Q_k is diagonalized in place since S_k is not needed again afterwards
         W_k = H @ V_k
-        S_k = V_k.T @ W_k
+        Q_k = V_k.T @ W_k
 
         ### diagonalize S_k to find (projected) eigenbasis
-        L_k, Q_k = diagonalize(S_k)  # L_k is sorted smallest -> largest
+        w = diagonalize(Q_k)  # L_k is sorted smallest -> largest
+
+        L_k = DMatrix(V_k.n, V_k.n, dtype=H.dtype)
+        L_k.fill_diagonal(w)
 
         ### Form Ritz vectors (in place) and calculate residuals
         R_k = V_k @ Q_k[:, :l] @ L_k[:l, :l] - W_k @ Q_k[:, :l]
 
-        r_norms = np.linalg.norm(R_k, axis=0)
+        r_norms = R_k.column_2norm()
+        r_norms = r_norms.arr.np_arr
 
         # process early exits
         early_exit = False
         if np.all(r_norms[:N_states] < tol):
             early_exit = True
-            print(f"Davidson has converged with tolerance {tol:0.4e}")
+            print(f"Davidson has converged with tolerance {tol:0.4e} in {k+1} iterations")
             for i in range(N_states):
-                print(f"Energy of state {i}:{L_k[i]} Ha")
+                print(f"Energy of state {i} : {w.arr[i]} Ha. Residual {r_norms[i]}")
 
         elif k == max_iter - 1:
             early_exit = True
             print("Davidson has hit max number of iterations. Exiting early.")
             for i in range(N_states):
-                print(f"Energy of state {i}:{L_k[i]} Ha. Residual {r_norms[i]}")
+                print(f"Energy of state {i} : {w.arr[i]} Ha. Residual {r_norms[i]}")
 
         if early_exit:
-            return L_k[:N_states], Q_k[:, :N_states]
+            # TODO: This works okay in this case because __setitem__ does the bounds checks,
+            # but should really implement __getitem__ on LinkedArrays
+            # and make sure desired ranges are compatible
+            E = w.allocate_result(N_states)
+            E.arr[:N_states] = w.arr
+
+            psi = DMatrix(Q_k.m, N_states, dtype=H.dtype)
+            psi[:, :] = Q_k[:, :N_states]
+            return E, psi
 
         ### Calculate next batch of trial vectors
-        # TODO: get rid of allocatons in loop
-        V_kk = np.zeros((H.shape[0], l))
+        V_trial = DMatrix(H.m, l, dtype=H.dtype)
 
         for i in range(l):
             if pc == "D":  # diagonal preconditioner
-                C_ki = np.ones(N) * L_k[i] - C_d
-                C_ki = 1.0 / C_ki
-                V_kk[:, i] = C_ki * R_k[:, i]
+                # If eigenvalue collides with diagonal value, this can propagate NaNs
+                # So replace preconditioner entry and accept a bad vector
+                C_ki = get_LArray(C_d.arr.dtype)(N, fill=w.arr[i]) - C_d
+                C_ki.reset_near_zeros(np.finfo(H.dtype).eps, 1.0)
+                V_trial[:, i] = R_k[:, i] / C_ki
             elif pc == "T":  # tridiagonal preconditioner
-                C_d_i = np.ones(N) * L_k[i] - C_d
+                C_d_i = np.ones(N) * w.arr[i] - C_d
                 res = ptsvx(C_d_i, C_sd, R_k[:, i])
-                V_kk[:, i] = res[0]
+                V_trial[:, i] = res[0]
 
         ### Form new orthonormal subspace
-        V_k, R_k, T_k = bmgs_h(np.hstack([V_k, V_kk]), l // 2, V_k, R_k, T_k)
+        reset_subspace = V_k.n + l >= max_subspace_rank
+        if reset_subspace:
+            new_rank = 2 * l
+            V_kk = DMatrix(V_k.m, new_rank, dtype=H.dtype)
+            V_kk[:, :l] = V_k @ Q_k[:, :l]
+            V_kk[:, l:] = V_trial
+            V_k = None
+        else:
+            new_rank = V_k.n + l
+            V_kk = DMatrix(V_k.m, new_rank, dtype=H.dtype)
+            V_kk[:, : V_k.n] = V_k
+            V_kk[:, V_k.n :] = V_trial
+
+        V_k, bmgs_R_k, bmgs_T_k = bmgs_h(V_kk, l // 2, V_k, bmgs_R_k, bmgs_T_k)
 
 
 def davidson_par_0(
