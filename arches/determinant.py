@@ -123,6 +123,9 @@ lib_dets.Dets_get_H_structure_naive_f32.restype = handle_t
 lib_dets.Dets_get_H_structure_naive_f64.argtypes = [handle_t, idx_t]
 lib_dets.Dets_get_H_structure_naive_f64.restype = handle_t
 
+lib_dets.Dets_extend_array_with_filter.argtypes = [handle_t, handle_t, idx_t_p, idx_t]
+lib_dets.Dets_extend_array_with_filter.restype = None
+
 #### Generation routines
 for exc in ["singles", "same_spin_doubles", "opp_spin_doubles", "dets"]:
     pfix = "Dets_get_"
@@ -467,6 +470,16 @@ class DetArray(DetGenerator, LinkedHandle):
             self.N_dets, self.N_dets, dtype=dtype, handle=res_handle, override_original=True
         )
 
+    def extend_with_filter(self, other, idx):
+        if not isinstance(other, DetArray):
+            raise TypeError
+
+        if not isinstance(idx, LinkedArray_idx_t):
+            raise TypeError
+
+        lib_dets.Dets_extend_array_with_filter(self.handle, other.handle, idx.arr.p, idx.N)
+        self.N_dets += idx.N
+
 
 class exc(ABC):
     def __init__(self, h, p, spin):
@@ -525,7 +538,7 @@ class single_exc(exc):
     def spin(self, v):
         match v:
             case 1 | 0 | None:
-                self._v = v
+                self._spin = v
             case _:
                 raise ValueError
 
@@ -587,7 +600,7 @@ class double_exc(exc):
                 self._v = v
             case tuple() | list():
                 if v[0] in (0, 1) and v[1] in (0, 1):
-                    self._v = v
+                    self._spin = v
                 else:
                     raise ValueError
             case _:

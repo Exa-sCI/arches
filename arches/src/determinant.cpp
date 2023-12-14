@@ -595,4 +595,8 @@ SymCSRMatrix<float> *Dets_get_H_structure_naive_f32(DetArray *psi_det) {
 SymCSRMatrix<double> *Dets_get_H_structure_naive_f64(DetArray *psi_det) {
     return new SymCSRMatrix<double>(psi_det);
 }
+
+void Dets_extend_array_with_filter(DetArray *target, DetArray *source, idx_t *filter, idx_t N) {
+    target->extend_with_filter(*source, filter, N);
+}
 }

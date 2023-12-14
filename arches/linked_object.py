@@ -569,3 +569,29 @@ def get_LArray(dtype):
             return LinkedArray_ui64
         case _:
             raise NotImplementedError
+
+
+lib_array.LArray_get_threshold_idx_f32.argtypes = [f32_p, idx_t, f32]
+lib_array.LArray_get_threshold_idx_f32.restype = handle_t
+lib_array.LArray_get_threshold_idx_f64.argtypes = [f64_p, idx_t, f64]
+lib_array.LArray_get_threshold_idx_f64.restype = handle_t
+
+lib_array.LArray_get_arr_size_idx_t.argtypes = [handle_t]
+lib_array.LArray_get_arr_size_idx_t.restype = idx_t
+
+
+def get_indices_by_threshold(arr, threshold):
+    print(type(arr))
+    match arr:
+        case LinkedArray_f32():
+            res_handle = lib_array.LArray_get_threshold_idx_f32(
+                arr.arr.p, idx_t(arr.N), f32(threshold)
+            )
+        case LinkedArray_f64():
+            res_handle = lib_array.LArray_get_threshold_idx_f64(
+                arr.arr.p, idx_t(arr.N), f64(threshold)
+            )
+        case _:
+            raise NotImplementedError
+    N = lib_array.LArray_get_arr_size_idx_t(res_handle)
+    return LinkedArray_idx_t(N, handle=res_handle, override_original=True)

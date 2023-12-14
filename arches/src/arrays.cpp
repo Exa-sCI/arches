@@ -202,6 +202,7 @@ unsigned long long int *LArray_get_arr_ptr_ui64(LArray<unsigned long long int> *
     return X->arr;
 }
 idx_t *LArray_get_arr_ptr_idx_t(LArray<idx_t> *X) { return X->arr; }
+idx_t LArray_get_arr_size_idx_t(LArray<idx_t> *X) { return X->size; }
 
 // Destructors
 void LArray_dtor_f32(LArray<float> *X) { delete X; }
@@ -544,5 +545,29 @@ void LArray_reset_near_zeros_f64(double *a, const idx_t N, double tol, double r_
         if (a[i] < tol)
             a[i] = r_val;
     }
+}
+
+LArray<idx_t> *LArray_get_threshold_idx_f32(float *arr, idx_t N, float threshold) {
+
+    std::unique_ptr<idx_t[]> temp_ind(new idx_t[N]);
+    idx_t count = 0;
+    for (auto i = 0; i < N; i++) {
+        if (arr[i] >= threshold) {
+            temp_ind[count++] = i;
+        }
+    }
+    return new LArray<idx_t>(count, temp_ind.get());
+}
+
+LArray<idx_t> *LArray_get_threshold_idx_f64(double *arr, idx_t N, double threshold) {
+
+    std::unique_ptr<idx_t[]> temp_ind(new idx_t[N]);
+    idx_t count = 0;
+    for (auto i = 0; i < N; i++) {
+        if (arr[i] >= threshold) {
+            temp_ind[count++] = i;
+        }
+    }
+    return new LArray<idx_t>(count, temp_ind.get());
 }
 }

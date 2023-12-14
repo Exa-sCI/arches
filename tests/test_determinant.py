@@ -5,6 +5,7 @@ import numpy as np
 from arches.determinant import DetArray, det_t, double_exc, single_exc, spin_det_t
 from arches.fundamental_types import Determinant as det_ref
 from arches.fundamental_types import Spin_determinant_tuple as spin_det_ref
+from arches.linked_object import LinkedArray_f32, LinkedArray_idx_t, get_indices_by_threshold
 
 rng = np.random.default_rng(seed=6329)
 
@@ -1147,6 +1148,33 @@ class Test_DetArray(unittest.TestCase):
         c2 = c1.generate_connected_dets()
         c2_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in c2)
         self.assertEqual(c1_set.intersection(c2_set), set())
+
+    def test_add_filtered_list(self):
+        N_orbs = 12
+        max_orb = 4
+        ground_state = det_t(
+            N_orbs,
+            spin_det_t(N_orbs, occ=True, max_orb=max_orb),
+            spin_det_t(N_orbs, occ=True, max_orb=max_orb),
+        )
+        c1 = ground_state.generate_connected_dets()
+
+        c2 = c1.generate_connected_dets()
+        threshold = 0.95
+        pt2_arr = rng.uniform(size=(c2.N_dets)).astype(np.float32)
+        idx_arr = np.where(pt2_arr > threshold)[0]
+
+        pt2 = LinkedArray_f32(c2.N_dets, pt2_arr)
+        idx = get_indices_by_threshold(pt2, threshold)
+        # idx = LinkedArray_idx_t(100, idx_arr)
+
+        ref_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in c1)
+        c1.extend_with_filter(c2, idx)
+        add_set = set((c2[i][0].as_orb_list, c2[i][1].as_orb_list) for i in idx_arr)
+        ref_set = ref_set.union(add_set)
+        test_set = set((d[0].as_orb_list, d[1].as_orb_list) for d in c1)
+
+        self.assertEqual(ref_set, test_set)
 
 
 if __name__ == "__main__":

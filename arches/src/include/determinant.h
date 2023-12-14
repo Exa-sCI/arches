@@ -341,6 +341,14 @@ class DetArray {
 
     const det_t &operator[](idx_t i) const { return arr[i]; }
 
+    void extend_with_filter(const DetArray &other, idx_t *filter, const idx_t N) {
+        for (auto i = 0; i < N; i++) {
+            storage.push_back(other[filter[i]]);
+        }
+        size += N;
+        arr = &storage[0];
+    }
+
     ~DetArray() = default;
 };
 
