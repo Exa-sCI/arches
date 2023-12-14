@@ -216,18 +216,20 @@ for k in [f32, f64]:
 
         gemm.restype = None
 
+    for cfig in ["ref", "mkl"]:
         spgemm = getattr(lib_matrix, "sym_csr_" + sd[k] + "_MM_" + cfig)
         spgemm.argtypes = [
             k,  # alpha
             idx_t_p,  # A_rows
+            idx_t,  # N rows in A
             idx_t_p,  # A_cols
             k_p,  # A_vals
+            idx_t,  # N cols in A
             k_p,  # B
+            idx_t,  # ldb
             k,  # beta
             k_p,  # C
-            idx_t,  # M
-            idx_t,  # K
-            idx_t,  # N
+            idx_t,  # ldc
         ]
         spgemm.restype = None
 
@@ -963,8 +965,8 @@ class SymCSRMatrix(AMatrix):
     _get_n_entries_f32 = lib_matrix.SymCSRMatrix_get_n_entries_f32
     _get_n_entries_f64 = lib_matrix.SymCSRMatrix_get_n_entries_f64
 
-    _s_spgemm = lib_matrix.sym_csr_s_MM_mkl
-    _d_spgemm = lib_matrix.sym_csr_d_MM_mkl
+    _s_spgemm = lib_matrix.sym_csr_s_MM_ref
+    _d_spgemm = lib_matrix.sym_csr_d_MM_ref
 
     def __init__(self, m, n, dtype, A_p=None, A_c=None, A_v=None, handle=None, **kwargs):
         """
@@ -1081,7 +1083,7 @@ class SymCSRMatrix(AMatrix):
                 raise NotImplementedError
 
     @property
-    def spgemm(self, op_A, op_B, alpha, A, B, beta, C):
+    def spgemm(self):
         match self.dtype:
             case np.float32:
                 return self._s_spgemm
@@ -1100,22 +1102,20 @@ class SymCSRMatrix(AMatrix):
 
         # TODO: consider interface for op B? op A is not so useful since A is symmetric
         # and/or consider passing arguments for B storage being col. major instead
-        op_A = "t" if self.transposed else "n"
-        op_B = "t" if B.transpose else "n"
-        lda = m
-        ldb = k
-        ldc = m
+        ldb = B.max_col_rank
+        ldc = res.max_col_rank
         self.spgemm(
             self.ctype(1.0),
             self.A_p.p,
+            idx_t(self.m),
             self.A_c.p,
             self.A_v.p,
+            idx_t(B.n),
             B.arr.p,
+            idx_t(ldb),
             self.ctype(1.0),
             res.arr.p,
-            m,
-            k,
-            n,
+            idx_t(ldc),
         )
 
         return res

@@ -1,8 +1,12 @@
+import pathlib
 import unittest
 
 import numpy as np
 from test_types import Test_f32, Test_f64
 
+from arches.determinant import det_t, spin_det_t
+from arches.integrals import load_integrals_into_chunks
+from arches.linked_object import idx_t
 from arches.matrix import DMatrix
 
 seed = 21872
@@ -706,6 +710,139 @@ class Test_DMatrix_f32(Test_f32, Test_DMatrix):
 
 
 class Test_DMatrix_f64(Test_f64, Test_DMatrix):
+    __test__ = True
+
+
+class FakeComm:
+    # to avoid initializing MPI for just tests
+    def __init__(self, rank, size):
+        self.rank = rank
+        self.size = size
+
+    def Get_rank(self):
+        return self.rank
+
+    def Get_size(self):
+        return self.size
+
+
+class FilteredDict:
+    def __init__(self, data):
+        self._data = data
+
+    def __getitem__(self, key):
+        try:
+            return self._data[key]
+        except KeyError:
+            return 0.0
+
+    def items(self):
+        return self._data.items()
+
+
+class Test_SymCSRMatrix(unittest.TestCase):
+    __test__ = False
+
+    @staticmethod
+    def launch_H_ii_kernel(kernel, chunk, connected, H):
+        kernel(
+            chunk.J.p,
+            chunk.idx.p,
+            idx_t(chunk.chunk_size),
+            connected.det_pointer,
+            idx_t(connected.N_dets),
+            H.A_p.p,
+            H.A_v.p,
+        )
+
+    @staticmethod
+    def launch_H_ij_kernel(kernel, chunk, connected, H):
+        kernel(
+            chunk.J.p,
+            chunk.idx.p,
+            idx_t(chunk.chunk_size),
+            connected.det_pointer,
+            idx_t(connected.N_dets),
+            H.A_p.p,
+            H.A_c.p,
+            H.A_v.p,
+        )
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rng = rng
+
+        run_folder = pathlib.Path(__file__).parent.resolve()
+        fp = run_folder.joinpath("../data/nh3.5det.fcidump")
+        # fp = run_folder.joinpath("../data/f2_631g.18det.fcidump")
+        # fp = run_folder.joinpath("../data/c2_eq_hf_dz.fcidump")
+        cls.fp = fp
+
+        N_mos, N_elec, E0, chunks = load_integrals_into_chunks(
+            str(fp), FakeComm(0, 1), dtype=cls.dtype
+        )
+
+        cls.N_mos = N_mos
+        cls.E0 = E0
+        cls.chunks = chunks
+
+        max_orb = N_elec // 2
+        ground_state = det_t(
+            N_mos,
+            spin_det_t(N_mos, occ=True, max_orb=max_orb),
+            spin_det_t(N_mos, occ=True, max_orb=max_orb),
+        )
+
+        cls.ground_state = ground_state
+        orbs = cls.ground_state.alpha.as_orb_list
+        h_constraint = orbs[-3:]
+        p_constraint = tuple(set([x for x in range(cls.N_mos)]).difference(set(h_constraint)))[-4:]
+        constraint = (h_constraint, p_constraint)
+
+        print("Generating connected determinants")
+        cls.connected = cls.ground_state.generate_connected_dets(constraint)
+        print("Generating H structure")
+        cls.H = cls.connected.get_H_structure(cls.dtype)
+
+        print("Filling H values")
+        for chunk in chunks:
+            kernels = chunk.H_kernels
+            match chunk.category:
+                case "OE" | "F":
+                    cls.launch_H_ij_kernel(kernels[0], chunk, cls.connected, cls.H)
+                    cls.launch_H_ii_kernel(kernels[1], chunk, cls.connected, cls.H)
+                case "A" | "B":
+                    cls.launch_H_ii_kernel(kernels[1], chunk, cls.connected, cls.H)
+                case _:
+                    cls.launch_H_ij_kernel(kernels[0], chunk, cls.connected, cls.H)
+
+    def test_matmul(self):
+        ref_A = self.rng.normal(size=(self.H.n, self.H.n // 2)).astype(self.dtype)
+        test_A = DMatrix(*ref_A.shape, ref_A, dtype=self.dtype)
+
+        ref_H = np.zeros((self.H.m, self.H.n), dtype=self.dtype)
+        for i in range(self.H.m):
+            row_start = self.H.A_p[i]
+            row_end = self.H.A_p[i + 1]
+            for idx in range(row_start, row_end):
+                j = self.H.A_c[idx]
+                val = self.H.A_v[idx]
+                ref_H[i, j] = val
+                ref_H[j, i] = val
+
+        ref_D_H = DMatrix(self.H.m, self.H.n, ref_H, dtype=self.dtype)
+        ref_B = ref_H @ ref_A
+        test_B = self.H @ test_A
+
+        self.assertTrue(np.allclose((ref_D_H @ test_A).np_arr, ref_B))
+        self.assertTrue(np.allclose(test_B.np_arr, ref_B))
+
+
+class Test_SymCSRMatrix_f32(Test_f32, Test_SymCSRMatrix):
+    __test__ = True
+
+
+class Test_SymCSRMatrix_f64(Test_f64, Test_SymCSRMatrix):
     __test__ = True
 
 
