@@ -180,18 +180,6 @@ for k in [f32, f64]:
         f_diag_op.argtypes = [idx_t, handle_t, idx_t, k_p]
         f_diag_op.restype = None
 
-    # fill_diagonal = getattr(lib_matrix, pfix + "fill_diagonal" + sfix)
-    # fill_diagonal.argtypes = [idx_t, handle_t, idx_t, k_p]
-    # fill_diagonal.restype = None
-
-    # extract_diagonal = getattr(lib_matrix, pfix + "extract_diagonal" + sfix)
-    # extract_diagonal.argtypes = [idx_t, handle_t, idx_t, k_p]
-    # extract_diagonal.restype = None
-
-    # extract_sdiagonal = getattr(lib_matrix, pfix + "extract_superdiagonal" + sfix)
-    # extract_sdiagonal.argtypes = [idx_t, handle_t, idx_t, k_p]
-    # extract_sdiagonal.restype = None
-
     column_2norm = getattr(lib_matrix, pfix + "column_2norm" + sfix)
     column_2norm.argtypes = [idx_t, idx_t, handle_t, idx_t, k_p]
     column_2norm.restype = None
@@ -944,6 +932,11 @@ for k in [f32, f64]:
     av_ptr_return.restype = k_p
     n_entries_return.restype = idx_t
 
+    for diag_op in ["extract_", "extract_super"]:
+        f_diag_op = getattr(lib_matrix, pfix + diag_op + "diagonal" + sfix)
+        f_diag_op.argtypes = [idx_t, handle_t, k_p]
+        f_diag_op.restype = None
+
 
 class SymCSRMatrix(AMatrix):
     """Symmetric matrix stored in CSR format."""
@@ -964,6 +957,12 @@ class SymCSRMatrix(AMatrix):
 
     _get_n_entries_f32 = lib_matrix.SymCSRMatrix_get_n_entries_f32
     _get_n_entries_f64 = lib_matrix.SymCSRMatrix_get_n_entries_f64
+
+    _extract_diagonal_f32 = lib_matrix.SymCSRMatrix_extract_diagonal_f32
+    _extract_diagonal_f64 = lib_matrix.SymCSRMatrix_extract_diagonal_f64
+
+    _extract_superdiagonal_f32 = lib_matrix.SymCSRMatrix_extract_superdiagonal_f32
+    _extract_superdiagonal_f64 = lib_matrix.SymCSRMatrix_extract_superdiagonal_f64
 
     _s_spgemm = lib_matrix.sym_csr_s_MM_ref
     _d_spgemm = lib_matrix.sym_csr_d_MM_ref
@@ -1117,6 +1116,32 @@ class SymCSRMatrix(AMatrix):
             res.arr.p,
             idx_t(ldc),
         )
+
+        return res
+
+    def extract_diagonal(self):
+        match self.dtype:
+            case np.float32:
+                res = LinkedArray_f32(self.m)
+                self._extract_diagonal_f32(idx_t(self.m), self.handle, res.arr.p)
+            case np.float64:
+                res = LinkedArray_f64(self.m)
+                self._extract_diagonal_f64(idx_t(self.m), self.handle, res.arr.p)
+            case _:
+                raise NotImplementedError
+
+        return res
+
+    def extract_superdiagonal(self):
+        match self.dtype:
+            case np.float32:
+                res = LinkedArray_f32(self.m - 1)
+                self._extract_superdiagonal_f32(idx_t(self.m), self.handle, res.arr.p)
+            case np.float64:
+                res = LinkedArray_f64(self.m - 1)
+                self._extract_superdiagonal_f64(idx_t(self.m), self.handle, res.arr.p)
+            case _:
+                raise NotImplementedError
 
         return res
 

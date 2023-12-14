@@ -837,6 +837,28 @@ class Test_SymCSRMatrix(unittest.TestCase):
         self.assertTrue(np.allclose((ref_D_H @ test_A).np_arr, ref_B))
         self.assertTrue(np.allclose(test_B.np_arr, ref_B))
 
+    def test_extract_diagonal(self):
+        ref_diag = np.zeros(self.H.m, dtype=self.dtype)
+
+        for i in range(self.H.m):
+            idx = self.H.A_p[i]
+            ref_diag[i] = self.H.A_v[idx]
+
+        test_diag = self.H.extract_diagonal()
+        self.assertTrue(np.allclose(test_diag.arr.np_arr, ref_diag))
+
+    def test_extract_superdiagonal(self):
+        ref_superdiag = np.zeros(self.H.m - 1, dtype=self.dtype)
+
+        for i in range(self.H.m):
+            idx = self.H.A_p[i] + 1
+            col = self.H.A_c[idx]
+            if col == (i + 1):
+                ref_superdiag[i] = self.H.A_v[idx]
+
+        test_superdiag = self.H.extract_superdiagonal()
+        self.assertTrue(np.allclose(test_superdiag.arr.np_arr, ref_superdiag))
+
 
 class Test_SymCSRMatrix_f32(Test_f32, Test_SymCSRMatrix):
     __test__ = True

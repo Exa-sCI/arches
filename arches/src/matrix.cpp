@@ -493,4 +493,22 @@ void DMatrix_column_2norm_f64(const idx_t m, const idx_t n, const DMatrix<double
                               const idx_t lda, double *res) {
     column_2norm(m, n, A->A, lda, res);
 }
+
+//// SymCSR
+void SymCSRMatrix_extract_diagonal_f32(const idx_t m, const SymCSRMatrix<float> *A, float *res) {
+    extract_sparse_diagonal(m, A->A_p, A->A_v, res);
+}
+
+void SymCSRMatrix_extract_diagonal_f64(const idx_t m, const SymCSRMatrix<double> *A, double *res) {
+    extract_sparse_diagonal(m, A->A_p, A->A_v, res);
+}
+void SymCSRMatrix_extract_superdiagonal_f32(const idx_t m, const SymCSRMatrix<float> *A,
+                                            float *res) {
+    extract_sparse_superdiagonal(m, A->A_p, A->A_c, A->A_v, res);
+}
+
+void SymCSRMatrix_extract_superdiagonal_f64(const idx_t m, const SymCSRMatrix<double> *A,
+                                            double *res) {
+    extract_sparse_superdiagonal(m, A->A_p, A->A_c, A->A_v, res);
+}
 }
