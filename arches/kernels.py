@@ -216,3 +216,55 @@ def dispatch_H_kernel(
             return (k_H_F_ij, k_H_F_ii)
         case "G":
             return (k_H_G, None)
+
+
+def launch_H_ii_kernel(kernel, chunk, dets, H):
+    kernel(
+        chunk.J.p,
+        chunk.idx.p,
+        idx_t(chunk.chunk_size),
+        dets.det_pointer,
+        idx_t(dets.N_dets),
+        H.A_p.p,
+        H.A_v.p,
+    )
+
+
+def launch_H_ij_kernel(kernel, chunk, dets, H):
+    kernel(
+        chunk.J.p,
+        chunk.idx.p,
+        idx_t(chunk.chunk_size),
+        dets.det_pointer,
+        idx_t(dets.N_dets),
+        H.A_p.p,
+        H.A_c.p,
+        H.A_v.p,
+    )
+
+
+def launch_denom_kernel(kernel, chunk, ext_dets, N_states, res):
+    kernel(
+        chunk.J.p,
+        chunk.idx.p,
+        idx_t(chunk.chunk_size),
+        idx_t(N_states),
+        ext_dets.det_pointer,
+        ext_dets.N_dets,
+        res.arr.p,
+    )
+
+
+def launch_num_kernel(kernel, chunk, int_dets, psi_coef, ext_dets, N_states, res):
+    kernel(
+        chunk.J.p,
+        chunk.idx.p,
+        idx_t(chunk.chunk_size),
+        int_dets.det_pointer,
+        psi_coef.arr.p,
+        int_dets.N_dets,
+        idx_t(N_states),
+        ext_dets.det_pointer,
+        ext_dets.N_dets,
+        res.arr.p,
+    )

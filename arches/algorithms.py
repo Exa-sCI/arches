@@ -7,8 +7,15 @@ from mpi4py import MPI
 from scipy.linalg import lapack
 
 from arches.integrals import JChunk
-from arches.linked_object import get_LArray
-from arches.matrix import AMatrix, DMatrix, diagonalize, gtsv, qr_factorization
+from arches.kernels import (
+    launch_denom_kernel,
+    launch_H_ii_kernel,
+    launch_H_ij_kernel,
+    launch_num_kernel,
+)
+from arches.linked_object import get_indices_by_threshold, get_LArray
+from arches.log_timer import ScopedTimer
+from arches.matrix import DMatrix, diagonalize, gtsv, qr_factorization
 
 
 def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
@@ -137,7 +144,7 @@ def davidson(
         early_exit = False
         if np.all(r_norms[:N_states] < tol):
             early_exit = True
-            print(f"Davidson has converged with tolerance {tol:0.4e} in {k+1} iterations")
+            print(f"Davidson has converged with tolerance {tol:0.2e} in {k+1} iterations")
             for i in range(N_states):
                 print(f"Energy of state {i} : {w.arr[i]:0.6e} Ha. Residual {r_norms[i]:0.6e}")
 
@@ -154,11 +161,12 @@ def davidson(
             E = w.allocate_result(N_states)
             E.arr[:N_states] = w.arr
 
-            psi = DMatrix(Q_k.m, N_states, dtype=H.dtype)
-            psi[:, :] = Q_k[:, :N_states]
+            psi = DMatrix(H.m, N_states, dtype=H.dtype)
+            psi[:, :] = V_k @ Q_k[:, :N_states]
 
             V_0 = DMatrix(H.m, l, dtype=H.dtype)
             V_0[: H.m, :] = V_k @ Q_k[:, :l]
+
             return E, psi, V_0
 
         ### Calculate next batch of trial vectors
@@ -291,105 +299,140 @@ def davidson_par_0(
 
 def cipsi(
     E0,
+    V_nn,
     int_dets,
     psi_coef,
     J_chunks: Iterable[JChunk],
     *args,
     N_states=1,
-    pt2_threshold=1e-8,
-    exc_constraints=None,
+    pt2_threshold=1e-4,
+    exc_constraint=None,
     **kwargs,
 ):
-    ext_dets = int_dets.get_connected_dets(exc_constraints)
+    with ScopedTimer(
+        log_message=f"Generating connected space for {int_dets.N_dets} internal determinants"
+    ):
+        ext_dets = int_dets.generate_connected_dets(exc_constraint)
 
-    e_pt2_n = np.array(
-        len(ext_dets)
-    )  # TODO: convert these arrays to LinkedArrays and expand over states
-    e_pt2_d = np.array(len(ext_dets))  # TODO: initialize with E_0/E_i
+    e_pt2_n = get_LArray(psi_coef.dtype)(ext_dets.N_dets * N_states, fill=0.0)
+    e_pt2_d = get_LArray(psi_coef.dtype)(ext_dets.N_dets * N_states, fill=0.0)
 
-    for chunk in J_chunks:
-        kernels = (
-            chunk.pt2_kernels
-        )  # kernels[0] is numerator contrib., kernels[1] is denom. contrib.
-        match chunk.category:
-            case "OE" | "F":  # both num and denominator
-                kernels[0](
-                    chunk.J.p,
-                    chunk.idx.p,
-                    chunk.chunk_size,
-                    int_dets.p,
-                    psi_coef.p,
-                    int_dets.size,
-                    N_states,
-                    ext_dets.p,
-                    ext_dets.size,
-                    e_pt2_n.p,
-                )
-                kernels[1](
-                    chunk.J.p,
-                    chunk.idx.p,
-                    chunk.chunk_size,
-                    N_states,
-                    ext_dets.p,
-                    ext_dets.size,
-                    e_pt2_n.p,
-                )
-            case "A" | "B":  # only denominator
-                kernels[1](
-                    chunk.J.p,
-                    chunk.idx.p,
-                    chunk.chunk_size,
-                    N_states,
-                    ext_dets.p,
-                    ext_dets.size,
-                    e_pt2_n.p,
-                )
-            case _:  # only numerator
-                kernels[0](
-                    chunk.J.p,
-                    chunk.idx.p,
-                    chunk.chunk_size,
-                    int_dets.p,
-                    psi_coef.p,
-                    int_dets.size,
-                    N_states,
-                    ext_dets.p,
-                    ext_dets.size,
-                    e_pt2_n.p,
-                )
+    with ScopedTimer(
+        log_message=f"Calculating pt2 contribution for {ext_dets.N_dets} external determinants"
+    ):
+        for chunk in J_chunks:
+            kernels = (
+                chunk.pt2_kernels
+            )  # kernels[0] is numerator contrib., kernels[1] is denom. contrib.
+            match chunk.category:
+                case "OE" | "F":  # both num and denominator
+                    launch_num_kernel(
+                        kernels[0], chunk, int_dets, psi_coef, ext_dets, N_states, e_pt2_n
+                    )
+                    launch_denom_kernel(kernels[1], chunk, ext_dets, N_states, e_pt2_d)
+                case "A" | "B":  # only denominator
+                    launch_denom_kernel(kernels[1], chunk, ext_dets, N_states, e_pt2_d)
+                case _:  # only numerator
+                    launch_num_kernel(
+                        kernels[0], chunk, int_dets, psi_coef, ext_dets, N_states, e_pt2_n
+                    )
 
-    # reduce e_pt2_n,d over processes
+    E0_arr = get_LArray(psi_coef.dtype)(ext_dets.N_dets * N_states, E0.arr[0])
+    V_nn_arr = get_LArray(psi_coef.dtype)(ext_dets.N_dets * N_states, V_nn)
+
+    e_pt2_d = E0_arr - (V_nn_arr + e_pt2_d)
     e_pt2 = e_pt2_n / e_pt2_d
-    pt2_filter = e_pt2 > pt2_threshold  # TODO: pass this off to customizable selection function
-    e_pt2_total = np.sum(e_pt2)
+    e_pt2_total = np.sum(e_pt2.arr.np_arr)
 
+    pt2_filter = get_indices_by_threshold(e_pt2, pt2_threshold)
+    int_dets = int_dets.extend_with_filter(ext_dets, pt2_filter)
     # TODO: sort ext dets so that they are in weight order? Or otherwise, pass in information if N_max_dets will be hit
-    return int_dets + ext_dets[pt2_filter], e_pt2_total
+
+    print(f"Internal det space is now rank {int_dets.N_dets}")
+    return int_dets, e_pt2_total
 
 
-def prepare_hamiltonian(psi_dets, H_partial: AMatrix = None) -> AMatrix:
-    raise NotImplementedError
+def evaluate_H_entries(H, psi_dets, chunks, E0):
+    H.add_to_diagonal(E0)
+
+    for chunk in chunks:
+        kernels = chunk.H_kernels
+        match chunk.category:
+            case "OE" | "F":
+                launch_H_ij_kernel(kernels[0], chunk, psi_dets, H)
+                launch_H_ii_kernel(kernels[1], chunk, psi_dets, H)
+            case "A" | "B":
+                launch_H_ii_kernel(kernels[1], chunk, psi_dets, H)
+            case _:
+                launch_H_ij_kernel(kernels[0], chunk, psi_dets, H)
+
+
+def prepare_hamiltonian(psi_dets, chunks, E0):
+    with ScopedTimer(log_message="Finding non-zero Hamiltonian entries"):
+        H = psi_dets.get_H_structure(chunks[0].dtype)
+
+    with ScopedTimer(log_message="Calculating Hamiltonian entries"):
+        evaluate_H_entries(H, psi_dets, chunks, E0)
+
+    return H
+
+
+def get_davidson_work(rank):
+    if rank < 64:
+        return 8, 2
+    elif rank < 512:
+        return 32, 8
+    else:
+        return 256, 8
 
 
 def s_CI(
+    V_nn,
     E0,
     dets,
     psi_coef,
     J_chunks,
     *args,
+    constraint=None,
     N_states=1,
     N_max_dets=1e6,
-    pt2_conv=1e-4,
+    pt2_conv=1e-6,
+    pt2_threshold=1e-7,
     **kwargs,
 ):
     est_pt2_correction = np.inf
+    print(f"Starting selected CI routine with {dets.N_dets} determinants. SCF energy {E0:0.4f} Ha")
+    E0 = get_LArray(J_chunks[0].dtype)(1, E0)
+    N_rounds = 0
+    while dets.N_dets < N_max_dets and np.abs(est_pt2_correction) > pt2_conv:
+        print("\n###################\n")
+        with ScopedTimer(log_message=f"CIPSI with {dets.N_dets} internal determinants"):
+            # expand wavefunction in space of Slater determinants
+            dets, est_pt2_correction = cipsi(
+                E0,
+                V_nn,
+                dets,
+                psi_coef,
+                J_chunks,
+                pt2_threshold=pt2_threshold,
+                exc_constraint=constraint,
+            )
 
-    while len(dets) < N_max_dets and est_pt2_correction > pt2_conv:
-        # expand wavefunction in space of Slater determinants
-        dets, est_pt2_correction = cipsi(E0, dets, psi_coef, J_chunks)
-
+        print(f"Estimated pt2 contribution {est_pt2_correction:0.4e} Ha")
         # find wavefunctions and energies of first N states
-        H = prepare_hamiltonian(dets)
-        E0, psi_coef = davidson(H)
+        with ScopedTimer(log_message=f"Generating Hamiltonian with rank {dets.N_dets}"):
+            H = prepare_hamiltonian(dets, J_chunks, V_nn)
+
+        max_subspace_rank, N_trial_vectors = get_davidson_work(H.m)
+        with ScopedTimer(log_message=f"Davidson for sparse H with {H.N_entries} entries"):
+            E0, psi_coef, _ = davidson(H, l=N_trial_vectors, max_subspace_rank=max_subspace_rank)
+
+        N_rounds += 1
+        print("\n## sCI Iteration Summary")
+        for i in range(N_states):
+            Evar_with_pt2 = E0.arr[i] + est_pt2_correction
+            print(
+                f"E{i} after {N_rounds} rounds (Ha): E{i}_var : {E0.arr[i]:0.4f} | E_pt2 : {est_pt2_correction:0.4e}  | E_var + pt2 : {Evar_with_pt2:0.4f}"
+            )
 
     return E0, psi_coef, dets
