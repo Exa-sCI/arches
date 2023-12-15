@@ -1005,7 +1005,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category A, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category A, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "A"
@@ -1047,7 +1047,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category B, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category B, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "B"
@@ -1105,7 +1105,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category C, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category C, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "C"
@@ -1198,7 +1198,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         n_orb: int,
     ):
         """
-        Return determinant pairs (I, J) connected by integral idx in category C, s.to J \in constraint for use in PT2 selection
+        Return determinant pairs (I, J) connected by integral idx in category C, s.to J \\in constraint for use in PT2 selection
         Category C possibilties:
             i = k < j < l: e.g., (1, 2, 1, 3)
             i < k < j = l: e.g., (1, 3, 2, 3)
@@ -1212,7 +1212,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ, spindet_b_occ: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category C, return determinant pairs (I, J) \in (psi, psi_connected) and associated phase s.to J satisfies C
+        For two-electron integral (i, j, k, l) in category C, return determinant pairs (I, J) \\in (psi, psi_connected) and associated phase s.to J satisfies C
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "C"
@@ -1409,7 +1409,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category D, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category D, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "D"
@@ -1496,7 +1496,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         n_orb,
     ):
         """
-        Return determinant pairs (I, J) connected by integral idx in category D, s.to J \in constraint for use in PT2 selection
+        Return determinant pairs (I, J) connected by integral idx in category D, s.to J \\in constraint for use in PT2 selection
         Category D possibilties:
             i = j = k < l: e.g., (1, 1, 1, 2)
             i < j = k = l: e.g., (1, 2, 2, 2)
@@ -1509,7 +1509,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ, spindet_b_occ: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category D, return determinant pairs (I, J) \in (psi, psi_connected) and associated phase s.to J satisfies C
+        For two-electron integral (i, j, k, l) in category D, return determinant pairs (I, J) \\in (psi, psi_connected) and associated phase s.to J satisfies C
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "D"
@@ -1635,7 +1635,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category E, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category E, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "E"
@@ -1760,7 +1760,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         n_orb,
     ):
         """
-        Return determinant pairs (I, J) connected by integral idx in category E, s.to J \in constraint for use in PT2 selection
+        Return determinant pairs (I, J) connected by integral idx in category E, s.to J \\in constraint for use in PT2 selection
         Category E possibilties:
             i = j < k < l: e.g., (1, 1, 2, 3)
             i < j = k < l: e.g., (1, 2, 2, 3)
@@ -1774,7 +1774,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ, spindet_b_occ: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category E, return determinant pairs (I, J) \in (psi, psi_connected) and associated phase s.to J satisfies C
+        For two-electron integral (i, j, k, l) in category E, return determinant pairs (I, J) \\in (psi, psi_connected) and associated phase s.to J satisfies C
         """
 
         i, j, k, l = idx
@@ -1922,7 +1922,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category F, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category F, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "F"
@@ -1996,7 +1996,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         n_orb,
     ):
         """
-        Return determinant pairs (I, J) connected by integral idx in category F, s.to J \in constraint for use in PT2 selection
+        Return determinant pairs (I, J) connected by integral idx in category F, s.to J \\in constraint for use in PT2 selection
         Category F possibilties:
             i = j < k = l: e.g., (1, 1, 2, 2)
         This category contributes to diagonals (not relevant for PT2) and double (opposite-spin) excitation pairs
@@ -2008,7 +2008,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ, spindet_b_occ: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category F, return determinant pairs (I, J) \in (psi, psi_connected) and associated phase s.to J satisfies C
+        For two-electron integral (i, j, k, l) in category F, return determinant pairs (I, J) \\in (psi, psi_connected) and associated phase s.to J satisfies C
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "F"
@@ -2053,7 +2053,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category G, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category G, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "G"
@@ -2109,7 +2109,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         n_orb,
     ):
         """
-        Return determinant pairs (I, J) connected by integral idx in category G, s.to J \in constraint for use in PT2 selection
+        Return determinant pairs (I, J) connected by integral idx in category G, s.to J \\in constraint for use in PT2 selection
         Category G possibilties:
             i < j < k < l: e.g., (1, 2, 3, 4)
             i < k < j < l: e.g., (1, 3, 2, 4)
@@ -2123,7 +2123,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ, spindet_b_occ: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category G, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase s.to J satisfies C
+        For two-electron integral (i, j, k, l) in category G, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase s.to J satisfies C
         """
 
         i, j, k, l = idx
@@ -2321,7 +2321,7 @@ class H_indices_generator(object):
 class Hamiltonian_generator(object):
     """Generator class for matrix Hamiltonian; compute matrix elements of H
     in the basis of Slater determinants in a distributed fashion.
-    Each rank handles local H_i \in len(psi_local) x len(psi_internal) chunk of the full H.
+    Each rank handles local H_i \\in len(psi_local) x len(psi_internal) chunk of the full H.
     Slater-Condon rules are used to compute the matrix elements <I|H|J> where I
     and J are Slater determinants.
 
@@ -2955,7 +2955,7 @@ class Powerplant_manager(object):
         :param psi_coef: list of determinant coefficients in expansion of trial WF
 
         Outputs:
-        List of energies, Jth entry contains E_pt2 contribution of determinant |J⟩ \in connected space s.to |C⟩
+        List of energies, Jth entry contains E_pt2 contribution of determinant |J⟩ \\in connected space s.to |C⟩
         """
 
         # Compute len(psi_internal) \times len(psi_external_chunk) `Hamiltonian'
