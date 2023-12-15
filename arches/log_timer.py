@@ -6,7 +6,7 @@ import numpy as np
 
 
 class ScopedTimer:
-    def __init__(self, timer_on=True, log_message="", **kwargs):
+    def __init__(self, log_message="", timer_on=True, **kwargs):
         self.log_message = log_message
         self.print = timer_on
 
