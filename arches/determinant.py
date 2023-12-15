@@ -126,6 +126,9 @@ lib_dets.Dets_get_H_structure_naive_f64.restype = handle_t
 lib_dets.Dets_extend_array_with_filter.argtypes = [handle_t, handle_t, idx_t_p, idx_t]
 lib_dets.Dets_extend_array_with_filter.restype = None
 
+lib_dets.Dets_extend_det_with_filter.argtypes = [handle_t, handle_t, idx_t_p, idx_t]
+lib_dets.Dets_extend_det_with_filter.restype = handle_t
+
 #### Generation routines
 for exc in ["singles", "same_spin_doubles", "opp_spin_doubles", "dets"]:
     pfix = "Dets_get_"
@@ -405,6 +408,21 @@ class det_t(DetGenerator, LinkedHandle):
         res_handle = lib_dets.Dets_det_t_exc_det(self.handle, other.handle)
         return det_t(handle=res_handle, override_original=True, N_orbs=self.N_orbs)
 
+    def extend_with_filter(self, other, idx):
+        if not isinstance(other, DetArray):
+            raise TypeError
+
+        if not isinstance(idx, LinkedArray_idx_t):
+            raise TypeError
+
+        res_handle = lib_dets.Dets_extend_det_with_filter(
+            self.handle, other.handle, idx.arr.p, idx.N
+        )
+        N_dets_out = lib_dets.Dets_DetArray_get_N_dets(res_handle)
+        return DetArray(
+            handle=res_handle, override_original=True, N_dets=N_dets_out, N_orbs=self.N_orbs
+        )
+
 
 class DetArray(DetGenerator, LinkedHandle):
     _empty_ctor = lib_dets.Dets_DetArray_empty_ctor
@@ -478,7 +496,14 @@ class DetArray(DetGenerator, LinkedHandle):
             raise TypeError
 
         lib_dets.Dets_extend_array_with_filter(self.handle, other.handle, idx.arr.p, idx.N)
+        self._det_pointer = lib_dets.Dets_DetArray_get_arr_pointer(self.handle)
         self.N_dets += idx.N
+        return self
+
+    def check_block_sizes(self):
+        lib_dets.check_block_sizes.argtypes = [handle_t, idx_t]
+        lib_dets.check_block_sizes.restype = None
+        lib_dets.check_block_sizes(self.handle, self.N_dets)
 
 
 class exc(ABC):
