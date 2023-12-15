@@ -3,20 +3,16 @@ import unittest
 
 import numpy as np
 from test_types import Test_f32, Test_f64
-from tqdm import tqdm
 
 from arches.determinant import det_t, spin_det_t
 from arches.drivers import Hamiltonian_one_electron, Hamiltonian_two_electrons_determinant_driven
 from arches.fundamental_types import Determinant as det_ref
 from arches.integral_indexing_utils import (
-    canonical_idx4,
     compound_idx2_reverse,
-    compound_idx4,
-    compound_idx4_reverse,
 )
 from arches.integrals import JChunkFactory, load_integrals_into_chunks
 from arches.io import load_integrals
-from arches.linked_object import f32_p, idx_t
+from arches.linked_object import idx_t
 from arches.matrix import DMatrix
 
 seed = 521392
@@ -127,7 +123,6 @@ class Test_pt2_Kernels(Test_Kernel_Fixture):
         cls.ref_int = [det_ref(d.alpha.as_orb_list, d.beta.as_orb_list) for d in cls.dets_int]
         cls.ref_ext = [det_ref(d.alpha.as_orb_list, d.beta.as_orb_list) for d in cls.dets_ext]
 
-        print(set(cls.ref_int).intersection(set(cls.ref_ext)))
         cls.N_states = 1
         cls.N_int = cls.dets_int.N_dets
         cls.N_ext = cls.dets_ext.N_dets
