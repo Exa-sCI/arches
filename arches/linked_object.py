@@ -11,7 +11,6 @@ from ctypes import (
     c_uint64,
     c_void_p,
 )
-from functools import singledispatchmethod
 
 import numpy as np
 from numpy.ctypeslib import ndpointer
@@ -350,22 +349,28 @@ class LinkedArray(LinkedHandle):
         res = self.allocate_result(self.N)
         match b:
             case LinkedArray():
-                self._add(b.arr.p, self.arr.p, res.arr.p, self.N)
+                self._add(self.arr.p, b.arr.p, res.arr.p, self.N)
             case ManagedArray():
-                self._add(b.p, self.arr.p, res.arr.p, self.N)
-            case self.dtype:  # maybe need to track python scalar types
-                self._add_c(self.ctype(b), self.arr.p, res.arr.p, self.N)
+                self._add(self.arr.p, b.p, res.arr.p, self.N)
+            case _:
+                if np.issubdtype(
+                    type(b), self.arr.dtype
+                ):  # maybe need to track python scalar types
+                    self._add_c(self.arr.p, self.ctype(b), res.arr.p, self.N)
 
         return res
 
     def __iadd__(self, b):
         match b:
             case LinkedArray():
-                self._iadd(b.arr.p, self.arr.p, self.arr.p, self.N)
+                self._iadd(self.arr.p, b.arr.p, self.arr.p, self.N)
             case ManagedArray():
-                self._iadd(b.p, self.arr.p, self.arr.p, self.N)
-            case self.dtype:  # maybe need to track python scalar types
-                self._iadd_c(self.ctype(b), self.arr.p, self.arr.p, self.N)
+                self._iadd(self.arr.p, b.p, self.arr.p, self.N)
+            case _:
+                if np.issubdtype(
+                    type(b), self.arr.dtype
+                ):  # maybe need to track python scalar types
+                    self._iadd_c(self.arr.p, self.ctype(b), self.arr.p, self.N)
 
         return self
 
@@ -373,22 +378,28 @@ class LinkedArray(LinkedHandle):
         res = self.allocate_result(self.N)
         match b:
             case LinkedArray():
-                self._sub(b.arr.p, self.arr.p, res.arr.p, self.N)
+                self._sub(self.arr.p, b.arr.p, res.arr.p, self.N)
             case ManagedArray():
-                self._sub(b.p, self.arr.p, res.arr.p, self.N)
-            case self.dtype:  # maybe need to track python scalar types
-                self._sub_c(self.ctype(b), self.arr.p, res.arr.p, self.N)
+                self._sub(self.arr.p, b.p, res.arr.p, self.N)
+            case _:
+                if np.issubdtype(
+                    type(b), self.arr.dtype
+                ):  # maybe need to track python scalar types
+                    self._sub_c(self.arr.p, self.ctype(b), res.arr.p, self.N)
 
         return res
 
     def __isub__(self, b):
         match b:
             case LinkedArray():
-                self._isub(b.arr.p, self.arr.p, self.arr.p, self.N)
+                self._isub(self.arr.p, b.arr.p, self.arr.p, self.N)
             case ManagedArray():
-                self._isub(b.p, self.arr.p, self.arr.p, self.N)
-            case self.dtype:  # maybe need to track python scalar types
-                self._isub_c(self.ctype(b), self.arr.p, self.arr.p, self.N)
+                self._isub(self.arr.p, b.p, self.arr.p, self.N)
+            case _:
+                if np.issubdtype(
+                    type(b), self.arr.dtype
+                ):  # maybe need to track python scalar types
+                    self._isub_c(self.arr.p, self.ctype(b), self.arr.p, self.N)
 
         return self
 
@@ -396,22 +407,28 @@ class LinkedArray(LinkedHandle):
         res = self.allocate_result(self.N)
         match b:
             case LinkedArray():
-                self._mul(b.arr.p, self.arr.p, res.arr.p, self.N)
+                self._mul(self.arr.p, b.arr.p, res.arr.p, self.N)
             case ManagedArray():
-                self._mul(b.p, self.arr.p, res.arr.p, self.N)
-            case self.dtype:  # maybe need to track python scalar types
-                self._mul_c(self.ctype(b), self.arr.p, res.arr.p, self.N)
+                self._mul(self.arr.p, b.p, res.arr.p, self.N)
+            case _:
+                if np.issubdtype(
+                    type(b), self.arr.dtype
+                ):  # maybe need to track python scalar types
+                    self._mul_c(self.arr.p, self.ctype(b), res.arr.p, self.N)
 
         return res
 
     def __imul__(self, b):
         match b:
             case LinkedArray():
-                self._imul(b.arr.p, self.arr.p, self.arr.p, self.N)
+                self._imul(self.arr.p, b.arr.p, self.arr.p, self.N)
             case ManagedArray():
-                self._imul(b.p, self.arr.p, self.arr.p, self.N)
-            case self.dtype:  # maybe need to track python scalar types
-                self._imul_c(self.ctype(b), self.arr.p, self.arr.p, self.N)
+                self._imul(self.arr.p, b.p, self.arr.p, self.N)
+            case _:
+                if np.issubdtype(
+                    type(b), self.arr.dtype
+                ):  # maybe need to track python scalar types
+                    self._imul_c(self.arr.p, self.ctype(b), self.arr.p, self.N)
 
         return self
 
@@ -419,22 +436,28 @@ class LinkedArray(LinkedHandle):
         res = self.allocate_result(self.N)
         match b:
             case LinkedArray():
-                self._div(b.arr.p, self.arr.p, res.arr.p, self.N)
+                self._div(self.arr.p, b.arr.p, res.arr.p, self.N)
             case ManagedArray():
-                self._div(b.p, self.arr.p, res.arr.p, self.N)
-            case self.dtype:  # maybe need to track python scalar types
-                self._div_c(self.ctype(b), self.arr.p, res.arr.p, self.N)
+                self._div(self.arr.p, b.p, res.arr.p, self.N)
+            case _:
+                if np.issubdtype(
+                    type(b), self.arr.dtype
+                ):  # maybe need to track python scalar types
+                    self._div_c(self.arr.p, self.ctype(b), res.arr.p, self.N)
 
         return res
 
     def __itruediv__(self, b):
         match b:
             case LinkedArray():
-                self._idiv(b.arr.p, self.arr.p, self.arr.p, self.N)
+                self._idiv(self.arr.p, b.arr.p, self.arr.p, self.N)
             case ManagedArray():
-                self._idiv(b.p, self.arr.p, self.arr.p, self.N)
-            case self.dtype:  # maybe need to track python scalar types
-                self._idiv_c(self.ctype(b), self.arr.p, self.arr.p, self.N)
+                self._idiv(self.arr.p, b.p, self.arr.p, self.N)
+            case _:
+                if np.issubdtype(
+                    type(b), self.arr.dtype
+                ):  # maybe need to track python scalar types
+                    self._idiv_c(self.arr.p, self.ctype(b), self.arr.p, self.N)
 
         return self
 
@@ -581,7 +604,6 @@ lib_array.LArray_get_arr_size_idx_t.restype = idx_t
 
 
 def get_indices_by_threshold(arr, threshold):
-    print(type(arr))
     match arr:
         case LinkedArray_f32():
             res_handle = lib_array.LArray_get_threshold_idx_f32(
