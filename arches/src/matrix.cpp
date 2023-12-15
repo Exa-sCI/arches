@@ -511,4 +511,12 @@ void SymCSRMatrix_extract_superdiagonal_f64(const idx_t m, const SymCSRMatrix<do
                                             double *res) {
     extract_sparse_superdiagonal(m, A->A_p, A->A_c, A->A_v, res);
 }
+
+void SymCSRMatrix_add_to_diagonal_f32(const idx_t m, const SymCSRMatrix<float> *A, float x) {
+    add_to_sparse_diagonal(m, A->A_p, A->A_v, x);
+}
+
+void SymCSRMatrix_add_to_diagonal_f64(const idx_t m, const SymCSRMatrix<double> *A, double x) {
+    add_to_sparse_diagonal(m, A->A_p, A->A_v, x);
+}
 }

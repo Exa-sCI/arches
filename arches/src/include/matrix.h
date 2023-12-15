@@ -436,9 +436,15 @@ void extract_sparse_diagonal(const idx_t m, const idx_t *A_p, const T *A_v, T *r
 template <class T>
 void extract_sparse_superdiagonal(const idx_t m, const idx_t *A_p, const idx_t *A_c, const T *A_v,
                                   T *res) {
-    for (auto i = 0; i < m; i++) {
+    for (auto i = 0; i < m - 1; i++) {
         if (A_c[A_p[i] + 1] == i + 1)
             res[i] = A_v[A_p[i] + 1];
+    }
+}
+
+template <class T> void add_to_sparse_diagonal(const idx_t m, const idx_t *A_p, T *A_v, T x) {
+    for (auto i = 0; i < m; i++) {
+        A_v[A_p[i]] += x;
     }
 }
 

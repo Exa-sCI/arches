@@ -937,6 +937,10 @@ for k in [f32, f64]:
         f_diag_op.argtypes = [idx_t, handle_t, k_p]
         f_diag_op.restype = None
 
+    f_add_to_diag = getattr(lib_matrix, pfix + "add_to_diagonal" + sfix)
+    f_add_to_diag.argtypes = [idx_t, handle_t, k]
+    f_add_to_diag.restype = None
+
 
 class SymCSRMatrix(AMatrix):
     """Symmetric matrix stored in CSR format."""
@@ -963,6 +967,9 @@ class SymCSRMatrix(AMatrix):
 
     _extract_superdiagonal_f32 = lib_matrix.SymCSRMatrix_extract_superdiagonal_f32
     _extract_superdiagonal_f64 = lib_matrix.SymCSRMatrix_extract_superdiagonal_f64
+
+    _add_to_diagonal_f32 = lib_matrix.SymCSRMatrix_add_to_diagonal_f32
+    _add_to_diagonal_f64 = lib_matrix.SymCSRMatrix_add_to_diagonal_f64
 
     _s_spgemm = lib_matrix.sym_csr_s_MM_ref
     _d_spgemm = lib_matrix.sym_csr_d_MM_ref
@@ -1144,6 +1151,15 @@ class SymCSRMatrix(AMatrix):
                 raise NotImplementedError
 
         return res
+
+    def add_to_diagonal(self, x):
+        match self.dtype:
+            case np.float32:
+                self._add_to_diagonal_f32(idx_t(self.m), self.handle, f32(x))
+            case np.float64:
+                self._add_to_diagonal_f64(idx_t(self.m), self.handle, f64(x))
+            case _:
+                raise NotImplementedError
 
 
 class DistMatrix(AMatrix):
