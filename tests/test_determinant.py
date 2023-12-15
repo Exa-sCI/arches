@@ -5,7 +5,7 @@ import numpy as np
 from arches.determinant import DetArray, det_t, double_exc, single_exc, spin_det_t
 from arches.fundamental_types import Determinant as det_ref
 from arches.fundamental_types import Spin_determinant_tuple as spin_det_ref
-from arches.linked_object import LinkedArray_f32, LinkedArray_idx_t, get_indices_by_threshold
+from arches.linked_object import LinkedArray_f32, get_indices_by_threshold
 
 rng = np.random.default_rng(seed=6329)
 
