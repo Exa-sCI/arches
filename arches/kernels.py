@@ -167,7 +167,7 @@ T_p = Union[f32_p, f64_p]
 
 
 def dispatch_pt2_kernel(
-    category: str
+    category: str,
 ) -> Tuple[
     Union[
         None, Callable[[T_p, idx_t_p, idx_t, det_t_p, T_p, idx_t, idx_t, det_t_p, idx_t, T_p], None]
@@ -194,7 +194,7 @@ def dispatch_pt2_kernel(
 
 
 def dispatch_H_kernel(
-    category: str
+    category: str,
 ) -> Tuple[
     Union[None, Callable[[T_p, idx_t_p, idx_t, det_t_p, idx_t, idx_t_p, idx_t_p, T_p], None]],
     Union[None, Callable[[T_p, idx_t_p, idx_t, det_t_p, idx_t, idx_t_p, T_p], None]],

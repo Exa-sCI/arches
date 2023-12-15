@@ -1,7 +1,6 @@
 import pathlib
 from abc import ABC, abstractmethod
 from ctypes import CDLL, c_bool
-from dataclasses import dataclass
 
 import numpy as np
 

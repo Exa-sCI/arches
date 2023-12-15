@@ -4,7 +4,6 @@ from ctypes import CDLL, c_char
 
 import numpy as np
 from mpi4py import MPI
-from scipy.linalg import lapack as la
 
 from arches.linked_object import (
     LinkedArray,
@@ -16,9 +15,7 @@ from arches.linked_object import (
     ManagedArray_f64,
     ManagedArray_idx_t,
     f32,
-    f32_p,
     f64,
-    f64_p,
     handle_t,
     idx_t,
     idx_t_p,
@@ -894,13 +891,13 @@ class DMatrix(AMatrix):
         return C
 
     @classmethod
-    def eye(cls, l, dtype=np.float64):
-        res = DMatrix(l, l, dtype=dtype)
+    def eye(cls, n, dtype=np.float64):
+        res = DMatrix(n, n, dtype=dtype)
         match dtype:
             case np.float32:
-                temp = LinkedArray_f32(l, fill=1.0)
+                temp = LinkedArray_f32(n, fill=1.0)
             case np.float64:
-                temp = LinkedArray_f64(l, fill=1.0)
+                temp = LinkedArray_f64(n, fill=1.0)
         res.fill_diagonal(temp)
         return res
 
