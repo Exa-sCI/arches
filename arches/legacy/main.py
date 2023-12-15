@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from arches.drivers import Hamiltonian_generator, selection_step
+from legacy.drivers import Hamiltonian_generator, selection_step
 from arches.io import load_integrals, load_wf
 from mpi4py import MPI
 import argparse

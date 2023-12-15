@@ -7,7 +7,6 @@ from itertools import combinations_with_replacement, product
 import numpy as np
 from test_types import Test_f32, Test_f64
 
-from arches.drivers import integral_category
 from arches.integral_indexing_utils import (
     canonical_idx4,
     compound_idx2,
@@ -17,6 +16,7 @@ from arches.integral_indexing_utils import (
 )
 from arches.integrals import JChunk, JChunkFactory, load_integrals_into_chunks
 from arches.io import load_integrals
+from arches.legacy.drivers import integral_category
 
 seed = 79123
 rng = np.random.default_rng(seed=seed)
@@ -205,7 +205,7 @@ class Test_ChunkFactory(unittest.TestCase):
             comm = FakeComm(1, 2)
             ref_ind = set([v["idx"] for v in self.canon_order.values() if v["category"] == cat])
             fact = JChunkFactory(self.N_mos, cat, FakeReader(), comm=comm, chunk_size=len(ref_ind))
-            chunks = fact.get_chunks()
+            _ = fact.get_chunks()
 
         with self.assertWarns(Warning):
             for cat in self.categories:

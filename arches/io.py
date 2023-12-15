@@ -2,16 +2,20 @@
 import math
 from collections import defaultdict
 from itertools import takewhile
+from typing import Dict, List, NewType, Tuple
 
-from arches.fundamental_types import (
-    Determinant,
-    Energy,
-    List,
-    One_electron_integral,
-    Tuple,
-    Two_electron_integral,
-)
 from arches.integral_indexing_utils import compound_idx2, compound_idx4
+
+from arches.legacy.fundamental_types import (
+    Determinant,
+)
+
+OrbitalIdx = NewType("OrbitalIdx", int)
+One_electron_integral = Dict[Tuple[OrbitalIdx, OrbitalIdx], float]
+Two_electron_integral_index = Tuple[OrbitalIdx, OrbitalIdx, OrbitalIdx, OrbitalIdx]
+Two_electron_integral = Dict[Two_electron_integral_index, float]
+Energy = NewType("Energy", float)
+
 
 #   _____      _ _   _       _ _          _   _
 #  |_   _|    (_) | (_)     | (_)        | | (_)

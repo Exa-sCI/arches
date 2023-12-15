@@ -1,10 +1,10 @@
 # ruff : noqa : E741
 import math
 import pathlib
-from ctypes import CDLL, Structure
+from ctypes import CDLL, Structure, c_char
 from ctypes import c_longlong as idx_t
 
-from arches.func_decorators import offload, return_tuple
+from arches.func_decorators import offload, return_str, return_tuple
 
 run_folder = pathlib.Path(__file__).parent.resolve()
 
@@ -90,6 +90,60 @@ lib_iu.compound_idx4_reverse_all.argtypes = [idx_t]
 
 # lib_iu.get_unique_idx4.restype = c_int
 # lib_iu.get_unique_idx4.argtypes = [POINTER(ijkl_tuple), ijkl_perms]
+
+lib_it = CDLL(run_folder.joinpath("build/libintegral_types.so"))
+
+lib_it.integral_category.restype = c_char
+lib_it.integral_category.argtypes = [idx_t, idx_t, idx_t, idx_t]
+
+
+@offload(return_str(lib_it.integral_category))
+def integral_category(i, j, k, l):
+    """
+    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+    | label |                   | ik/jl i/k j/l | i/j j/k k/l i/l | singles                       | doubles                      | diagonal                    |
+    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+    |   A   | i=j=k=l (1,1,1,1) |   =    =   =  |  =   =   =   =  |                               |                              | coul. (1 occ. both spins?)  |
+    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+    |   B   | i=k<j=l (1,2,1,2) |   <    =   =  |  <   >   <   <  |                               |                              | coul. (1,2 any spin occ.?)  |
+    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+    |       | i=k<j<l (1,2,1,3) |   <    =   <  |  <   >   <   <  | 2<->3, 1 occ. (any spin)      |                              |                             |
+    |   C   | i<k<j=l (1,3,2,3) |   <    <   =  |  <   >   <   <  | 1<->2, 3 occ. (any spin)      |                              |                             |
+    |       | j<i=k<l (2,1,2,3) |   <    =   <  |  >   <   <   <  | 1<->3, 2 occ. (any spin)      |                              |                             |
+    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+    |   D   | i=j=k<l (1,1,1,2) |   <    =   <  |  =   =   <   <  | 1<->2, 1 occ. (opposite spin) |                              |                             |
+    |       | i<j=k=l (1,2,2,2) |   <    <   =  |  <   =   =   <  | 1<->2, 2 occ. (opposite spin) |                              |                             |
+    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+    |       | i=j<k<l (1,1,2,3) |   <    <   <  |  =   <   <   <  | 2<->3, 1 occ. (same spin)     | 1a<->2a x 1b<->3b, (and a/b) |                             |
+    |   E   | i<j=k<l (1,2,2,3) |   <    <   <  |  <   =   <   <  | 1<->3, 2 occ. (same spin)     | 1a<->2a x 2b<->3b, (and a/b) |                             |
+    |       | i<j<k=l (1,2,3,3) |   <    <   <  |  <   <   =   <  | 1<->2, 3 occ. (same spin)     | 1a<->3a x 2b<->3b, (and a/b) |                             |
+    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+    |   F   | i=j<k=l (1,1,2,2) |   =    <   <  |  =   <   =   <  |                               | 1a<->2a x 1b<->2b            | exch. (1,2 same spin occ.?) |
+    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+    |       | i<j<k<l (1,2,3,4) |   <    <   <  |  <   <   <   <  |                               | 1<->3 x 2<->4                |                             |
+    |   G   | i<k<j<l (1,3,2,4) |   <    <   <  |  <   >   <   <  |                               | 1<->2 x 3<->4                |                             |
+    |       | j<i<k<l (2,1,3,4) |   <    <   <  |  >   <   <   <  |                               | 1<->4 x 2<->3                |                             |
+    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+    """
+    if (i, j, k, l) != canonical_idx4(i, j, k, l):
+        raise ValueError("Integral indices are not cannonical.")
+    if i == l:
+        return "A"
+    elif (i == k) and (j == l):
+        return "B"
+    elif (i == k) or (j == l):
+        if j == k:
+            return "D"
+        else:
+            return "C"
+    elif j == k:
+        return "E"
+    elif (i == j) and (k == l):
+        return "F"
+    elif (i == j) or (k == l):
+        return "E"
+    else:
+        return "G"
 
 
 @offload(lib_iu.compound_idx2)

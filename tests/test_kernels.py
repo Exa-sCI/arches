@@ -5,8 +5,8 @@ import numpy as np
 from test_types import Test_f32, Test_f64
 
 from arches.determinant import det_t, spin_det_t
-from arches.drivers import Hamiltonian_one_electron, Hamiltonian_two_electrons_determinant_driven
-from arches.fundamental_types import Determinant as det_ref
+from arches.legacy.drivers import Hamiltonian_one_electron, Hamiltonian_two_electrons_determinant_driven
+from arches.legacy.fundamental_types import Determinant as det_ref
 from arches.integral_indexing_utils import (
     compound_idx2_reverse,
 )
