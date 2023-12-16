@@ -1,8 +1,4 @@
-#if !defined(DOCTEST_CONFIG_DISABLE)
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#endif
 #include <determinant.h>
-#include <doctest/doctest.h>
 #include <matrix.h>
 
 int compute_phase_single_excitation(spin_det_t d, idx_t h, idx_t p) {
@@ -598,5 +594,11 @@ SymCSRMatrix<double> *Dets_get_H_structure_naive_f64(DetArray *psi_det) {
 
 void Dets_extend_array_with_filter(DetArray *target, DetArray *source, idx_t *filter, idx_t N) {
     target->extend_with_filter(*source, filter, N);
+}
+
+DetArray *Dets_extend_det_with_filter(det_t *target, DetArray *source, idx_t *filter, idx_t N) {
+    DetArray *target_arr = new DetArray(std::vector<det_t>(1, *target));
+    target_arr->extend_with_filter(*source, filter, N);
+    return target_arr;
 }
 }

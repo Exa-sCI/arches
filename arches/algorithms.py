@@ -4,7 +4,6 @@ from typing import Iterable
 
 import numpy as np
 from mpi4py import MPI
-from scipy.linalg import lapack
 
 from arches.integrals import JChunk
 from arches.kernels import (
@@ -206,96 +205,6 @@ def davidson(
             V_kk[:, V_k.n :] = V_trial
 
         V_k, bmgs_R_k, bmgs_T_k = bmgs_h(V_kk, l // 2, V_k, bmgs_R_k, bmgs_T_k)
-
-
-def davidson_par_0(
-    H, comm, *args, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-6, **kwargs
-):  # noqa: E741
-    """
-    Implementation of the Davidson diagonalization algorithm in parallel.
-
-    Assumes each worker i has partial component of H s.t. H = \\sum_i H_i
-
-    Assume that subspace is small enough that diagonalization/BMGS are fast enough locally
-    to outspeed communicating
-    """
-
-    if V_0 is None:
-        V_k = np.zeros((H.shape[0], l))
-        V_k[:l, :l] = np.eye(l)
-    else:
-        V_k = V_0
-
-    R_k = np.eye(l)
-    T_k = np.eye(l)
-    N = H.shape[0]
-
-    ## TODO: Diagonal and subdiagonal need to be communicated
-    C_d = np.diag(H)
-    if pc == "T":
-        C_sd = np.zeros(N - 1)
-        for i in range(N - 1):
-            C_sd[i] = H[i, i + 1]
-
-        ptsvx = lapack.get_lapack_funcs("ptsvx", dtype=H.dtype)
-
-    rank = comm.Get_rank()
-    assert l == comm.Get_size()
-
-    for k in range(max_iter):
-        ### Project Hamiltonian onto subspace spanned by V_k
-        W_k = H @ V_k
-        comm.Allreduce(MPI.IN_PLACE, [W_k, MPI.DOUBLE])  ## Synchronization
-
-        S_k = V_k.T @ W_k
-
-        ### diagonalize S_k to find (projected) eigenbasis
-        # assume S_k \in R^(kl, kl) is small enough to diagonalize locally
-        L_k, Q_k = diagonalize(S_k)  # L_k is sorted smallest -> largest
-
-        ### Calculate residual of owned Ritz vector
-        R_k = L_k[rank] * V_k @ Q_k[:, rank] - W_k @ Q_k[:, rank]
-
-        r_norm = np.linalg.norm(R_k)
-        r_norms = np.zeros(l)
-        comm.Allgather([r_norm, MPI.DOUBLE], [r_norms, MPI.DOUBLE])  ## Synchronization
-
-        # process early exits
-        early_exit = False
-        if np.all(r_norms[:N_states] < tol):
-            early_exit = True
-            if rank == 0:
-                print(f"Davidson has converged with tolerance {tol:0.4e}")
-                for i in range(N_states):
-                    print(f"Energy of state {i}:{L_k[i]} Ha")
-        elif k == max_iter - 1:
-            early_exit = True
-            if rank == 0:
-                print("Davidson has hit max number of iterations. Exiting early.")
-                for i in range(N_states):
-                    print(f"Energy of state {i}:{L_k[i]} Ha. Residual {r_norms[i]}")
-
-        if early_exit:
-            return L_k[:N_states], Q_k[:, :N_states]
-
-        ### Calculate next batch of trial vectors
-        # TODO: get rid of allocatons in loop
-        V_kk = np.zeros((H.shape[0], l))
-
-        if pc == "D":  # diagonal preconditioner
-            C_ki = np.ones(N) * L_k[rank] - C_d
-            C_ki = 1.0 / C_ki
-            V_kk[:, rank] = C_ki * R_k
-        elif pc == "T":  # tridiagonal preconditioner
-            C_d_i = np.ones(N) * L_k[rank] - C_d
-            res = ptsvx(C_d_i, C_sd, R_k)
-            V_kk[:, rank] = res[0]
-
-        comm.Allgather(MPI.IN_PLACE, [V_kk, MPI.DOUBLE])
-
-        ### Form new orthonormal subspace
-        V_k, R_k, T_k = bmgs_h(np.hstack([V_k, V_kk]), l // 2, V_k, R_k, T_k)
-
 
 def cipsi(
     E0,
