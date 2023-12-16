@@ -552,7 +552,7 @@ LArray<idx_t> *LArray_get_threshold_idx_f32(float *arr, idx_t N, float threshold
     std::unique_ptr<idx_t[]> temp_ind(new idx_t[N]);
     idx_t count = 0;
     for (auto i = 0; i < N; i++) {
-        if (arr[i] >= threshold) {
+        if (std::abs(arr[i]) >= threshold) {
             temp_ind[count++] = i;
         }
     }
@@ -564,7 +564,7 @@ LArray<idx_t> *LArray_get_threshold_idx_f64(double *arr, idx_t N, double thresho
     std::unique_ptr<idx_t[]> temp_ind(new idx_t[N]);
     idx_t count = 0;
     for (auto i = 0; i < N; i++) {
-        if (arr[i] >= threshold) {
+        if (std::abs(arr[i]) >= threshold) {
             temp_ind[count++] = i;
         }
     }
