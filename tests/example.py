@@ -5,6 +5,7 @@ import numpy as np
 from arches.algorithms import evaluate_H_entries, s_CI
 from arches.determinant import det_t, spin_det_t
 from arches.integrals import load_integrals_into_chunks
+from arches.io import load_integrals
 from arches.linked_object import LinkedArray_idx_t, get_LArray
 from arches.log_timer import logtimer
 from arches.matrix import DMatrix, SymCSRMatrix
@@ -55,12 +56,17 @@ config_map = (
 
 @logtimer(config_map, report_on=("call",))
 def run_example(fp, config, dtype):
-    N_orbs, N_elec, V_nn, chunks = load_integrals_into_chunks(str(fp), FakeComm(0, 1), dtype=dtype)
-
+    N_orbs, N_elec = load_integrals(str(fp), return_size_only=True)
     ground_det = get_ground_state(N_orbs, N_elec)
     ground_psi = DMatrix(1, 1, 1.0, dtype=dtype)
-
     config["constraint"] = get_constraint(ground_det, *config["constraint"])
+
+    N_orbs, N_elec, V_nn, chunks = load_integrals_into_chunks(
+        str(fp),
+        FakeComm(0, 1),
+        dtype=dtype,
+        constraint=config["constraint"],
+    )
 
     E0 = get_E0(ground_det, chunks, V_nn, dtype)
 

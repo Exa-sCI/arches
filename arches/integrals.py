@@ -1,6 +1,7 @@
 import pathlib
 import warnings
 from ctypes import CDLL
+from functools import reduce
 from itertools import combinations, combinations_with_replacement, islice
 
 import numpy as np
@@ -245,7 +246,15 @@ class JChunk(LinkedHandle):
 #  Would be useful to be able to provide custom hook f: (idx, val) -> Bool
 #  and/or flexibility to be used in repacking of chunks when using adaptive integral pruning
 class JChunkFactory:
-    def __init__(self, N_mo, category, src_data, chunk_size=-1, comm=None):
+    def __init__(
+        self,
+        N_mo,
+        category,
+        src_data,
+        chunk_size=-1,
+        comm=None,
+        constraint=None,
+    ):
         if comm is None:
             self.comm_rank = 0
             self.comm_size = None
@@ -256,6 +265,7 @@ class JChunkFactory:
         self.N_mo = N_mo
         self.chunk_size = chunk_size
         self.src_data = src_data
+        self.constraint = constraint
         self.category = category
 
     @property
@@ -287,6 +297,16 @@ class JChunkFactory:
             case "G":
                 f = JChunkFactory.G_idx_iter
 
+        match val:
+            case "OE" | "A" | "B" | "F":
+                active_orbs = range(self.N_mo)
+            case _:
+                if self.constraint is None:
+                    active_orbs = range(self.N_mo)
+                else:
+                    orb_sets = [set(x) for x in self.constraint]
+                    active_orbs = reduce(lambda x, y: x.union(y), orb_sets)
+
         # Yield indices in batches and distribute batches over communicator
         if self.chunk_size < 1:
             self.batched = False
@@ -295,11 +315,11 @@ class JChunkFactory:
             # more consistent. w/o some form of caching, would need to have two synced iterators
             # or similar to be able to yield indices for the index arrays and value arrays without
             # exhausing the index generator
-            self._idx_iter = list(islice(f(self.N_mo), self.comm_rank, None, self.comm_size))
+            self._idx_iter = list(islice(f(active_orbs), self.comm_rank, None, self.comm_size))
         else:
             self.batched = True
             self._idx_iter = islice(
-                batched(f(self.N_mo), self.chunk_size), self.comm_rank, None, self.comm_size
+                batched(f(active_orbs), self.chunk_size), self.comm_rank, None, self.comm_size
             )
             self._advance_batch()  # initialize first batch
 
@@ -319,48 +339,48 @@ class JChunkFactory:
             return self._idx_iter
 
     @staticmethod
-    def OE_idx_iter(N_mo):
-        for i, j in combinations_with_replacement(range(N_mo), 2):
+    def OE_idx_iter(orbs):
+        for i, j in combinations_with_replacement(orbs, 2):
             yield compound_idx2(i, j)
 
     @staticmethod
-    def A_idx_iter(N_mo):
-        for i in range(N_mo):
+    def A_idx_iter(orbs):
+        for i in orbs:
             yield compound_idx4(i, i, i, i)
 
     @staticmethod
-    def B_idx_iter(N_mo):
-        for i, j in combinations(range(N_mo), 2):
+    def B_idx_iter(orbs):
+        for i, j in combinations(orbs, 2):
             yield compound_idx4(i, j, i, j)
 
     @staticmethod
-    def C_idx_iter(N_mo):
-        for i, j, k in combinations(range(N_mo), 3):
+    def C_idx_iter(orbs):
+        for i, j, k in combinations(orbs, 3):
             yield compound_idx4(i, j, i, k)
             yield compound_idx4(i, k, j, k)
             yield compound_idx4(j, i, j, k)
 
     @staticmethod
-    def D_idx_iter(N_mo):
-        for i, j in combinations(range(N_mo), 2):
+    def D_idx_iter(orbs):
+        for i, j in combinations(orbs, 2):
             yield compound_idx4(i, i, i, j)
             yield compound_idx4(i, j, j, j)
 
     @staticmethod
-    def E_idx_iter(N_mo):
-        for i, j, k in combinations(range(N_mo), 3):
+    def E_idx_iter(orbs):
+        for i, j, k in combinations(orbs, 3):
             yield compound_idx4(i, i, j, k)
             yield compound_idx4(i, j, j, k)
             yield compound_idx4(i, j, k, k)
 
     @staticmethod
-    def F_idx_iter(N_mo):
-        for i, j in combinations(range(N_mo), 2):
+    def F_idx_iter(orbs):
+        for i, j in combinations(orbs, 2):
             yield compound_idx4(i, i, j, j)
 
     @staticmethod
-    def G_idx_iter(N_mo):
-        for i, j, k, l in combinations(range(N_mo), 4):  # noqa: E741
+    def G_idx_iter(orbs):
+        for i, j, k, l in combinations(orbs, 4):  # noqa: E741
             yield compound_idx4(i, j, k, l)
             yield compound_idx4(i, k, j, l)
             yield compound_idx4(j, i, k, l)
@@ -414,7 +434,12 @@ def default_comm_cat_map(rank):
 
 
 def load_integrals_into_chunks(
-    fp, comm, comm_cat_map=default_comm_cat_map, chunk_size=-1, dtype=np.float64
+    fp,
+    comm,
+    comm_cat_map=default_comm_cat_map,
+    chunk_size=-1,
+    dtype=np.float64,
+    constraint=None,
 ):
     # Set-up IO
     n_orb, n_elec, E0, J_oe, J_te = load_integrals(fp, return_N_elec=True)
@@ -429,7 +454,7 @@ def load_integrals_into_chunks(
         if cat == "OE":
             fact = JChunkFactory(n_orb, cat, J_oe_reader, chunk_size, comm)
         else:
-            fact = JChunkFactory(n_orb, cat, J_te_reader, chunk_size, comm)
+            fact = JChunkFactory(n_orb, cat, J_te_reader, chunk_size, comm, constraint)
 
         # add new chunks and prune any empty chunks coming from bad distribution of integrals
         chunks += [chunk for chunk in fact.get_chunks() if chunk.chunk_size > 0]

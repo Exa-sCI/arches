@@ -5,7 +5,6 @@ from itertools import takewhile
 from typing import Dict, List, NewType, Tuple
 
 from arches.integral_indexing_utils import compound_idx2, compound_idx4
-
 from arches.legacy.fundamental_types import (
     Determinant,
 )
@@ -35,7 +34,9 @@ def manipulate_line(raw_line, used_zip):
 # Integrals of the Hamiltonian over molecular orbitals
 # ~
 def load_integrals(
-    fcidump_path, return_N_elec=False
+    fcidump_path,
+    return_N_elec=False,
+    return_size_only=False,
 ) -> Tuple[int, float, One_electron_integral, Two_electron_integral]:
     """Read all the Hamiltonian integrals from the data file.
     Returns: (E0, d_one_e_integral, d_two_e_integral).
@@ -76,6 +77,9 @@ def load_integrals(
     n_orb = int(line.split()[2])
     n_elec = int(line.split()[5])
 
+    if return_size_only:
+        return n_orb, n_elec
+
     # Using takewhile we 'take lines from the file' while '/' has not been found
     # Needed so we can start reading data on the integrals.
     lines = list(takewhile(lambda line: "/" not in manipulate_line(line, used_zip), f))  # noqa
@@ -110,6 +114,10 @@ def load_integrals(
         return n_orb, n_elec, E0, d_one_e_integral, d_two_e_integral
     else:
         return n_orb, E0, d_one_e_integral, d_two_e_integral
+
+
+def get_mo_size():
+    pass
 
 
 def load_wf(path_wf, det_representation="tuple") -> Tuple[List[float], List[Determinant]]:
