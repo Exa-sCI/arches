@@ -34,7 +34,10 @@ class spin_det_t {
     mo_block_t block_size;
 
     // needed for det_t to compile
-    spin_det_t(){};
+    spin_det_t() {
+        block_size = sizeof(mo_block_t) * 8;
+        read_mask = ((mo_block_t)1) << (block_size - 1);
+    };
 
     // empty initialization
     spin_det_t(idx_t min_mos) {
@@ -394,6 +397,7 @@ template <> struct std::hash<det_t> {
 class LinearUnorderedMap {
   protected:
     std::unordered_map<std::size_t, det_t> map;
+    std::unordered_map<std::size_t, idx_t> order;
     std::hash<det_t> hash_f;
 
   public:
@@ -413,6 +417,22 @@ class LinearUnorderedMap {
 
         map[hash_val] = d;
         return 1;
+    }
+
+    idx_t add_det_get_order(const det_t &d, idx_t *count) {
+        // Hash is not perfect, but collisions are low
+        // If collides, use linear probing to augment hash_val
+        std::size_t hash_val = hash_f(d);
+        while (map.count(hash_val) == 1) {
+            if (map[hash_val] == d) {
+                return order[hash_val];
+            }
+            hash_val++;
+        }
+
+        map[hash_val] = d;
+        order[hash_val] = *count++;
+        return order[hash_val];
     }
 };
 

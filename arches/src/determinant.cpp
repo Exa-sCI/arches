@@ -1,5 +1,9 @@
+#include <algorithm>
+#include <arrays.h>
 #include <determinant.h>
+#include <iostream>
 #include <matrix.h>
+#include <memory>
 
 int compute_phase_single_excitation(spin_det_t d, idx_t h, idx_t p) {
     const auto &[i, j] = std::minmax(h, p);
@@ -346,6 +350,74 @@ std::vector<det_t> get_all_connected_dets(det_t *d, idx_t N_dets) {
     return connected;
 }
 
+std::vector<det_t> get_all_connected_dets_with_work(det_t *d, idx_t N_dets, work_array *work) {
+
+    std::vector<det_t> connected;
+    LinearUnorderedMap hash_map = LinearUnorderedMap();
+    int success;
+    for (auto i = 0; i < N_dets; i++) {
+        success = hash_map.add_det(d[i]);
+    }
+
+    idx_t count = 0;
+    std::vector<std::vector<idx_t>> work_vecs;
+    for (auto i = 0; i < N_dets; i++) {
+        auto &current_det = d[i];
+        std::vector<idx_t> current_work;
+
+        // This is the same memory allocation technique
+        // I use in building the sparse Hamiltonian structure
+        // I'm not actually sure if this is better than
+        // just pushing back at the end of the loop body,
+        // since current_work will get deleted anyway.
+        // std::emplace_back(std::move(current_work));
+        // current_work = &work_vecs[i];
+
+        std::vector<det_t> singles_and_os_doubles = get_os_doubles(current_det, true);
+        std::vector<det_t> ss_doubles = get_ss_doubles(current_det);
+
+        for (auto &new_det : singles_and_os_doubles) {
+            idx_t idx = hash_map.add_det_get_order(new_det, &count);
+            current_work.push_back(idx);
+            if (idx == count - 1) {
+                connected.push_back(new_det);
+            }
+        }
+
+        for (auto &new_det : ss_doubles) {
+            idx_t idx = hash_map.add_det_get_order(new_det, &count);
+            current_work.push_back(idx);
+            if (idx == count - 1) {
+                connected.push_back(new_det);
+            }
+        }
+        std::sort(current_work.begin(), current_work.end());
+        work_vecs.push_back(current_work);
+    }
+
+    // convert work into contiguous arrays
+    idx_t total_work = 0;
+    // std::unique_ptr<idx_t[]> work_starts(new idx_t[N_dets + 1]);
+    work_array work_starts(N_dets + 1);
+    idx_t *ws_p = work_starts.arr;
+    for (auto i = 0; i < N_dets; i++) {
+        total_work += work_vecs[i].size();
+        ws_p[i + 1] = total_work;
+    }
+
+    // std::unique_ptr<idx_t[]> work_indices(new idx_t[total_work]);
+    work_array work_indices(total_work);
+    //     // std::vector<idx_t> current_work = &work_vecs[i];
+    idx_t *wi_p = work_indices.arr;
+    for (auto i = 0; i < N_dets; i++) {
+        std::copy(work_vecs[i].begin(), work_vecs[i].end(), wi_p + ws_p[0]);
+    }
+
+    // *work = std::move(total_work);
+
+    return connected;
+}
+
 std::vector<det_t> get_constrained_connected_dets(det_t *d, idx_t N_dets,
                                                   exc_constraint_t alpha_constraint,
                                                   exc_constraint_t beta_constraint) {
@@ -526,6 +598,10 @@ DetArray *Dets_get_connected_opp_spin_doubles(det_t *source, idx_t N_dets) {
 
 DetArray *Dets_get_connected_dets(det_t *source, idx_t N_dets) {
     return new DetArray(get_all_connected_dets(source, N_dets));
+}
+
+DetArray *Dets_get_connected_with_work(det_t *source, idx_t N_dets, work_array *work) {
+    return new DetArray(get_all_connected_dets_with_work(source, N_dets, work));
 }
 
 DetArray *Dets_get_constrained_singles(det_t *source, idx_t N_dets, idx_t *h_a, idx_t N_h_a,
