@@ -331,10 +331,10 @@ class DetArray {
         arr = &storage[0];
     }
 
-    // move constructor
-    DetArray(const std::vector<det_t> &&other) {
+    // safer move connstructor
+    DetArray(const std::vector<det_t> &&other, det_t *source) {
         size = other.size();
-        N_mos = other[0].N_mos;
+        N_mos = source->N_mos; // in case other has no dets
         storage = std::move(other);
         arr = &storage[0];
     }
