@@ -31,14 +31,14 @@ class spin_det_t {
     idx_t N_blocks;
     mo_block_t *block_arr;
     mo_block_t read_mask;
-    mo_block_t block_size;
+    mo_block_t block_size = sizeof(mo_block_t) * 8;
 
     // needed for det_t to compile
-    spin_det_t(){};
+    spin_det_t() { read_mask = ((mo_block_t)1) << (block_size - 1); };
 
     // empty initialization
     spin_det_t(idx_t min_mos) {
-        block_size = sizeof(mo_block_t) * 8;
+        // block_size = sizeof(mo_block_t) * 8;
         read_mask = ((mo_block_t)1) << (block_size - 1);
 
         N_mos = min_mos;
