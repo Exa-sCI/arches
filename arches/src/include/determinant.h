@@ -31,14 +31,14 @@ class spin_det_t {
     idx_t N_blocks;
     mo_block_t *block_arr;
     mo_block_t read_mask;
-    mo_block_t block_size;
+    mo_block_t block_size = sizeof(mo_block_t) * 8;
 
     // needed for det_t to compile
-    spin_det_t(){};
+    spin_det_t() { read_mask = ((mo_block_t)1) << (block_size - 1); };
 
     // empty initialization
     spin_det_t(idx_t min_mos) {
-        block_size = sizeof(mo_block_t) * 8;
+        // block_size = sizeof(mo_block_t) * 8;
         read_mask = ((mo_block_t)1) << (block_size - 1);
 
         N_mos = min_mos;
@@ -331,10 +331,10 @@ class DetArray {
         arr = &storage[0];
     }
 
-    // move constructor
-    DetArray(const std::vector<det_t> &&other) {
+    // safer move connstructor
+    DetArray(const std::vector<det_t> &&other, det_t *source) {
         size = other.size();
-        N_mos = other[0].N_mos;
+        N_mos = source->N_mos; // in case other has no dets
         storage = std::move(other);
         arr = &storage[0];
     }

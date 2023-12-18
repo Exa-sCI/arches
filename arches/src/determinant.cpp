@@ -513,19 +513,19 @@ void Dets_DetArray_setitem(DetArray *arr, det_t *other, idx_t i) { arr->arr[i] =
 //// Det generation routines
 
 DetArray *Dets_get_connected_singles(det_t *source, idx_t N_dets) {
-    return new DetArray(get_all_singles(*source));
+    return new DetArray(get_all_singles(*source), source);
 }
 
 DetArray *Dets_get_connected_same_spin_doubles(det_t *source, idx_t N_dets) {
-    return new DetArray(get_ss_doubles(*source));
+    return new DetArray(get_ss_doubles(*source), source);
 }
 
 DetArray *Dets_get_connected_opp_spin_doubles(det_t *source, idx_t N_dets) {
-    return new DetArray(get_os_doubles(*source, false));
+    return new DetArray(get_os_doubles(*source, false), source);
 }
 
 DetArray *Dets_get_connected_dets(det_t *source, idx_t N_dets) {
-    return new DetArray(get_all_connected_dets(source, N_dets));
+    return new DetArray(get_all_connected_dets(source, N_dets), source);
 }
 
 DetArray *Dets_get_constrained_singles(det_t *source, idx_t N_dets, idx_t *h_a, idx_t N_h_a,
@@ -539,7 +539,7 @@ DetArray *Dets_get_constrained_singles(det_t *source, idx_t N_dets, idx_t *h_a, 
     const exc_constraint_t a(ah, ap);
     const exc_constraint_t b(bh, bp);
 
-    return new DetArray(get_constrained_singles(*source, a, b));
+    return new DetArray(get_constrained_singles(*source, a, b), source);
 }
 
 DetArray *Dets_get_constrained_same_spin_doubles(det_t *source, idx_t N_dets, idx_t *h_a,
@@ -553,7 +553,7 @@ DetArray *Dets_get_constrained_same_spin_doubles(det_t *source, idx_t N_dets, id
     const exc_constraint_t a(ah, ap);
     const exc_constraint_t b(bh, bp);
 
-    return new DetArray(get_constrained_ss_doubles(*source, a, b));
+    return new DetArray(get_constrained_ss_doubles(*source, a, b), source);
 }
 
 DetArray *Dets_get_constrained_opp_spin_doubles(det_t *source, idx_t N_dets, idx_t *h_a,
@@ -567,7 +567,7 @@ DetArray *Dets_get_constrained_opp_spin_doubles(det_t *source, idx_t N_dets, idx
     const exc_constraint_t a(ah, ap);
     const exc_constraint_t b(bh, bp);
 
-    return new DetArray(get_constrained_os_doubles(*source, a, b, false));
+    return new DetArray(get_constrained_os_doubles(*source, a, b, false), source);
 }
 
 DetArray *Dets_get_constrained_dets(det_t *source, idx_t N_dets, idx_t *h_a, idx_t N_h_a,
@@ -581,7 +581,7 @@ DetArray *Dets_get_constrained_dets(det_t *source, idx_t N_dets, idx_t *h_a, idx
     const exc_constraint_t a(ah, ap);
     const exc_constraint_t b(bh, bp);
 
-    return new DetArray(get_constrained_connected_dets(source, N_dets, a, b));
+    return new DetArray(get_constrained_connected_dets(source, N_dets, a, b), source);
 }
 
 SymCSRMatrix<float> *Dets_get_H_structure_naive_f32(DetArray *psi_det) {

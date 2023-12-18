@@ -113,14 +113,15 @@ class Test_ChunkFactory(unittest.TestCase):
                 len(ref_ind), len(idx), msg=f"Some indices double counted in category {cat}"
             )
 
-        check_category("A", list(JChunkFactory.A_idx_iter(self.N_mos)))
-        check_category("B", list(JChunkFactory.B_idx_iter(self.N_mos)))
-        check_category("C", list(JChunkFactory.C_idx_iter(self.N_mos)))
-        check_category("D", list(JChunkFactory.D_idx_iter(self.N_mos)))
-        check_category("E", list(JChunkFactory.E_idx_iter(self.N_mos)))
-        check_category("F", list(JChunkFactory.F_idx_iter(self.N_mos)))
-        check_category("G", list(JChunkFactory.G_idx_iter(self.N_mos)))
-        check_category("OE", list(JChunkFactory.OE_idx_iter(self.N_mos)))
+        orbs = range(self.N_mos)
+        check_category("A", list(JChunkFactory.A_idx_iter(orbs)))
+        check_category("B", list(JChunkFactory.B_idx_iter(orbs)))
+        check_category("C", list(JChunkFactory.C_idx_iter(orbs)))
+        check_category("D", list(JChunkFactory.D_idx_iter(orbs)))
+        check_category("E", list(JChunkFactory.E_idx_iter(orbs)))
+        check_category("F", list(JChunkFactory.F_idx_iter(orbs)))
+        check_category("G", list(JChunkFactory.G_idx_iter(orbs)))
+        check_category("OE", list(JChunkFactory.OE_idx_iter(orbs)))
 
     def test_idx(self):
         def check_category(cat):

@@ -71,13 +71,13 @@ template <class T> class SymCSRMatrix {
         n = N;
 
         // allocate row pointer array
-        std::unique_ptr<idx_t[]> A_p_tmp(new idx_t[m + 1]);
+        std::unique_ptr<idx_t[]> A_p_tmp(new idx_t[M + 1]);
         A_p_ptr = std::move(A_p_tmp);
         A_p = A_p_ptr.get();
-        std::copy(arr_p, arr_p + m, A_p);
+        std::copy(arr_p, arr_p + M + 1, A_p);
 
         // allocate col arr
-        idx_t n_entries = A_p[m];
+        idx_t n_entries = A_p[M];
         std::unique_ptr<idx_t[]> A_c_tmp(new idx_t[n_entries]);
         A_c_ptr = std::move(A_c_tmp);
         A_c = A_c_ptr.get();
