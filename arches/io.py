@@ -2,16 +2,19 @@
 import math
 from collections import defaultdict
 from itertools import takewhile
+from typing import Dict, List, NewType, Tuple
 
-from arches.fundamental_types import (
-    Determinant,
-    Energy,
-    List,
-    One_electron_integral,
-    Tuple,
-    Two_electron_integral,
-)
 from arches.integral_indexing_utils import compound_idx2, compound_idx4
+from arches.legacy.fundamental_types import (
+    Determinant,
+)
+
+OrbitalIdx = NewType("OrbitalIdx", int)
+One_electron_integral = Dict[Tuple[OrbitalIdx, OrbitalIdx], float]
+Two_electron_integral_index = Tuple[OrbitalIdx, OrbitalIdx, OrbitalIdx, OrbitalIdx]
+Two_electron_integral = Dict[Two_electron_integral_index, float]
+Energy = NewType("Energy", float)
+
 
 #   _____      _ _   _       _ _          _   _
 #  |_   _|    (_) | (_)     | (_)        | | (_)
@@ -32,6 +35,8 @@ def manipulate_line(raw_line, used_zip):
 # ~
 def load_integrals(
     fcidump_path,
+    return_N_elec=False,
+    return_size_only=False,
 ) -> Tuple[int, float, One_electron_integral, Two_electron_integral]:
     """Read all the Hamiltonian integrals from the data file.
     Returns: (E0, d_one_e_integral, d_two_e_integral).
@@ -68,7 +73,12 @@ def load_integrals(
 
     # Only non-zero integrals are stored in the fci_dump.
     # Hence we use a defaultdict to handle the sparsity
-    n_orb = int(next(f).split()[2])
+    line = next(f)
+    n_orb = int(line.split()[2])
+    n_elec = int(line.split()[5])
+
+    if return_size_only:
+        return n_orb, n_elec
 
     # Using takewhile we 'take lines from the file' while '/' has not been found
     # Needed so we can start reading data on the integrals.
@@ -100,7 +110,10 @@ def load_integrals(
 
     f.close()
 
-    return n_orb, E0, d_one_e_integral, d_two_e_integral
+    if return_N_elec:
+        return n_orb, n_elec, E0, d_one_e_integral, d_two_e_integral
+    else:
+        return n_orb, E0, d_one_e_integral, d_two_e_integral
 
 
 def load_wf(path_wf, det_representation="tuple") -> Tuple[List[float], List[Determinant]]:

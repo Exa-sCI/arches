@@ -119,15 +119,34 @@ Constructors and destructors for simple arrays for the following types
 extern "C" {
 
 // Empty constructors
-LArray<float> *LArray_ctor_e_f32(idx_t n) { return new LArray<float>(n); }
-LArray<double> *LArray_ctor_e_f64(idx_t n) { return new LArray<double>(n); }
-LArray<long int> *LArray_ctor_e_i32(idx_t n) { return new LArray<long int>(n); }
-LArray<long long int> *LArray_ctor_e_i64(idx_t n) { return new LArray<long long int>(n); }
-LArray<unsigned long int> *LArray_ctor_e_ui32(idx_t n) { return new LArray<unsigned long int>(n); }
-LArray<unsigned long long int> *LArray_ctor_e_ui64(idx_t n) {
-    return new LArray<unsigned long long int>(n);
+LArray<float> *LArray_ctor_e_f32(idx_t n) {
+    float fill = 0.0;
+    return new LArray<float>(n, fill);
 }
-LArray<idx_t> *LArray_ctor_e_idx_t(idx_t n) { return new LArray<idx_t>(n); }
+LArray<double> *LArray_ctor_e_f64(idx_t n) {
+    double fill = 0.0;
+    return new LArray<double>(n, fill);
+}
+LArray<long int> *LArray_ctor_e_i32(idx_t n) {
+    int fill = 0;
+    return new LArray<long int>(n, fill);
+}
+LArray<long long int> *LArray_ctor_e_i64(idx_t n) {
+    long long int fill = 0;
+    return new LArray<long long int>(n, fill);
+}
+LArray<unsigned long int> *LArray_ctor_e_ui32(idx_t n) {
+    unsigned long int fill = 0;
+    return new LArray<unsigned long int>(n, fill);
+}
+LArray<unsigned long long int> *LArray_ctor_e_ui64(idx_t n) {
+    unsigned long long int fill = 0;
+    return new LArray<unsigned long long int>(n, fill);
+}
+LArray<idx_t> *LArray_ctor_e_idx_t(idx_t n) {
+    idx_t fill = 0;
+    return new LArray<idx_t>(n, fill);
+}
 
 // Fill constructors
 LArray<float> *LArray_ctor_c_f32(idx_t n, float fill_val) { return new LArray<float>(n, fill_val); }
@@ -183,6 +202,7 @@ unsigned long long int *LArray_get_arr_ptr_ui64(LArray<unsigned long long int> *
     return X->arr;
 }
 idx_t *LArray_get_arr_ptr_idx_t(LArray<idx_t> *X) { return X->arr; }
+idx_t LArray_get_arr_size_idx_t(LArray<idx_t> *X) { return X->size; }
 
 // Destructors
 void LArray_dtor_f32(LArray<float> *X) { delete X; }
@@ -509,4 +529,45 @@ void LArray_idiv_c_f64(double *a, const double b, const idx_t N) { div_LArray(a,
 // complex 64
 
 // complex 128
+}
+
+// Misc utilities
+extern "C" {
+
+void LArray_reset_near_zeros_f32(float *a, const idx_t N, float tol, float r_val) {
+    for (auto i = 0; i < N; i++) {
+        if (a[i] < tol)
+            a[i] = r_val;
+    }
+}
+void LArray_reset_near_zeros_f64(double *a, const idx_t N, double tol, double r_val) {
+    for (auto i = 0; i < N; i++) {
+        if (a[i] < tol)
+            a[i] = r_val;
+    }
+}
+
+LArray<idx_t> *LArray_get_threshold_idx_f32(float *arr, idx_t N, float threshold) {
+
+    std::unique_ptr<idx_t[]> temp_ind(new idx_t[N]);
+    idx_t count = 0;
+    for (auto i = 0; i < N; i++) {
+        if (std::abs(arr[i]) >= threshold) {
+            temp_ind[count++] = i;
+        }
+    }
+    return new LArray<idx_t>(count, temp_ind.get());
+}
+
+LArray<idx_t> *LArray_get_threshold_idx_f64(double *arr, idx_t N, double threshold) {
+
+    std::unique_ptr<idx_t[]> temp_ind(new idx_t[N]);
+    idx_t count = 0;
+    for (auto i = 0; i < N; i++) {
+        if (std::abs(arr[i]) >= threshold) {
+            temp_ind[count++] = i;
+        }
+    }
+    return new LArray<idx_t>(count, temp_ind.get());
+}
 }

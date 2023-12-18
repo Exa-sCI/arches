@@ -1,8 +1,6 @@
 # ruff : noqa : E741
 # Yes, I like itertools
-import pathlib
 from collections import defaultdict
-from ctypes import CDLL, c_char
 from dataclasses import dataclass
 from functools import cached_property
 from itertools import chain, combinations, permutations, product
@@ -13,8 +11,12 @@ import numpy as np
 # Import mpi4py and utilities
 from mpi4py import MPI  # Note this initializes and finalizes MPI session automatically
 
-from arches.func_decorators import offload, return_str
-from arches.fundamental_types import (
+from arches.integral_indexing_utils import (
+    compound_idx4,
+    compound_idx4_reverse,
+    integral_category,
+)
+from arches.legacy.fundamental_types import (
     Determinant,
     Energy,
     One_electron_integral,
@@ -25,14 +27,6 @@ from arches.fundamental_types import (
     Two_electron_integral_index,
     Two_electron_integral_index_phase,
 )
-from arches.integral_indexing_utils import (
-    canonical_idx4,
-    compound_idx4,
-    compound_idx4_reverse,
-)
-from arches.linked_object import idx_t
-
-run_folder = pathlib.Path(__file__).parent.resolve()
 
 #  _____      _                       _   _
 # |_   _|    | |                     | | | |
@@ -42,60 +36,32 @@ run_folder = pathlib.Path(__file__).parent.resolve()
 #  \___/_| |_|\__\___|\__, |_|  \__,_|_|  \__|\__, | .__/ \___||___/
 #                      __/ |                   __/ | |
 #                     |___/                   |___/|_|
-
-lib_it = CDLL(run_folder.joinpath("build/libintegral_types.so"))
-
-lib_it.integral_category.restype = c_char
-lib_it.integral_category.argtypes = [idx_t, idx_t, idx_t, idx_t]
-
-
-@offload(return_str(lib_it.integral_category))
-def integral_category(i, j, k, l):
-    """
-    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
-    | label |                   | ik/jl i/k j/l | i/j j/k k/l i/l | singles                       | doubles                      | diagonal                    |
-    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
-    |   A   | i=j=k=l (1,1,1,1) |   =    =   =  |  =   =   =   =  |                               |                              | coul. (1 occ. both spins?)  |
-    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
-    |   B   | i=k<j=l (1,2,1,2) |   <    =   =  |  <   >   <   <  |                               |                              | coul. (1,2 any spin occ.?)  |
-    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
-    |       | i=k<j<l (1,2,1,3) |   <    =   <  |  <   >   <   <  | 2<->3, 1 occ. (any spin)      |                              |                             |
-    |   C   | i<k<j=l (1,3,2,3) |   <    <   =  |  <   >   <   <  | 1<->2, 3 occ. (any spin)      |                              |                             |
-    |       | j<i=k<l (2,1,2,3) |   <    =   <  |  >   <   <   <  | 1<->3, 2 occ. (any spin)      |                              |                             |
-    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
-    |   D   | i=j=k<l (1,1,1,2) |   <    =   <  |  =   =   <   <  | 1<->2, 1 occ. (opposite spin) |                              |                             |
-    |       | i<j=k=l (1,2,2,2) |   <    <   =  |  <   =   =   <  | 1<->2, 2 occ. (opposite spin) |                              |                             |
-    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
-    |       | i=j<k<l (1,1,2,3) |   <    <   <  |  =   <   <   <  | 2<->3, 1 occ. (same spin)     | 1a<->2a x 1b<->3b, (and a/b) |                             |
-    |   E   | i<j=k<l (1,2,2,3) |   <    <   <  |  <   =   <   <  | 1<->3, 2 occ. (same spin)     | 1a<->2a x 2b<->3b, (and a/b) |                             |
-    |       | i<j<k=l (1,2,3,3) |   <    <   <  |  <   <   =   <  | 1<->2, 3 occ. (same spin)     | 1a<->3a x 2b<->3b, (and a/b) |                             |
-    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
-    |   F   | i=j<k=l (1,1,2,2) |   =    <   <  |  =   <   =   <  |                               | 1a<->2a x 1b<->2b            | exch. (1,2 same spin occ.?) |
-    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
-    |       | i<j<k<l (1,2,3,4) |   <    <   <  |  <   <   <   <  |                               | 1<->3 x 2<->4                |                             |
-    |   G   | i<k<j<l (1,3,2,4) |   <    <   <  |  <   >   <   <  |                               | 1<->2 x 3<->4                |                             |
-    |       | j<i<k<l (2,1,3,4) |   <    <   <  |  >   <   <   <  |                               | 1<->4 x 2<->3                |                             |
-    +-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
-    """
-    if (i, j, k, l) != canonical_idx4(i, j, k, l):
-        raise ValueError("Integral indices are not cannonical.")
-    if i == l:
-        return "A"
-    elif (i == k) and (j == l):
-        return "B"
-    elif (i == k) or (j == l):
-        if j == k:
-            return "D"
-        else:
-            return "C"
-    elif j == k:
-        return "E"
-    elif (i == j) and (k == l):
-        return "F"
-    elif (i == j) or (k == l):
-        return "E"
-    else:
-        return "G"
+"""
++-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+| label |                   | ik/jl i/k j/l | i/j j/k k/l i/l | singles                       | doubles                      | diagonal                    |
++-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+|   A   | i=j=k=l (1,1,1,1) |   =    =   =  |  =   =   =   =  |                               |                              | coul. (1 occ. both spins?)  |
++-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+|   B   | i=k<j=l (1,2,1,2) |   <    =   =  |  <   >   <   <  |                               |                              | coul. (1,2 any spin occ.?)  |
++-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+|       | i=k<j<l (1,2,1,3) |   <    =   <  |  <   >   <   <  | 2<->3, 1 occ. (any spin)      |                              |                             |
+|   C   | i<k<j=l (1,3,2,3) |   <    <   =  |  <   >   <   <  | 1<->2, 3 occ. (any spin)      |                              |                             |
+|       | j<i=k<l (2,1,2,3) |   <    =   <  |  >   <   <   <  | 1<->3, 2 occ. (any spin)      |                              |                             |
++-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+|   D   | i=j=k<l (1,1,1,2) |   <    =   <  |  =   =   <   <  | 1<->2, 1 occ. (opposite spin) |                              |                             |
+|       | i<j=k=l (1,2,2,2) |   <    <   =  |  <   =   =   <  | 1<->2, 2 occ. (opposite spin) |                              |                             |
++-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+|       | i=j<k<l (1,1,2,3) |   <    <   <  |  =   <   <   <  | 2<->3, 1 occ. (same spin)     | 1a<->2a x 1b<->3b, (and a/b) |                             |
+|   E   | i<j=k<l (1,2,2,3) |   <    <   <  |  <   =   <   <  | 1<->3, 2 occ. (same spin)     | 1a<->2a x 2b<->3b, (and a/b) |                             |
+|       | i<j<k=l (1,2,3,3) |   <    <   <  |  <   <   =   <  | 1<->2, 3 occ. (same spin)     | 1a<->3a x 2b<->3b, (and a/b) |                             |
++-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+|   F   | i=j<k=l (1,1,2,2) |   =    <   <  |  =   <   =   <  |                               | 1a<->2a x 1b<->2b            | exch. (1,2 same spin occ.?) |
++-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+|       | i<j<k<l (1,2,3,4) |   <    <   <  |  <   <   <   <  |                               | 1<->3 x 2<->4                |                             |
+|   G   | i<k<j<l (1,3,2,4) |   <    <   <  |  <   >   <   <  |                               | 1<->2 x 3<->4                |                             |
+|       | j<i<k<l (2,1,3,4) |   <    <   <  |  >   <   <   <  |                               | 1<->4 x 2<->3                |                             |
++-------+-------------------+---------------+-----------------+-------------------------------+------------------------------+-----------------------------+
+"""
 
 
 #   ______ _                                      _   _____         _ _        _   _
@@ -1005,7 +971,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category A, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category A, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "A"
@@ -1047,7 +1013,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category B, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category B, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "B"
@@ -1105,7 +1071,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category C, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category C, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "C"
@@ -1198,7 +1164,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         n_orb: int,
     ):
         """
-        Return determinant pairs (I, J) connected by integral idx in category C, s.to J \in constraint for use in PT2 selection
+        Return determinant pairs (I, J) connected by integral idx in category C, s.to J \\in constraint for use in PT2 selection
         Category C possibilties:
             i = k < j < l: e.g., (1, 2, 1, 3)
             i < k < j = l: e.g., (1, 3, 2, 3)
@@ -1212,7 +1178,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ, spindet_b_occ: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category C, return determinant pairs (I, J) \in (psi, psi_connected) and associated phase s.to J satisfies C
+        For two-electron integral (i, j, k, l) in category C, return determinant pairs (I, J) \\in (psi, psi_connected) and associated phase s.to J satisfies C
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "C"
@@ -1409,7 +1375,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category D, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category D, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "D"
@@ -1496,7 +1462,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         n_orb,
     ):
         """
-        Return determinant pairs (I, J) connected by integral idx in category D, s.to J \in constraint for use in PT2 selection
+        Return determinant pairs (I, J) connected by integral idx in category D, s.to J \\in constraint for use in PT2 selection
         Category D possibilties:
             i = j = k < l: e.g., (1, 1, 1, 2)
             i < j = k = l: e.g., (1, 2, 2, 2)
@@ -1509,7 +1475,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ, spindet_b_occ: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category D, return determinant pairs (I, J) \in (psi, psi_connected) and associated phase s.to J satisfies C
+        For two-electron integral (i, j, k, l) in category D, return determinant pairs (I, J) \\in (psi, psi_connected) and associated phase s.to J satisfies C
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "D"
@@ -1635,7 +1601,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category E, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category E, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "E"
@@ -1760,7 +1726,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         n_orb,
     ):
         """
-        Return determinant pairs (I, J) connected by integral idx in category E, s.to J \in constraint for use in PT2 selection
+        Return determinant pairs (I, J) connected by integral idx in category E, s.to J \\in constraint for use in PT2 selection
         Category E possibilties:
             i = j < k < l: e.g., (1, 1, 2, 3)
             i < j = k < l: e.g., (1, 2, 2, 3)
@@ -1774,7 +1740,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ, spindet_b_occ: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category E, return determinant pairs (I, J) \in (psi, psi_connected) and associated phase s.to J satisfies C
+        For two-electron integral (i, j, k, l) in category E, return determinant pairs (I, J) \\in (psi, psi_connected) and associated phase s.to J satisfies C
         """
 
         i, j, k, l = idx
@@ -1922,7 +1888,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category F, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category F, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "F"
@@ -1996,7 +1962,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         n_orb,
     ):
         """
-        Return determinant pairs (I, J) connected by integral idx in category F, s.to J \in constraint for use in PT2 selection
+        Return determinant pairs (I, J) connected by integral idx in category F, s.to J \\in constraint for use in PT2 selection
         Category F possibilties:
             i = j < k = l: e.g., (1, 1, 2, 2)
         This category contributes to diagonals (not relevant for PT2) and double (opposite-spin) excitation pairs
@@ -2008,7 +1974,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ, spindet_b_occ: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category F, return determinant pairs (I, J) \in (psi, psi_connected) and associated phase s.to J satisfies C
+        For two-electron integral (i, j, k, l) in category F, return determinant pairs (I, J) \\in (psi, psi_connected) and associated phase s.to J satisfies C
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "F"
@@ -2053,7 +2019,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ_i, spindet_b_occ_i: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category G, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase
+        For two-electron integral (i, j, k, l) in category G, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase
         """
         i, j, k, l = idx
         assert integral_category(i, j, k, l) == "G"
@@ -2109,7 +2075,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         n_orb,
     ):
         """
-        Return determinant pairs (I, J) connected by integral idx in category G, s.to J \in constraint for use in PT2 selection
+        Return determinant pairs (I, J) connected by integral idx in category G, s.to J \\in constraint for use in PT2 selection
         Category G possibilties:
             i < j < k < l: e.g., (1, 2, 3, 4)
             i < k < j < l: e.g., (1, 3, 2, 4)
@@ -2123,7 +2089,7 @@ class Hamiltonian_two_electrons_integral_driven(Hamiltonian_two_electrons, objec
         :param spindet_a_occ, spindet_b_occ: Dictionaries mapping |OrbitalIdx| -> Indices of determinants occupied in associated orbital
 
         Outputs:
-        For two-electron integral (i, j, k, l) in category G, return determinant pairs (I, J) \in (psi_i, psi_j) and associated phase s.to J satisfies C
+        For two-electron integral (i, j, k, l) in category G, return determinant pairs (I, J) \\in (psi_i, psi_j) and associated phase s.to J satisfies C
         """
 
         i, j, k, l = idx
@@ -2321,7 +2287,7 @@ class H_indices_generator(object):
 class Hamiltonian_generator(object):
     """Generator class for matrix Hamiltonian; compute matrix elements of H
     in the basis of Slater determinants in a distributed fashion.
-    Each rank handles local H_i \in len(psi_local) x len(psi_internal) chunk of the full H.
+    Each rank handles local H_i \\in len(psi_local) x len(psi_internal) chunk of the full H.
     Slater-Condon rules are used to compute the matrix elements <I|H|J> where I
     and J are Slater determinants.
 
@@ -2955,7 +2921,7 @@ class Powerplant_manager(object):
         :param psi_coef: list of determinant coefficients in expansion of trial WF
 
         Outputs:
-        List of energies, Jth entry contains E_pt2 contribution of determinant |J⟩ \in connected space s.to |C⟩
+        List of energies, Jth entry contains E_pt2 contribution of determinant |J⟩ \\in connected space s.to |C⟩
         """
 
         # Compute len(psi_internal) \times len(psi_external_chunk) `Hamiltonian'

@@ -7,7 +7,6 @@ from itertools import combinations_with_replacement, product
 import numpy as np
 from test_types import Test_f32, Test_f64
 
-from arches.drivers import integral_category
 from arches.integral_indexing_utils import (
     canonical_idx4,
     compound_idx2,
@@ -17,6 +16,7 @@ from arches.integral_indexing_utils import (
 )
 from arches.integrals import JChunk, JChunkFactory, load_integrals_into_chunks
 from arches.io import load_integrals
+from arches.legacy.drivers import integral_category
 
 seed = 79123
 rng = np.random.default_rng(seed=seed)
@@ -113,14 +113,15 @@ class Test_ChunkFactory(unittest.TestCase):
                 len(ref_ind), len(idx), msg=f"Some indices double counted in category {cat}"
             )
 
-        check_category("A", list(JChunkFactory.A_idx_iter(self.N_mos)))
-        check_category("B", list(JChunkFactory.B_idx_iter(self.N_mos)))
-        check_category("C", list(JChunkFactory.C_idx_iter(self.N_mos)))
-        check_category("D", list(JChunkFactory.D_idx_iter(self.N_mos)))
-        check_category("E", list(JChunkFactory.E_idx_iter(self.N_mos)))
-        check_category("F", list(JChunkFactory.F_idx_iter(self.N_mos)))
-        check_category("G", list(JChunkFactory.G_idx_iter(self.N_mos)))
-        check_category("OE", list(JChunkFactory.OE_idx_iter(self.N_mos)))
+        orbs = range(self.N_mos)
+        check_category("A", list(JChunkFactory.A_idx_iter(orbs)))
+        check_category("B", list(JChunkFactory.B_idx_iter(orbs)))
+        check_category("C", list(JChunkFactory.C_idx_iter(orbs)))
+        check_category("D", list(JChunkFactory.D_idx_iter(orbs)))
+        check_category("E", list(JChunkFactory.E_idx_iter(orbs)))
+        check_category("F", list(JChunkFactory.F_idx_iter(orbs)))
+        check_category("G", list(JChunkFactory.G_idx_iter(orbs)))
+        check_category("OE", list(JChunkFactory.OE_idx_iter(orbs)))
 
     def test_idx(self):
         def check_category(cat):
@@ -205,7 +206,7 @@ class Test_ChunkFactory(unittest.TestCase):
             comm = FakeComm(1, 2)
             ref_ind = set([v["idx"] for v in self.canon_order.values() if v["category"] == cat])
             fact = JChunkFactory(self.N_mos, cat, FakeReader(), comm=comm, chunk_size=len(ref_ind))
-            chunks = fact.get_chunks()
+            _ = fact.get_chunks()
 
         with self.assertWarns(Warning):
             for cat in self.categories:
@@ -221,7 +222,7 @@ class Test_IO(unittest.TestCase):
 
         N_orb_ref, E0_ref, ref_J_oe, ref_J_te = load_integrals(str(fp))
 
-        N_orb_test, E0_test, chunks = load_integrals_into_chunks(
+        N_orb_test, _, E0_test, chunks = load_integrals_into_chunks(
             str(fp), FakeComm(0, 1), dtype=self.dtype
         )
 
@@ -262,7 +263,7 @@ class Test_IO(unittest.TestCase):
 
         N_orb_ref, E0_ref, ref_J_oe, ref_J_te = load_integrals(str(fp))
 
-        N_orb_test, E0_test, chunks = load_integrals_into_chunks(
+        N_orb_test, _, E0_test, chunks = load_integrals_into_chunks(
             str(fp), FakeComm(0, 1), chunk_size=32
         )
 

@@ -1,0 +1,225 @@
+###### Running NH3 example ######
+
+
+Starting selected CI routine with 1 determinants. SCF energy -56.1610 Ha
+
+###################
+
+Generating connected space for 1 internal determinants | Execution took 2.586e-04 seconds
+Calculating pt2 contribution for 117 external determinants | Execution took 3.617e-02 seconds
+Internal det space is now rank 48
+CIPSI with 1 internal determinants | Execution took 3.676e-02 seconds
+Estimated pt2 contribution -3.3192e-01 Ha
+Finding non-zero Hamiltonian entries | Execution took 2.600e-04 seconds
+Calculating Hamiltonian entries | Execution took 2.522e-01 seconds
+Generating Hamiltonian with rank 48 | Execution took 2.525e-01 seconds
+Davidson has converged with tolerance 1.00e-06 in 7 iterations
+Energy of state 0 : -5.617241e+01 Ha. Residual 5.910570e-07
+Davidson for sparse H with 550 entries | Execution took 4.043e-02 seconds
+
+## sCI Iteration Summary
+E0 after 1 rounds (Ha): E0_var : -56.1724 | E_pt2 : -3.3192e-01  | E_var + pt2 : -56.5043
+
+###################
+
+Generating connected space for 48 internal determinants | Execution took 1.426e-03 seconds
+Calculating pt2 contribution for 333 external determinants | Execution took 3.910e+00 seconds
+Internal det space is now rank 175
+CIPSI with 48 internal determinants | Execution took 3.912e+00 seconds
+Estimated pt2 contribution 6.9314e-01 Ha
+Finding non-zero Hamiltonian entries | Execution took 1.532e-03 seconds
+Calculating Hamiltonian entries | Execution took 1.264e+00 seconds
+Generating Hamiltonian with rank 175 | Execution took 1.265e+00 seconds
+Davidson has converged with tolerance 1.00e-06 in 18 iterations
+Energy of state 0 : -5.776000e+01 Ha. Residual 5.870659e-07
+Davidson for sparse H with 4575 entries | Execution took 3.893e-02 seconds
+
+## sCI Iteration Summary
+E0 after 2 rounds (Ha): E0_var : -57.7600 | E_pt2 : 6.9314e-01  | E_var + pt2 : -57.0669
+
+###################
+
+Generating connected space for 175 internal determinants | Execution took 1.946e-03 seconds
+Calculating pt2 contribution for 225 external determinants | Execution took 9.779e+00 seconds
+Internal det space is now rank 208
+CIPSI with 175 internal determinants | Execution took 9.782e+00 seconds
+Estimated pt2 contribution 1.8001e-02 Ha
+Finding non-zero Hamiltonian entries | Execution took 2.069e-03 seconds
+Calculating Hamiltonian entries | Execution took 1.771e+00 seconds
+Generating Hamiltonian with rank 208 | Execution took 1.773e+00 seconds
+Davidson has converged with tolerance 1.00e-06 in 24 iterations
+Energy of state 0 : -5.776038e+01 Ha. Residual 8.032140e-07
+Davidson for sparse H with 6424 entries | Execution took 4.727e-02 seconds
+
+## sCI Iteration Summary
+E0 after 3 rounds (Ha): E0_var : -57.7604 | E_pt2 : 1.8001e-02  | E_var + pt2 : -57.7424
+
+###################
+
+Generating connected space for 208 internal determinants | Execution took 1.820e-03 seconds
+Calculating pt2 contribution for 192 external determinants | Execution took 9.887e+00 seconds
+Internal det space is now rank 208
+CIPSI with 208 internal determinants | Execution took 9.889e+00 seconds
+Estimated pt2 contribution 8.5221e-12 Ha
+Finding non-zero Hamiltonian entries | Execution took 2.083e-03 seconds
+Calculating Hamiltonian entries | Execution took 1.776e+00 seconds
+Generating Hamiltonian with rank 208 | Execution took 1.778e+00 seconds
+Davidson has converged with tolerance 1.00e-06 in 24 iterations
+Energy of state 0 : -5.776038e+01 Ha. Residual 8.032140e-07
+Davidson for sparse H with 6424 entries | Execution took 4.554e-02 seconds
+
+## sCI Iteration Summary
+E0 after 4 rounds (Ha): E0_var : -57.7604 | E_pt2 : 8.5221e-12  | E_var + pt2 : -57.7604
+run_example ran with config | Example: nh3, (N_h, N_p): (3, 3) and executed in 2.891e+01 seconds
+###### NH3 example finished ######
+
+------------------
+
+###### Running F2 example ######
+Starting selected CI routine with 1 determinants. SCF energy -198.6461 Ha
+
+###################
+
+Generating connected space for 1 internal determinants | Execution took 1.698e-04 seconds
+Calculating pt2 contribution for 117 external determinants | Execution took 5.419e-02 seconds
+Internal det space is now rank 48
+CIPSI with 1 internal determinants | Execution took 5.454e-02 seconds
+Estimated pt2 contribution -5.4869e-01 Ha
+Finding non-zero Hamiltonian entries | Execution took 1.596e-04 seconds
+Calculating Hamiltonian entries | Execution took 3.622e-01 seconds
+Generating Hamiltonian with rank 48 | Execution took 3.624e-01 seconds
+Davidson has converged with tolerance 1.00e-06 in 8 iterations
+Energy of state 0 : -1.987388e+02 Ha. Residual 8.977276e-07
+Davidson for sparse H with 553 entries | Execution took 9.516e-03 seconds
+
+## sCI Iteration Summary
+E0 after 1 rounds (Ha): E0_var : -198.7388 | E_pt2 : -5.4869e-01  | E_var + pt2 : -199.2875
+
+###################
+
+Generating connected space for 48 internal determinants | Execution took 9.628e-04 seconds
+Calculating pt2 contribution for 333 external determinants | Execution took 9.606e+00 seconds
+Internal det space is now rank 95
+CIPSI with 48 internal determinants | Execution took 9.608e+00 seconds
+Estimated pt2 contribution 5.1484e-02 Ha
+Finding non-zero Hamiltonian entries | Execution took 5.207e-04 seconds
+Calculating Hamiltonian entries | Execution took 9.850e-01 seconds
+Generating Hamiltonian with rank 95 | Execution took 9.856e-01 seconds
+Davidson has converged with tolerance 1.00e-06 in 12 iterations
+Energy of state 0 : -1.987408e+02 Ha. Residual 6.985353e-07
+Davidson for sparse H with 1488 entries | Execution took 2.005e-02 seconds
+
+## sCI Iteration Summary
+E0 after 2 rounds (Ha): E0_var : -198.7408 | E_pt2 : 5.1484e-02  | E_var + pt2 : -198.6894
+
+###################
+
+Generating connected space for 95 internal determinants | Execution took 1.122e-03 seconds
+Calculating pt2 contribution for 305 external determinants | Execution took 1.775e+01 seconds
+Internal det space is now rank 96
+CIPSI with 95 internal determinants | Execution took 1.775e+01 seconds
+Estimated pt2 contribution -8.7196e-04 Ha
+Finding non-zero Hamiltonian entries | Execution took 5.146e-04 seconds
+Calculating Hamiltonian entries | Execution took 1.066e+00 seconds
+Generating Hamiltonian with rank 96 | Execution took 1.067e+00 seconds
+Davidson has converged with tolerance 1.00e-06 in 14 iterations
+Energy of state 0 : -1.987408e+02 Ha. Residual 3.817094e-07
+Davidson for sparse H with 1536 entries | Execution took 2.994e-02 seconds
+
+## sCI Iteration Summary
+E0 after 3 rounds (Ha): E0_var : -198.7408 | E_pt2 : -8.7196e-04  | E_var + pt2 : -198.7417
+
+###################
+
+Generating connected space for 96 internal determinants | Execution took 1.205e-03 seconds
+Calculating pt2 contribution for 304 external determinants | Execution took 1.857e+01 seconds
+Internal det space is now rank 96
+CIPSI with 96 internal determinants | Execution took 1.857e+01 seconds
+Estimated pt2 contribution 1.5710e-09 Ha
+Finding non-zero Hamiltonian entries | Execution took 5.157e-04 seconds
+Calculating Hamiltonian entries | Execution took 1.074e+00 seconds
+Generating Hamiltonian with rank 96 | Execution took 1.074e+00 seconds
+Davidson has converged with tolerance 1.00e-06 in 14 iterations
+Energy of state 0 : -1.987408e+02 Ha. Residual 3.817094e-07
+Davidson for sparse H with 1536 entries | Execution took 3.111e-02 seconds
+
+## sCI Iteration Summary
+E0 after 4 rounds (Ha): E0_var : -198.7408 | E_pt2 : 1.5710e-09  | E_var + pt2 : -198.7408
+run_example ran with config | Example: f2_631g, (N_h, N_p): (3, 3) and executed in 4.960e+01 seconds
+###### F2 example finished ######
+
+------------------
+
+###### Running C2 example ######
+Starting selected CI routine with 1 determinants. SCF energy -75.3869 Ha
+
+###################
+
+Generating connected space for 1 internal determinants | Execution took 1.750e-04 seconds
+Calculating pt2 contribution for 117 external determinants | Execution took 1.294e-01 seconds
+Internal det space is now rank 50
+CIPSI with 1 internal determinants | Execution took 1.298e-01 seconds
+Estimated pt2 contribution -2.7000e+01 Ha
+Finding non-zero Hamiltonian entries | Execution took 1.864e-04 seconds
+Calculating Hamiltonian entries | Execution took 1.045e+00 seconds
+Generating Hamiltonian with rank 50 | Execution took 1.045e+00 seconds
+Davidson has converged with tolerance 1.00e-06 in 17 iterations
+Energy of state 0 : -7.551950e+01 Ha. Residual 7.927081e-07
+Davidson for sparse H with 600 entries | Execution took 2.343e-02 seconds
+
+## sCI Iteration Summary
+E0 after 1 rounds (Ha): E0_var : -75.5195 | E_pt2 : -2.7000e+01  | E_var + pt2 : -102.5194
+
+###################
+
+Generating connected space for 50 internal determinants | Execution took 1.126e-03 seconds
+Calculating pt2 contribution for 331 external determinants | Execution took 2.410e+01 seconds
+Internal det space is now rank 97
+CIPSI with 50 internal determinants | Execution took 2.410e+01 seconds
+Estimated pt2 contribution -2.7111e-01 Ha
+Finding non-zero Hamiltonian entries | Execution took 5.338e-04 seconds
+Calculating Hamiltonian entries | Execution took 2.643e+00 seconds
+Generating Hamiltonian with rank 97 | Execution took 2.643e+00 seconds
+Davidson has converged with tolerance 1.00e-06 in 20 iterations
+Energy of state 0 : -7.553678e+01 Ha. Residual 5.414403e-07
+Davidson for sparse H with 1535 entries | Execution took 3.811e-02 seconds
+
+## sCI Iteration Summary
+E0 after 2 rounds (Ha): E0_var : -75.5368 | E_pt2 : -2.7111e-01  | E_var + pt2 : -75.8079
+
+###################
+
+Generating connected space for 97 internal determinants | Execution took 1.258e-03 seconds
+Calculating pt2 contribution for 303 external determinants | Execution took 4.385e+01 seconds
+Internal det space is now rank 98
+CIPSI with 97 internal determinants | Execution took 4.385e+01 seconds
+Estimated pt2 contribution 1.9125e-02 Ha
+Finding non-zero Hamiltonian entries | Execution took 8.590e-04 seconds
+Calculating Hamiltonian entries | Execution took 2.835e+00 seconds
+Generating Hamiltonian with rank 98 | Execution took 2.836e+00 seconds
+Davidson has converged with tolerance 1.00e-06 in 20 iterations
+Energy of state 0 : -7.553748e+01 Ha. Residual 9.959066e-07
+Davidson for sparse H with 1583 entries | Execution took 4.725e-02 seconds
+
+## sCI Iteration Summary
+E0 after 3 rounds (Ha): E0_var : -75.5375 | E_pt2 : 1.9125e-02  | E_var + pt2 : -75.5184
+
+###################
+
+Generating connected space for 98 internal determinants | Execution took 1.472e-03 seconds
+Calculating pt2 contribution for 302 external determinants | Execution took 4.465e+01 seconds
+Internal det space is now rank 98
+CIPSI with 98 internal determinants | Execution took 4.466e+01 seconds
+Estimated pt2 contribution 2.2094e-07 Ha
+Finding non-zero Hamiltonian entries | Execution took 6.625e-04 seconds
+Calculating Hamiltonian entries | Execution took 2.849e+00 seconds
+Generating Hamiltonian with rank 98 | Execution took 2.850e+00 seconds
+Davidson has converged with tolerance 1.00e-06 in 20 iterations
+Energy of state 0 : -7.553748e+01 Ha. Residual 9.959066e-07
+Davidson for sparse H with 1583 entries | Execution took 4.510e-02 seconds
+
+## sCI Iteration Summary
+E0 after 4 rounds (Ha): E0_var : -75.5375 | E_pt2 : 2.2094e-07  | E_var + pt2 : -75.5375
+run_example ran with config | Example: c2_eq_hf_dz, (N_h, N_p): (3, 3) and executed in 1.225e+02 seconds
+###### C2 example finished ######
+

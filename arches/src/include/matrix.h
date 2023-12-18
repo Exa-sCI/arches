@@ -1,6 +1,8 @@
 #pragma once
+#include "determinant.h"
 #include "integral_indexing_utils.h"
 #include <algorithm>
+#include <math.h>
 #include <memory>
 
 // typedef long int idx_t;
@@ -69,13 +71,13 @@ template <class T> class SymCSRMatrix {
         n = N;
 
         // allocate row pointer array
-        std::unique_ptr<idx_t[]> A_p_tmp(new idx_t[m + 1]);
+        std::unique_ptr<idx_t[]> A_p_tmp(new idx_t[M + 1]);
         A_p_ptr = std::move(A_p_tmp);
         A_p = A_p_ptr.get();
-        std::copy(arr_p, arr_p + m, A_p);
+        std::copy(arr_p, arr_p + M + 1, A_p);
 
         // allocate col arr
-        idx_t n_entries = A_p[m];
+        idx_t n_entries = A_p[M];
         std::unique_ptr<idx_t[]> A_c_tmp(new idx_t[n_entries]);
         A_c_ptr = std::move(A_c_tmp);
         A_c = A_c_ptr.get();
@@ -90,14 +92,70 @@ template <class T> class SymCSRMatrix {
     };
 
     // copy constructor from unique ptr, using move semantics
-    SymCSRMatrix(idx_t M, idx_t N, std::unique_ptr<idx_t[]> arr_p, std::unique_ptr<idx_t[]> arr_c,
-                 std::unique_ptr<T[]> arr_v) {
+    SymCSRMatrix(idx_t M, idx_t N, std::unique_ptr<idx_t[]> &arr_p, std::unique_ptr<idx_t[]> &arr_c,
+                 std::unique_ptr<T[]> &arr_v) {
         m = M;
         n = N;
 
         A_p_ptr = std::move(arr_p);
         A_c_ptr = std::move(arr_c);
         A_v_ptr = std::move(arr_v);
+
+        A_p = A_p_ptr.get();
+        A_c = A_c_ptr.get();
+        A_v = A_v_ptr.get();
+    }
+
+    // This is way too slow for actual formation of explicit Hamiltonians, but it's easy to write!
+    // Should get bilinear mappings so that we can iterate over known determinants and find
+    // connections directly. Or, resort to on the fly generation of the Hamiltonian structure, which
+    // would need true expandable vectors inside the offloaded kernels
+    SymCSRMatrix(DetArray *psi_det) {
+        idx_t N_dets = psi_det->size;
+        m = N_dets;
+        n = N_dets;
+
+        std::vector<std::vector<idx_t>> csr_rows;
+        std::unique_ptr<idx_t[]> H_p(new idx_t[N_dets + 1]);
+        idx_t *H_p_p = H_p.get();
+        std::fill(H_p_p, H_p_p + N_dets + 1, 0);
+        // find non-zero entries
+        for (auto i = 0; i < N_dets; i++) {
+            det_t &d_row = psi_det->arr[i];
+
+            H_p[i + 1] += 1; // add H_ii
+            std::vector<idx_t> new_row(1, i);
+            csr_rows.emplace_back(std::move(new_row));
+            for (auto j = i + 1; j < N_dets; j++) {
+                det_t &d_col = psi_det->arr[j];
+
+                det_t exc = exc_det(d_row, d_col);
+                auto degree = (exc[0].count() + exc[1].count()) / 2;
+
+                if (degree <= 2) { // add H_ij
+                    csr_rows[i].push_back(j);
+                    H_p[i + 1] += 1;
+                }
+            }
+
+            H_p[i + 1] += H_p[i]; // adjust global row offset
+        }
+
+        // copy over from vector of vectors into single array
+        std::unique_ptr<idx_t[]> H_c(new idx_t[H_p[N_dets]]);
+        idx_t *H_c_p = H_c.get();
+        for (auto i = 0; i < N_dets; i++) {
+            std::copy(csr_rows[i].begin(), csr_rows[i].end(), H_c_p + H_p[i]);
+        }
+
+        // initialize values at 0
+        std::unique_ptr<T[]> H_v(new T[H_p[N_dets]]);
+        T *H_v_p = H_v.get();
+        std::fill(H_v_p, H_v_p + H_p[N_dets], (T)0.0);
+
+        A_p_ptr = std::move(H_p);
+        A_c_ptr = std::move(H_c);
+        A_v_ptr = std::move(H_v);
 
         A_p = A_p_ptr.get();
         A_c = A_c_ptr.get();
@@ -116,6 +174,7 @@ template <class T> class SymCSRMatrix {
         A_p = A_p_ptr.get();
         A_c = A_c_ptr.get();
         A_v = A_v_ptr.get();
+        return *this;
     };
 };
 
@@ -142,13 +201,260 @@ void gemm_kernel(char op_a, char op_b, idx_t m, idx_t n, idx_t k, T alpha, T *A,
     }
 };
 
-template <class T> void ApB(T *A, T *B, T *C, idx_t m, idx_t n) {
-    for (auto i = 0; i < m * n; i++)
-        C[i] = A[i] + B[i];
+template <class T>
+void ApB(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A, const idx_t lda,
+         T *B, const idx_t ldb, T *C, const idx_t ldc) {
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    C[i * ldc + j] = A[i * lda + j] + B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] + B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] + B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    C[i * ldc + j] = A[i * lda + j] + B[i * ldb + j];
+                }
+            }
+        }
+    }
 };
 
-template <class T> void AmB(T *A, T *B, T *C, idx_t m, idx_t n) {
-    for (auto i = 0; i < m * n; i++)
-        C[i] = A[i] - B[i];
-    ;
+template <class T>
+void AmB(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A, const idx_t lda,
+         T *B, const idx_t ldb, T *C, const idx_t ldc) {
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    C[i * ldc + j] = A[i * lda + j] - B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] - B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] - B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    C[i * ldc + j] = A[i * lda + j] - B[i * ldb + j];
+                }
+            }
+        }
+    }
+}
+
+template <class T>
+void AtB(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A, const idx_t lda,
+         T *B, const idx_t ldb, T *C, const idx_t ldc) {
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    C[i * ldc + j] = A[i * lda + j] * B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] * B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] * B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    C[i * ldc + j] = A[i * lda + j] * B[i * ldb + j];
+                }
+            }
+        }
+    }
+};
+
+template <class T>
+void AdB(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A, const idx_t lda,
+         T *B, const idx_t ldb, T *C, const idx_t ldc) {
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    C[i * ldc + j] = A[i * lda + j] / B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] / B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    C[ia * ldc + ja] = A[ia * lda + ja] / B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    C[i * ldc + j] = A[i * lda + j] / B[i * ldb + j];
+                }
+            }
+        }
+    }
+}
+
+template <class T>
+void set_submatrix(const char op_A, const char op_B, const idx_t m, const idx_t n, T *A,
+                   const idx_t lda, const T *B, const idx_t ldb) {
+
+    if (op_A == 'n') {
+        if (op_B == 'n') {
+            for (auto i = 0; i < m; i++) {
+                for (auto j = 0; j < n; j++) {
+                    A[i * lda + j] = B[i * ldb + j];
+                }
+            }
+        } else if (op_B == 't') {
+            idx_t ib = 0;
+            idx_t jb = 0;
+            for (auto ia = 0; ia < m; ia++, jb++) {
+                for (auto ja = 0; ja < n; ja++, ib++) {
+                    A[ia * lda + ja] = B[ib * ldb + jb];
+                }
+                ib -= n;
+            }
+        }
+
+    } else if (op_A == 't') {
+        if (op_B == 'n') {
+            idx_t ia = 0;
+            idx_t ja = 0;
+            for (auto ib = 0; ib < m; ja++, ib++) {
+                for (auto jb = 0; jb < n; ia++, jb++) {
+                    A[ia * lda + ja] = B[ib * ldb + jb];
+                }
+                ia -= n;
+            }
+        } else if (op_B == 't') {
+            for (auto i = 0; i < n; i++) {
+                for (auto j = 0; j < m; j++) {
+                    A[i * lda + j] = B[i * ldb + j];
+                }
+            }
+        }
+    }
+}
+
+template <class T> void fill_diagonal(const idx_t m, T *A, const idx_t lda, const T *fill) {
+    for (auto i = 0; i < m; i++) {
+        A[i * lda + i] = fill[i];
+    }
+}
+
+template <class T> void extract_dense_diagonal(const idx_t m, const T *A, const idx_t lda, T *res) {
+    for (auto i = 0; i < m; i++) {
+        res[i] = A[i * lda + i];
+    }
+}
+
+template <class T>
+void extract_dense_superdiagonal(const idx_t m, const T *A, const idx_t lda, T *res) {
+    for (auto i = 0; i < m - 1; i++) {
+        res[i] = A[i * lda + i + 1];
+    }
+}
+
+template <class T>
+void extract_sparse_diagonal(const idx_t m, const idx_t *A_p, const T *A_v, T *res) {
+    for (auto i = 0; i < m; i++) {
+        res[i] = A_v[A_p[i]];
+    }
+}
+
+template <class T>
+void extract_sparse_superdiagonal(const idx_t m, const idx_t *A_p, const idx_t *A_c, const T *A_v,
+                                  T *res) {
+    for (auto i = 0; i < m - 1; i++) {
+        if (A_c[A_p[i] + 1] == i + 1)
+            res[i] = A_v[A_p[i] + 1];
+    }
+}
+
+template <class T> void add_to_sparse_diagonal(const idx_t m, const idx_t *A_p, T *A_v, T x) {
+    for (auto i = 0; i < m; i++) {
+        A_v[A_p[i]] += x;
+    }
+}
+
+template <class T> void column_2norm(const idx_t m, const idx_t n, T *A, const idx_t lda, T *res) {
+    for (auto i = 0; i < m; i++) {
+        for (auto j = 0; j < n; j++) {
+            res[j] += A[i * lda + j] * A[i * lda + j];
+        }
+    }
+
+    std::transform(res, res + n, res,
+                   [](T x) { return static_cast<T>(sqrt(static_cast<double>(x))); });
 }

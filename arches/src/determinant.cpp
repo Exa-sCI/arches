@@ -1,23 +1,17 @@
-#if !defined(DOCTEST_CONFIG_DISABLE)
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#endif
+#include <algorithm>
+#include <arrays.h>
 #include <determinant.h>
-#include <doctest/doctest.h>
+#include <iostream>
+#include <matrix.h>
+#include <memory>
 
 int compute_phase_single_excitation(spin_det_t d, idx_t h, idx_t p) {
     const auto &[i, j] = std::minmax(h, p);
     spin_det_t hpmask(d.N_mos);
-    hpmask.set(i + 1, j - i - 1, 1);
+    hpmask.set(i + 1, j, 1);
     const bool parity = (hpmask & d).count() % 2;
     return parity ? -1 : 1;
 }
-
-// TEST_CASE("testing get_phase_single") {
-//     CHECK(compute_phase_single_excitation(spin_det_t{"11000"}, 4, 2) == -1);
-//     CHECK(compute_phase_single_excitation(spin_det_t{"10001"}, 4, 2) == 1);
-//     CHECK(compute_phase_single_excitation(spin_det_t{"01100"}, 2, 4) == -1);
-//     CHECK(compute_phase_single_excitation(spin_det_t{"00100"}, 2, 4) == 1);
-// }
 
 int compute_phase_double_excitation(spin_det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
     // Single spin channel excitations, i.e., (2,0) or (0,2)
@@ -38,74 +32,74 @@ int compute_phase_double_excitation(det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t
 }
 
 det_t exc_det(det_t &a, det_t &b) {
-    // spin_det_t alpha = a[0] ^ b[0];
-    // spin_det_t beta = a[1] ^ b[1];
-    // return det_t(alpha, beta);
-
     return det_t(a[0] ^ b[0], a[1] ^ b[1]); // Does this work since I have the move defined?
 }
 
-det_t apply_single_excitation(det_t s, int spin, idx_t h, idx_t p) {
+spin_det_t apply_single_excitation(spin_det_t det, idx_t h, idx_t p, bool &success) {
+    // assert(s[h] == 1);
+    // assert(s[p] == 0);
+    success = det[h] && !det[p];
+
+    auto s2 = spin_det_t(det);
+    if (success) {
+        s2.set(h, 0);
+        s2.set(p, 1);
+    }
+    return s2;
+}
+
+det_t apply_single_excitation(det_t det, int spin, idx_t h, idx_t p, bool &success) {
     // assert(s[spin][h] == 1);
     // assert(s[spin][p] == 0);
 
-    auto s2 = det_t(s);
-    // s2[spin][h] = 0;
-    // s2[spin][p] = 1;
-    s2[spin].set(h, 0);
-    s2[spin].set(p, 1);
+    success = det[spin][h] && !det[spin][p];
+
+    auto s2 = det_t(det);
+    if (success) {
+        s2[spin].set(h, 0);
+        s2[spin].set(p, 1);
+    }
     return s2;
 }
 
-spin_det_t apply_single_excitation(spin_det_t s, idx_t h, idx_t p) {
-    // assert(s[h] == 1);
-    // assert(s[p] == 0);
+spin_det_t apply_double_excitation(spin_det_t det, idx_t h1, idx_t h2, idx_t p1, idx_t p2,
+                                   bool &success) {
 
-    auto s2 = spin_det_t(s);
-    s2.set(h, 0);
-    s2.set(p, 1);
-    return s2;
+    success = det[h1] && det[h2] && !det[p1] && !det[p2];
+    auto res = spin_det_t(det);
+    if (success) {
+        res.set(h1, 0);
+        res.set(h2, 0);
+        res.set(p1, 1);
+        res.set(p2, 1);
+    }
+    return res;
 }
 
-// TEST_CASE("testing apply_single_excitation") {
-//     det_t s{spin_det_t{"11000"}, spin_det_t{"00001"}};
-//     CHECK(apply_single_excitation(s, 0, 4, 1) == det_t{spin_det_t{"01010"},
-//     spin_det_t{"00001"}}); CHECK(apply_single_excitation(s, 1, 0, 1) ==
-//     det_t{spin_det_t{"11000"}, spin_det_t{"00010"}});
-// }
+det_t apply_double_excitation(det_t det, int s1, int s2, idx_t h1, idx_t h2, idx_t p1, idx_t p2,
+                              bool &success) {
 
-det_t apply_double_excitation(det_t s, int spin_1, int spin_2, idx_t h1, idx_t h2, idx_t p1,
-                              idx_t p2) {
-    // Check if valid
-    // assert(s[spin.first][h1] == 1);
-    // assert(s[spin.second][h2] == 1);
-    // assert(s[spin.first][p1] == 0);
-    // assert(s[spin.second][p2] == 0);
+    success = det[s1][h1] && det[s2][h2] && !det[s1][p1] && !det[s2][p2];
 
-    auto s2 = det_t(s);
-    s2[spin_1].set(h1, 0);
-    s2[spin_2].set(h2, 0);
-    s2[spin_1].set(p1, 1);
-    s2[spin_2].set(p2, 1);
-    return s2;
+    auto res = det_t(det);
+    if (success) {
+        res[s1].set(h1, 0);
+        res[s2].set(h2, 0);
+        res[s1].set(p1, 1);
+        res[s2].set(p2, 1);
+    }
+    return res;
 }
-
-// TEST_CASE("testing apply_double_excitation") {
-//     det_t s{spin_det_t{"11000000"}, spin_det_t{"10001000"}};
-//     CHECK(apply_double_excitation(s, std::pair<int>{0, 0}, 0, 1, 4, 5) ==
-//           det_t(spin_det_t{"00001100"}, spin_det_t{"10001000"}));
-//     CHECK(apply_double_excitation(s, std::pair<int>{1, 1}, 0, 4, 1, 7) ==
-//           det_t(spin_det_t{"11000000"}, spin_det_t{"01000001"}));
-//     CHECK(apply_double_excitation(s, std::pair<int>{0, 1}, 1, 0, 2, 2) ==
-//           det_t(spin_det_t{"10100000"}, spin_det_t{"00101000"}));
-// }
 
 std::vector<det_t> get_singles_by_exc_mask(det_t d, int spin, spin_constraint_t h,
                                            spin_constraint_t p) {
     std::vector<det_t> res;
+    bool success;
     for (auto &i : h) {
         for (auto &j : p) {
-            res.push_back(apply_single_excitation(d, spin, i, j));
+            det_t temp_det = apply_single_excitation(d, spin, i, j, success);
+            if (success)
+                res.push_back(temp_det);
         }
     }
     return res;
@@ -114,9 +108,12 @@ std::vector<det_t> get_singles_by_exc_mask(det_t d, int spin, spin_constraint_t 
 std::vector<spin_det_t> get_spin_singles_by_exc_mask(spin_det_t d, spin_constraint_t h,
                                                      spin_constraint_t p) {
     std::vector<spin_det_t> res;
+    bool success;
     for (auto &i : h) {
         for (auto &j : p) {
-            res.push_back(apply_single_excitation(d, i, j));
+            spin_det_t temp_det = apply_single_excitation(d, i, j, success);
+            if (success)
+                res.push_back(temp_det);
         }
     }
     return res;
@@ -127,11 +124,17 @@ std::vector<det_t> get_ss_doubles_by_exc_mask(det_t d, int spin, spin_constraint
 
     std::vector<det_t> res;
     // h, p are sorted so h1 < h2; p1 < p2 always
-    for (auto h1 = 0; h1 < h.size() - 1; h1++) {
-        for (auto h2 = h1 + 1; h2 < h.size(); h2++) {
-            for (auto p1 = 0; p1 < p.size() - 1; p1++) {
-                for (auto p2 = p1 + 1; p2 < p.size(); p2++) {
-                    res.push_back(apply_double_excitation(d, spin, spin, h1, h2, p1, p2));
+    bool success;
+    int N_holes = h.size();
+    int N_parts = p.size();
+    for (auto h1 = 0; h1 < N_holes - 1; h1++) {
+        for (auto h2 = h1 + 1; h2 < N_holes; h2++) {
+            for (auto p1 = 0; p1 < N_parts - 1; p1++) {
+                for (auto p2 = p1 + 1; p2 < N_parts; p2++) {
+                    det_t temp_det =
+                        apply_double_excitation(d, spin, spin, h[h1], h[h2], p[p1], p[p2], success);
+                    if (success)
+                        res.push_back(temp_det);
                 }
             }
         }
@@ -139,27 +142,41 @@ std::vector<det_t> get_ss_doubles_by_exc_mask(det_t d, int spin, spin_constraint
     return res;
 }
 
-std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t constraint, idx_t max_orb) {
+std::vector<det_t> get_all_singles(det_t d) {
+
+    std::vector<det_t> singles;
+
+    std::vector<det_t> alpha_singles =
+        get_singles_by_exc_mask(d, 0, to_constraint(d[0]), to_constraint(~d[0]));
+    std::vector<det_t> beta_singles =
+        get_singles_by_exc_mask(d, 1, to_constraint(d[1]), to_constraint(~d[1]));
+    singles.insert(singles.end(), alpha_singles.begin(), alpha_singles.end());
+    singles.insert(singles.end(), beta_singles.begin(), beta_singles.end());
+
+    return singles;
+}
+
+std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t alpha_constraint,
+                                           exc_constraint_t beta_constraint) {
     std::vector<det_t> singles;
 
     // convert constraints to bit masks
-    // TODO: test if faster to create empty bit mask and set bits
-    spin_det_t hole_mask(d.N_mos, constraint.first.size(),
-                         &constraint.first[0]); // where holes can be created
-    spin_det_t part_mask(d.N_mos, constraint.second.size(),
-                         &constraint.second[0]); // where particles can be created
+    spin_det_t ah_mask(d.N_mos, alpha_constraint.first.size(),
+                       &alpha_constraint.first[0]); // where holes can be created
+    spin_det_t ap_mask(d.N_mos, alpha_constraint.second.size(),
+                       &alpha_constraint.second[0]); // where particles can be created
 
-    // convert max orb to bit masks
-    // TODO: as above, test if faster to create empty bit mask, now with
-    // reserved size, and set bits
-    spin_det_t max_orb_mask(d.N_mos, max_orb, 1);
+    spin_det_t bh_mask(d.N_mos, beta_constraint.first.size(),
+                       &beta_constraint.first[0]); // where holes can be created
+    spin_det_t bp_mask(d.N_mos, beta_constraint.second.size(),
+                       &beta_constraint.second[0]); // where particles can be created
 
     // apply bit masks and get final list
-    spin_constraint_t alpha_holes = to_constraint((~d[0] & hole_mask) & max_orb_mask);
-    spin_constraint_t alpha_parts = to_constraint((d[0] & part_mask) & max_orb_mask);
+    spin_constraint_t alpha_holes = to_constraint((d[0] & ah_mask));
+    spin_constraint_t alpha_parts = to_constraint((~d[0] & ap_mask));
 
-    spin_constraint_t beta_holes = to_constraint((~d[1] & hole_mask) & max_orb_mask);
-    spin_constraint_t beta_parts = to_constraint((d[1] & part_mask) & max_orb_mask);
+    spin_constraint_t beta_holes = to_constraint((d[1] & bh_mask));
+    spin_constraint_t beta_parts = to_constraint((~d[1] & bp_mask));
 
     // at this point, hole and particle bitsets are guaranteed to be disjoint
     // iterate over product list and add to return vector
@@ -171,47 +188,27 @@ std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t constraint,
     return singles;
 }
 
-std::vector<det_t> get_all_singles(det_t d) {
-
-    std::vector<det_t> singles;
-    std::vector<det_t> alpha_singles =
-        get_singles_by_exc_mask(d, 0, to_constraint(~d[0]), to_constraint(d[0]));
-    std::vector<det_t> beta_singles =
-        get_singles_by_exc_mask(d, 1, to_constraint(~d[1]), to_constraint(d[1]));
-    singles.insert(singles.end(), alpha_singles.begin(), alpha_singles.end());
-    singles.insert(singles.end(), beta_singles.begin(), beta_singles.end());
-
-    return singles;
-}
-
-// TODO: refactor, a lot of code re-use
-std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb) {
+std::vector<det_t> get_os_doubles(det_t d, bool return_singles) {
     std::vector<det_t> os_doubles;
 
-    // convert constraints to bit masks
-    // TODO: test if faster to create empty bit mask and set bits
-    spin_det_t hole_mask(d.N_mos, constraint.first.size(),
-                         &constraint.first[0]); // where holes can be created
-    spin_det_t part_mask(d.N_mos, constraint.second.size(),
-                         &constraint.second[0]); // where particles can be created
+    spin_constraint_t alpha_holes = to_constraint(d[0]);
+    spin_constraint_t alpha_parts = to_constraint(~d[0]);
 
-    // convert max orb to bit masks
-    // TODO: as above, test if faster to create empty bit mask, now with
-    // reserved size, and set bits
-    spin_det_t max_orb_mask(d.N_mos, max_orb, 1);
-
-    // apply bit masks and get final list
-    spin_constraint_t alpha_holes = to_constraint((~d[0] & hole_mask) & max_orb_mask);
-    spin_constraint_t alpha_parts = to_constraint((d[0] & part_mask) & max_orb_mask);
-
-    spin_constraint_t beta_holes = to_constraint((~d[1] & hole_mask) & max_orb_mask);
-    spin_constraint_t beta_parts = to_constraint((d[1] & part_mask) & max_orb_mask);
+    spin_constraint_t beta_holes = to_constraint(d[1]);
+    spin_constraint_t beta_parts = to_constraint(~d[1]);
 
     // get all singles and iterate over product of (1,0) X (0,1) to get (1,1)
     std::vector<spin_det_t> alpha_singles =
         get_spin_singles_by_exc_mask(d[0], alpha_holes, alpha_parts);
     std::vector<spin_det_t> beta_singles =
         get_spin_singles_by_exc_mask(d[1], beta_holes, beta_parts);
+
+    if (return_singles) {
+        for (auto &a : alpha_singles)
+            os_doubles.push_back(det_t(a, d.beta));
+        for (auto &b : beta_singles)
+            os_doubles.push_back(det_t(d.alpha, b));
+    }
 
     for (auto &a : alpha_singles) {
         for (auto &b : beta_singles) {
@@ -222,27 +219,60 @@ std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t constrai
     return os_doubles;
 }
 
-std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb) {
-    std::vector<det_t> ss_doubles;
+// TODO: refactor, a lot of code re-use
+std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t alpha_constraint,
+                                              exc_constraint_t beta_constraint,
+                                              bool return_singles) {
+    std::vector<det_t> os_doubles;
 
     // convert constraints to bit masks
-    // TODO: test if faster to create empty bit mask and set bits
-    spin_det_t hole_mask(d.N_mos, constraint.first.size(),
-                         &constraint.first[0]); // where holes can be created
-    spin_det_t part_mask(d.N_mos, constraint.second.size(),
-                         &constraint.second[0]); // where particles can be created
+    spin_det_t ah_mask(d.N_mos, alpha_constraint.first.size(),
+                       &alpha_constraint.first[0]); // where holes can be created
+    spin_det_t ap_mask(d.N_mos, alpha_constraint.second.size(),
+                       &alpha_constraint.second[0]); // where particles can be created
 
-    // convert max orb to bit masks
-    // TODO: as above, test if faster to create empty bit mask, now with
-    // reserved size, and set bits
-    spin_det_t max_orb_mask(d.N_mos, max_orb, 1);
+    spin_det_t bh_mask(d.N_mos, beta_constraint.first.size(),
+                       &beta_constraint.first[0]); // where holes can be created
+    spin_det_t bp_mask(d.N_mos, beta_constraint.second.size(),
+                       &beta_constraint.second[0]); // where particles can be created
 
     // apply bit masks and get final list
-    spin_constraint_t alpha_holes = to_constraint((~d[0] & hole_mask) & max_orb_mask);
-    spin_constraint_t alpha_parts = to_constraint((d[0] & part_mask) & max_orb_mask);
+    spin_constraint_t alpha_holes = to_constraint((d[0] & ah_mask));
+    spin_constraint_t alpha_parts = to_constraint((~d[0] & ap_mask));
 
-    spin_constraint_t beta_holes = to_constraint((~d[1] & hole_mask) & max_orb_mask);
-    spin_constraint_t beta_parts = to_constraint((d[1] & part_mask) & max_orb_mask);
+    spin_constraint_t beta_holes = to_constraint((d[1] & bh_mask));
+    spin_constraint_t beta_parts = to_constraint((~d[1] & bp_mask));
+
+    // get all singles and iterate over product of (1,0) X (0,1) to get (1,1)
+    std::vector<spin_det_t> alpha_singles =
+        get_spin_singles_by_exc_mask(d[0], alpha_holes, alpha_parts);
+    std::vector<spin_det_t> beta_singles =
+        get_spin_singles_by_exc_mask(d[1], beta_holes, beta_parts);
+
+    if (return_singles) {
+        for (auto &a : alpha_singles)
+            os_doubles.push_back(det_t(a, d.beta));
+        for (auto &b : beta_singles)
+            os_doubles.push_back(det_t(d.alpha, b));
+    }
+
+    for (auto &a : alpha_singles) {
+        for (auto &b : beta_singles) {
+            os_doubles.push_back(det_t(a, b));
+        }
+    }
+
+    return os_doubles;
+}
+
+std::vector<det_t> get_ss_doubles(det_t d) {
+    std::vector<det_t> ss_doubles;
+
+    spin_constraint_t alpha_holes = to_constraint(d[0]);
+    spin_constraint_t alpha_parts = to_constraint(~d[0]);
+
+    spin_constraint_t beta_holes = to_constraint(d[1]);
+    spin_constraint_t beta_parts = to_constraint(~d[1]);
 
     // at this point, hole and particle bitsets are guaranteed to be disjoint
     // iterate over product list and add to return vector
@@ -253,6 +283,176 @@ std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constrai
     ss_doubles.insert(ss_doubles.end(), beta_ss_doubles.begin(), beta_ss_doubles.end());
 
     return ss_doubles;
+}
+
+std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t alpha_constraint,
+                                              exc_constraint_t beta_constraint) {
+    std::vector<det_t> ss_doubles;
+
+    // convert constraints to bit masks
+    spin_det_t ah_mask(d.N_mos, alpha_constraint.first.size(),
+                       &alpha_constraint.first[0]); // where holes can be created
+    spin_det_t ap_mask(d.N_mos, alpha_constraint.second.size(),
+                       &alpha_constraint.second[0]); // where particles can be created
+
+    spin_det_t bh_mask(d.N_mos, beta_constraint.first.size(),
+                       &beta_constraint.first[0]); // where holes can be created
+    spin_det_t bp_mask(d.N_mos, beta_constraint.second.size(),
+                       &beta_constraint.second[0]); // where particles can be created
+
+    // apply bit masks and get final list
+    spin_constraint_t alpha_holes = to_constraint((d[0] & ah_mask));
+    spin_constraint_t alpha_parts = to_constraint((~d[0] & ap_mask));
+
+    spin_constraint_t beta_holes = to_constraint((d[1] & bh_mask));
+    spin_constraint_t beta_parts = to_constraint((~d[1] & bp_mask));
+
+    // at this point, hole and particle bitsets are guaranteed to be disjoint
+    // iterate over product list and add to return vector
+    std::vector<det_t> alpha_ss_doubles =
+        get_ss_doubles_by_exc_mask(d, 0, alpha_holes, alpha_parts);
+    std::vector<det_t> beta_ss_doubles = get_ss_doubles_by_exc_mask(d, 1, beta_holes, beta_parts);
+    ss_doubles.insert(ss_doubles.end(), alpha_ss_doubles.begin(), alpha_ss_doubles.end());
+    ss_doubles.insert(ss_doubles.end(), beta_ss_doubles.begin(), beta_ss_doubles.end());
+
+    return ss_doubles;
+}
+
+std::vector<det_t> get_all_connected_dets(det_t *d, idx_t N_dets) {
+
+    std::vector<det_t> connected;
+    LinearUnorderedMap hash_map = LinearUnorderedMap();
+    int success;
+    for (auto i = 0; i < N_dets; i++) {
+        success = hash_map.add_det(d[i]);
+    }
+
+    for (auto i = 0; i < N_dets; i++) {
+        auto &current_det = d[i];
+        std::vector<det_t> singles_and_os_doubles = get_os_doubles(current_det, true);
+        std::vector<det_t> ss_doubles = get_ss_doubles(current_det);
+
+        for (auto &new_det : singles_and_os_doubles) {
+            success = hash_map.add_det(new_det);
+            if (success) {
+                connected.push_back(new_det);
+            }
+        }
+
+        for (auto &new_det : ss_doubles) {
+            success = hash_map.add_det(new_det);
+            if (success) {
+                connected.push_back(new_det);
+            }
+        }
+    }
+
+    return connected;
+}
+
+std::vector<det_t> get_all_connected_dets_with_work(det_t *d, idx_t N_dets, work_array *work) {
+
+    std::vector<det_t> connected;
+    LinearUnorderedMap hash_map = LinearUnorderedMap();
+    int success;
+    for (auto i = 0; i < N_dets; i++) {
+        success = hash_map.add_det(d[i]);
+    }
+
+    idx_t count = 0;
+    std::vector<std::vector<idx_t>> work_vecs;
+    for (auto i = 0; i < N_dets; i++) {
+        auto &current_det = d[i];
+        std::vector<idx_t> current_work;
+
+        // This is the same memory allocation technique
+        // I use in building the sparse Hamiltonian structure
+        // I'm not actually sure if this is better than
+        // just pushing back at the end of the loop body,
+        // since current_work will get deleted anyway.
+        // std::emplace_back(std::move(current_work));
+        // current_work = &work_vecs[i];
+
+        std::vector<det_t> singles_and_os_doubles = get_os_doubles(current_det, true);
+        std::vector<det_t> ss_doubles = get_ss_doubles(current_det);
+
+        for (auto &new_det : singles_and_os_doubles) {
+            idx_t idx = hash_map.add_det_get_order(new_det, &count);
+            current_work.push_back(idx);
+            if (idx == count - 1) {
+                connected.push_back(new_det);
+            }
+        }
+
+        for (auto &new_det : ss_doubles) {
+            idx_t idx = hash_map.add_det_get_order(new_det, &count);
+            current_work.push_back(idx);
+            if (idx == count - 1) {
+                connected.push_back(new_det);
+            }
+        }
+        std::sort(current_work.begin(), current_work.end());
+        work_vecs.push_back(current_work);
+    }
+
+    // convert work into contiguous arrays
+    idx_t total_work = 0;
+    // std::unique_ptr<idx_t[]> work_starts(new idx_t[N_dets + 1]);
+    work_array work_starts(N_dets + 1);
+    idx_t *ws_p = work_starts.arr;
+    for (auto i = 0; i < N_dets; i++) {
+        total_work += work_vecs[i].size();
+        ws_p[i + 1] = total_work;
+    }
+
+    // std::unique_ptr<idx_t[]> work_indices(new idx_t[total_work]);
+    work_array work_indices(total_work);
+    //     // std::vector<idx_t> current_work = &work_vecs[i];
+    idx_t *wi_p = work_indices.arr;
+    for (auto i = 0; i < N_dets; i++) {
+        std::copy(work_vecs[i].begin(), work_vecs[i].end(), wi_p + ws_p[0]);
+    }
+
+    // *work = std::move(total_work);
+
+    return connected;
+}
+
+std::vector<det_t> get_constrained_connected_dets(det_t *d, idx_t N_dets,
+                                                  exc_constraint_t alpha_constraint,
+                                                  exc_constraint_t beta_constraint) {
+
+    std::vector<det_t> connected;
+    LinearUnorderedMap hash_map = LinearUnorderedMap();
+
+    int success;
+    for (auto i = 0; i < N_dets; i++) {
+        success = hash_map.add_det(d[i]);
+    }
+
+    for (auto i = 0; i < N_dets; i++) {
+        auto &current_det = d[i];
+        std::vector<det_t> singles_and_os_doubles =
+            get_constrained_os_doubles(current_det, alpha_constraint, beta_constraint, true);
+        std::vector<det_t> ss_doubles =
+            get_constrained_ss_doubles(current_det, alpha_constraint, beta_constraint);
+
+        for (auto &new_det : singles_and_os_doubles) {
+            success = hash_map.add_det(new_det);
+            if (success) {
+                connected.push_back(new_det);
+            }
+        }
+
+        for (auto &new_det : ss_doubles) {
+            success = hash_map.add_det(new_det);
+            if (success) {
+                connected.push_back(new_det);
+            }
+        }
+    }
+
+    return connected;
 }
 
 extern "C" {
@@ -284,7 +484,6 @@ void Dets_spin_det_t_print(spin_det_t *det) {
 void Dets_spin_det_t_to_bit_tuple(spin_det_t *det, idx_t start_orb, idx_t end_orb, int *t) {
     auto j = 0;
     for (auto i = start_orb; i < end_orb; i++, j++) {
-        // std::cout << i << std::endl; // << " " << det->operator[](i) << std::endl;
         t[j] = (int)det->operator[](i);
     }
 }
@@ -306,4 +505,176 @@ spin_det_t *Dets_spin_det_t_and(spin_det_t *det, spin_det_t *other) {
 }
 
 int Dets_spin_det_t_count(spin_det_t *det) { return det->count(); }
+
+int Dets_spin_det_t_phase_single_exc(spin_det_t *det, idx_t h, idx_t p) {
+    return compute_phase_single_excitation(*det, h, p);
+}
+
+int Dets_spin_det_t_phase_double_exc(spin_det_t *det, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
+    return compute_phase_double_excitation(*det, h1, h2, p1, p2);
+}
+
+spin_det_t *Dets_spin_det_t_apply_single_exc(spin_det_t *det, idx_t h, idx_t p) {
+    bool success;
+    return new spin_det_t(apply_single_excitation(*det, h, p, success));
+}
+
+spin_det_t *Dets_spin_det_t_apply_double_exc(spin_det_t *det, idx_t h1, idx_t h2, idx_t p1,
+                                             idx_t p2) {
+    bool success;
+    return new spin_det_t(apply_double_excitation(*det, h1, h2, p1, p2, success));
+}
+
+//// det_t
+
+// constructors
+det_t *Dets_det_t_empty_ctor(idx_t N_mos) { return new det_t(N_mos); }
+det_t *Dets_det_t_copy_ctor(spin_det_t *alpha, spin_det_t *beta) {
+    return new det_t(*alpha, *beta);
+}
+
+// destructor
+void Dets_det_t_dtor(det_t *det) { delete det; }
+
+// utilities
+spin_det_t *Dets_det_t_get_spin_det_handle(det_t *det, bool spin) {
+    return spin ? &det->beta : &det->alpha;
+}
+
+// operations
+int Dets_det_t_phase_double_exc(det_t *det, idx_t h1, idx_t h2, idx_t p1, idx_t p2) {
+    return compute_phase_double_excitation(*det, h1, h2, p1, p2);
+}
+
+det_t *Dets_det_t_exc_det(det_t *det_1, det_t *det_2) { return new det_t(exc_det(*det_1, *det_2)); }
+
+det_t *Dets_det_t_apply_single_exc(det_t *det, idx_t spin, idx_t h, idx_t p) {
+    bool success;
+    return new det_t(apply_single_excitation(*det, spin, h, p, success));
+}
+
+det_t *Dets_det_t_apply_double_exc(det_t *det, idx_t s1, idx_t s2, idx_t h1, idx_t h2, idx_t p1,
+                                   idx_t p2) {
+    bool success;
+    return new det_t(apply_double_excitation(*det, s1, s2, h1, h2, p1, p2, success));
+}
+
+//// DetArray
+
+// constructor
+
+DetArray *Dets_DetArray_empty_ctor(idx_t N_dets, idx_t N_orbs) {
+    return new DetArray(N_dets, N_orbs);
+}
+
+// destructor
+
+void Dets_DetArray_dtor(DetArray *arr) { delete arr; }
+
+// member returns
+
+idx_t Dets_DetArray_get_N_dets(DetArray *arr) { return arr->size; }
+idx_t Dets_DetArray_get_N_mos(DetArray *arr) { return arr->N_mos; }
+det_t *Dets_DetArray_get_arr_pointer(DetArray *arr) { return arr->arr; }
+
+// utilities
+
+det_t *Dets_DetArray_getitem(DetArray *arr, idx_t i) { return &arr->arr[i]; }
+void Dets_DetArray_setitem(DetArray *arr, det_t *other, idx_t i) { arr->arr[i] = *other; }
+
+//// Det generation routines
+
+DetArray *Dets_get_connected_singles(det_t *source, idx_t N_dets) {
+    return new DetArray(get_all_singles(*source), source);
+}
+
+DetArray *Dets_get_connected_same_spin_doubles(det_t *source, idx_t N_dets) {
+    return new DetArray(get_ss_doubles(*source), source);
+}
+
+DetArray *Dets_get_connected_opp_spin_doubles(det_t *source, idx_t N_dets) {
+    return new DetArray(get_os_doubles(*source, false), source);
+}
+
+DetArray *Dets_get_connected_dets(det_t *source, idx_t N_dets) {
+    return new DetArray(get_all_connected_dets(source, N_dets), source);
+}
+
+DetArray *Dets_get_connected_with_work(det_t *source, idx_t N_dets, work_array *work) {
+    return new DetArray(get_all_connected_dets_with_work(source, N_dets, work));
+}
+
+DetArray *Dets_get_constrained_singles(det_t *source, idx_t N_dets, idx_t *h_a, idx_t N_h_a,
+                                       idx_t *h_b, idx_t N_h_b, idx_t *p_a, idx_t N_p_a, idx_t *p_b,
+                                       idx_t N_p_b) {
+    spin_constraint_t ah(h_a, h_a + N_h_a);
+    spin_constraint_t ap(p_a, p_a + N_p_a);
+    spin_constraint_t bh(h_b, h_b + N_h_b);
+    spin_constraint_t bp(p_b, p_b + N_p_b);
+
+    const exc_constraint_t a(ah, ap);
+    const exc_constraint_t b(bh, bp);
+
+    return new DetArray(get_constrained_singles(*source, a, b), source);
+}
+
+DetArray *Dets_get_constrained_same_spin_doubles(det_t *source, idx_t N_dets, idx_t *h_a,
+                                                 idx_t N_h_a, idx_t *h_b, idx_t N_h_b, idx_t *p_a,
+                                                 idx_t N_p_a, idx_t *p_b, idx_t N_p_b) {
+    spin_constraint_t ah(h_a, h_a + N_h_a);
+    spin_constraint_t ap(p_a, p_a + N_p_a);
+    spin_constraint_t bh(h_b, h_b + N_h_b);
+    spin_constraint_t bp(p_b, p_b + N_p_b);
+
+    const exc_constraint_t a(ah, ap);
+    const exc_constraint_t b(bh, bp);
+
+    return new DetArray(get_constrained_ss_doubles(*source, a, b), source);
+}
+
+DetArray *Dets_get_constrained_opp_spin_doubles(det_t *source, idx_t N_dets, idx_t *h_a,
+                                                idx_t N_h_a, idx_t *h_b, idx_t N_h_b, idx_t *p_a,
+                                                idx_t N_p_a, idx_t *p_b, idx_t N_p_b) {
+    spin_constraint_t ah(h_a, h_a + N_h_a);
+    spin_constraint_t ap(p_a, p_a + N_p_a);
+    spin_constraint_t bh(h_b, h_b + N_h_b);
+    spin_constraint_t bp(p_b, p_b + N_p_b);
+
+    const exc_constraint_t a(ah, ap);
+    const exc_constraint_t b(bh, bp);
+
+    return new DetArray(get_constrained_os_doubles(*source, a, b, false), source);
+}
+
+DetArray *Dets_get_constrained_dets(det_t *source, idx_t N_dets, idx_t *h_a, idx_t N_h_a,
+                                    idx_t *h_b, idx_t N_h_b, idx_t *p_a, idx_t N_p_a, idx_t *p_b,
+                                    idx_t N_p_b) {
+    spin_constraint_t ah(h_a, h_a + N_h_a);
+    spin_constraint_t ap(p_a, p_a + N_p_a);
+    spin_constraint_t bh(h_b, h_b + N_h_b);
+    spin_constraint_t bp(p_b, p_b + N_p_b);
+
+    const exc_constraint_t a(ah, ap);
+    const exc_constraint_t b(bh, bp);
+
+    return new DetArray(get_constrained_connected_dets(source, N_dets, a, b), source);
+}
+
+SymCSRMatrix<float> *Dets_get_H_structure_naive_f32(DetArray *psi_det) {
+    return new SymCSRMatrix<float>(psi_det);
+}
+
+SymCSRMatrix<double> *Dets_get_H_structure_naive_f64(DetArray *psi_det) {
+    return new SymCSRMatrix<double>(psi_det);
+}
+
+void Dets_extend_array_with_filter(DetArray *target, DetArray *source, idx_t *filter, idx_t N) {
+    target->extend_with_filter(*source, filter, N);
+}
+
+DetArray *Dets_extend_det_with_filter(det_t *target, DetArray *source, idx_t *filter, idx_t N) {
+    DetArray *target_arr = new DetArray(std::vector<det_t>(1, *target));
+    target_arr->extend_with_filter(*source, filter, N);
+    return target_arr;
+}
 }

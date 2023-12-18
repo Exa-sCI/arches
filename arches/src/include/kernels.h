@@ -1,6 +1,7 @@
 #pragma once
 #include <determinant.h>
 #include <integral_indexing_utils.h>
+#include <iostream>
 
 /*
  Kernels for performing integral driven calculations
@@ -32,7 +33,7 @@ void e_pt2_ii_OE(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, id
             auto &ext_det = psi_ext[det_j];
 
             for (auto state = 0; state < N_states; state++) {
-                res[det_j + state] += (ext_det.alpha[ij.i] + ext_det.beta[ij.i]) * J[i];
+                res[det_j * N_states + state] += (ext_det.alpha[ij.i] + ext_det.beta[ij.i]) * J[i];
             }
         }
     }
@@ -55,7 +56,7 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
                 continue;
 
             // loop over external determinants
-            for (auto d_e = 0; d_e < N; d_e++) {
+            for (auto d_e = 0; d_e < N_ext; d_e++) {
                 auto &d_ext = psi_ext[d_e];
 
                 det_t exc = exc_det(d_int, d_ext);
@@ -64,8 +65,8 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
                 if (degree_alpha + degree_beta != 1)
                     continue; // determinants not related by single exc
 
-                bool j_check = degree_alpha ? (!d_ext.alpha[ij.i] && d_ext.alpha[ij.j])
-                                            : (!d_ext.beta[ij.i] && d_ext.beta[ij.j]);
+                bool j_check = degree_alpha ? (!d_ext.alpha[ij.i] && d_ext.alpha[ij.j]) && i_alpha
+                                            : (!d_ext.beta[ij.i] && d_ext.beta[ij.j]) && i_beta;
                 if (!j_check)
                     continue; // integral doesn't apply
 
@@ -73,7 +74,7 @@ void e_pt2_ij_OE(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t
 
                 // loop over states
                 for (auto state = 0; state < N_states; state++) {
-                    res[d_e + state] += phase * psi_coef[d_i + state] * J[i];
+                    res[d_e * N_states + state] += phase * psi_coef[d_i * N_states + state] * J[i];
                 }
             }
         }
@@ -112,15 +113,17 @@ template <class T>
 void A_pt2(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
     // Contributes to denominator of pt2 energy
 
-    // iterate over external determinants first since A chunk is almost always smaller
-    for (auto d_e = 0; d_e < N_ext; d_e++) {
-        auto &ext_det = psi_ext[d_e];
+    // Iterate over all integrals in chunk (should be N_orb integrals)
+    for (auto i = 0; i < N; i++) {
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+        idx_t q = c_idx.i;
 
-        // Iterate over all integrals in chunk (should be N_orb integrals)
-        // order of integrals in chunk is known by construction
-        for (auto i = 0; i < N; i++) {
+        // iterate over external determinants
+        for (auto d_e = 0; d_e < N_ext; d_e++) {
+            auto &ext_det = psi_ext[d_e];
+
             for (auto state = 0; state < N_states; state++) {
-                res[d_e + state] += ext_det[0][i] * ext_det[1][i] * J[i];
+                res[d_e * N_states + state] += ext_det[0][q] * ext_det[1][q] * J[i];
             }
         }
     }
@@ -131,7 +134,6 @@ B: J_qqrr has the following contributions (to the denominator):
     B_1) q_a -> q_a, r_b -> r_b
     B_2) r_a -> r_a, q_b -> q_b
 
-Contributions are part of combination terms
 */
 template <class T>
 void B_pt2(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_ext, T *res) {
@@ -149,8 +151,11 @@ void B_pt2(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, idx_t N_
             auto &ext_det = psi_ext[d_e];
 
             for (auto state = 0; state < N_states; state++) {
-                res[d_e + state] += ext_det[0][q] * ext_det[0][r] * J[i];
-                res[d_e + state] += ext_det[1][q] * ext_det[1][r] * J[i];
+                res[d_e * N_states + state] += ext_det[0][q] * ext_det[0][r] * J[i];
+                res[d_e * N_states + state] += ext_det[1][q] * ext_det[1][r] * J[i];
+
+                res[d_e * N_states + state] += ext_det[0][q] * ext_det[1][r] * J[i];
+                res[d_e * N_states + state] += ext_det[0][r] * ext_det[1][q] * J[i];
             }
         }
     }
@@ -236,16 +241,20 @@ void C_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                 if (c13 && exc[0][r] && exc[0][s]) {
                     phase = compute_phase_single_excitation(d_int[0], r, s);
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += q_a * psi_coef[d_i + state] * J[i] * phase;
-                        res[d_e + state] += q_b * psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            q_a * psi_coef[d_i * N_states + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            q_b * psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
 
                 if (c24 && exc[1][r] && exc[1][s]) {
                     phase = compute_phase_single_excitation(d_int[1], r, s);
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += q_a * psi_coef[d_i + state] * J[i] * phase;
-                        res[d_e + state] += q_b * psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            q_a * psi_coef[d_i * N_states + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            q_b * psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
             }
@@ -314,14 +323,16 @@ void D_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                 if (d13 && q_b && exc[0][q] && exc[0][r]) {
                     phase = compute_phase_single_excitation(d_int[0], q, r);
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
 
                 if (d24 && q_a && exc[1][q] && exc[1][r]) {
                     phase = compute_phase_single_excitation(d_int[1], q, r);
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
             }
@@ -363,7 +374,6 @@ E: J_qqrs has the following contributions,
         E_c) s_a -> q_a | r_b -> q_b
         E_f) s_a -> q_a | q_b -> r_b
         E_h) q_a -> s_a | r_b -> q_b
-
 */
 template <class T>
 void E_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int, idx_t N_states,
@@ -389,7 +399,7 @@ void E_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
             e_24 = (d_int[1][r] != d_int[1][s]) && q_bi;
 
             e_adeg = (d_int[0][q] != d_int[0][r]) && (d_int[1][q] != d_int[1][s]);
-            e_bcfh = (d_int[0][q] != d_int[0][r]) && (d_int[1][q] != d_int[1][s]);
+            e_bcfh = (d_int[0][q] != d_int[0][s]) && (d_int[1][q] != d_int[1][r]);
 
             if (!(e_13 || e_24 || e_adeg || e_bcfh)) // J[i] has no contribution
                 continue;
@@ -416,14 +426,16 @@ void E_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     if (e_13 && q_a && exc[0][r] && exc[0][s]) {
                         phase = compute_phase_single_excitation(d_int[0], r, s);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase * -1;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase * -1;
                         }
                     }
 
                     if (e_24 && q_b && exc[1][r] && exc[1][s]) {
                         phase = compute_phase_single_excitation(d_int[1], r, s);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase * -1;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase * -1;
                         }
                     }
                 } else if (degree == 2) {
@@ -438,7 +450,8 @@ void E_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     if (exc[0][r] && exc[1][s]) {
                         phase = compute_phase_double_excitation(d_int, q, q, r, s);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase;
                         }
                     }
 
@@ -446,7 +459,8 @@ void E_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     if (exc[0][s] && exc[1][r]) {
                         phase = compute_phase_double_excitation(d_int, q, q, s, r);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase;
                         }
                     }
                 }
@@ -525,8 +539,9 @@ void F_pt2_denom(T *J, idx_t *J_ind, idx_t N, idx_t N_states, det_t *psi_ext, id
         for (auto d_e = 0; d_e < N_ext; d_e++) {
             det_t &d_ext = psi_ext[d_e];
             for (auto state = 0; state < N_states; state++) {
-                res[d_e + state] -= d_ext[0][q] * d_ext[0][r] * J[i]; // phase implicit in -=
-                res[d_e + state] -= d_ext[1][q] * d_ext[1][r] * J[i];
+                res[d_e * N_states + state] -=
+                    d_ext[0][q] * d_ext[0][r] * J[i]; // phase implicit in -=
+                res[d_e * N_states + state] -= d_ext[1][q] * d_ext[1][r] * J[i];
             }
         }
     }
@@ -595,16 +610,17 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
             // checks for same spin doubles
             // g_ii in (0,1,2,3) :
             // 0 - none, 1 - only alpha 2- only beta 3 - both alpha and beta
-            int g_11, g_22, g_33, g_44 = 0;
+            int g_11, g_22, g_33, g_44;
+            g_11 = g_22 = g_33 = g_44 = 0;
             for (auto spin = 0; spin < 2; spin++) {
-                g_11 = (spin + 1) *
-                       ((d_int[spin][q] && d_int[spin][r]) && (!d_int[spin][s] && !d_int[spin][t]));
-                g_22 = (spin + 1) *
-                       ((d_int[spin][s] && d_int[spin][t]) && (!d_int[spin][q] && !d_int[spin][r]));
-                g_33 = (spin + 1) *
-                       ((d_int[spin][q] && d_int[spin][t]) && (!d_int[spin][s] && !d_int[spin][r]));
-                g_44 = (spin + 1) *
-                       ((d_int[spin][r] && d_int[spin][s]) && (!d_int[spin][q] && !d_int[spin][t]));
+                g_11 += (spin + 1) * ((d_int[spin][q] && d_int[spin][r]) &&
+                                      (!d_int[spin][s] && !d_int[spin][t]));
+                g_22 += (spin + 1) * ((d_int[spin][s] && d_int[spin][t]) &&
+                                      (!d_int[spin][q] && !d_int[spin][r]));
+                g_33 += (spin + 1) * ((d_int[spin][q] && d_int[spin][t]) &&
+                                      (!d_int[spin][s] && !d_int[spin][r]));
+                g_44 += (spin + 1) * ((d_int[spin][r] && d_int[spin][s]) &&
+                                      (!d_int[spin][q] && !d_int[spin][t]));
             }
 
             if (!(g_aceg || g_bdfh ||
@@ -626,14 +642,15 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                 // using checks to make phase nonzero?
 
                 // TODO: profile some form of inlining for phase computations
-                int phase;
+                int phase = 0;
                 switch (a_degree) {
                 case 1:
                     // aceg
                     if (exc[0][q] && exc[0][s] && exc[1][r] && exc[1][t]) {
                         phase = compute_phase_double_excitation(d_int, q, r, s, t);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase;
                         }
                     }
 
@@ -641,48 +658,59 @@ void G_pt2(T *J, idx_t *J_ind, idx_t N, det_t *psi_int, T *psi_coef, idx_t N_int
                     if (exc[0][r] && exc[0][t] && exc[1][q] && exc[1][s]) {
                         phase = compute_phase_double_excitation(d_int, r, q, t, s);
                         for (auto state = 0; state < N_states; state++) {
-                            res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                            res[d_e * N_states + state] +=
+                                psi_coef[d_i * N_states + state] * J[i] * phase;
                         }
                     }
                 case 0: { // scoped so that variable can initialize
                     // (0,2) : g_ii >= 2 is criterion for acceptance
-                    bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
-                    if (!aa_check)
-                        continue;
-
-                    // now must be one of g_11, g_22, g_33, g_44
-                    if (g_11 >= 2) {
-                        phase = compute_phase_double_excitation(d_int[0], q, r, s, t);
-                    } else if (g_22 >= 2) {
-                        phase = compute_phase_double_excitation(d_int[0], s, t, q, r);
-                    } else if (g_33 >= 2) {
-                        phase = compute_phase_double_excitation(d_int[0], q, t, s, r);
-                    } else {
-                        phase = compute_phase_double_excitation(d_int[0], r, s, q, t);
-                    }
-
-                    for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
-                    }
-                }
-                case 2: { // scoped so that variable can initialize
-                    // (2,0) : g_ii % 2 is criterion for acceptance
                     bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
                     if (!bb_check)
                         continue;
 
                     // now must be one of g_11, g_22, g_33, g_44
-                    if (g_11 % 2) {
+                    if (g_11 >= 2) {
                         phase = compute_phase_double_excitation(d_int[1], q, r, s, t);
-                    } else if (g_22 % 2) {
+                        phase = r < q ? -1 * phase : phase;
+                    } else if (g_22 >= 2) {
                         phase = compute_phase_double_excitation(d_int[1], s, t, q, r);
-                    } else if (g_33 % 2) {
+                        phase = r < q ? -1 * phase : phase;
+                    } else if (g_33 >= 2) {
                         phase = compute_phase_double_excitation(d_int[1], q, t, s, r);
-                    } else {
+                        phase = r < s ? -1 * phase : phase;
+                    } else if (g_44 >= 2) {
                         phase = compute_phase_double_excitation(d_int[1], r, s, q, t);
+                        phase = r < s ? -1 * phase : phase;
+                    }
+
+                    for (auto state = 0; state < N_states; state++) {
+                        res[d_e * N_states + state] +=
+                            psi_coef[d_i * N_states + state] * J[i] * phase;
+                    }
+                }
+                case 2: { // scoped so that variable can initialize
+                    // (2,0) : g_ii % 2 is criterion for acceptance
+                    bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
+                    if (!aa_check)
+                        continue;
+
+                    // now must be one of g_11, g_22, g_33, g_44
+                    if (g_11 % 2) {
+                        phase = compute_phase_double_excitation(d_int[0], q, r, s, t);
+                        phase = r < q ? -1 * phase : phase;
+                    } else if (g_22 % 2) {
+                        phase = compute_phase_double_excitation(d_int[0], s, t, q, r);
+                        phase = r < q ? -1 * phase : phase;
+                    } else if (g_33 % 2) {
+                        phase = compute_phase_double_excitation(d_int[0], q, t, s, r);
+                        phase = r < s ? -1 * phase : phase;
+                    } else if (g_44 % 2) {
+                        phase = compute_phase_double_excitation(d_int[0], r, s, q, t);
+                        phase = r < s ? -1 * phase : phase;
                     }
                     for (auto state = 0; state < N_states; state++) {
-                        res[d_e + state] += psi_coef[d_i + state] * J[i] * phase;
+                        res[d_e * N_states + state] +=
+                            psi_coef[d_i * N_states + state] * J[i] * phase;
                     }
                 }
                 }
@@ -752,8 +780,8 @@ void H_OE_ij(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_
                 if (degree_alpha + degree_beta != 1)
                     continue; // determinants not related by single exc
 
-                bool j_check = degree_alpha ? (!d_col.alpha[ij.i] && d_col.alpha[ij.j])
-                                            : (!d_col.beta[ij.i] && d_col.beta[ij.j]);
+                bool j_check = degree_alpha ? (!d_col.alpha[ij.i] && d_col.alpha[ij.j]) && i_alpha
+                                            : (!d_col.beta[ij.i] && d_col.beta[ij.j]) && i_beta;
 
                 if (!j_check)
                     continue;
@@ -769,13 +797,16 @@ void H_OE_ij(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_
 template <class T>
 void H_A(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T *H_v) {
 
-    for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
-        auto &det = psi_det[j];
-        auto idx = H_p[j];
+    // Iterate over all integrals in chunk (should be N_orb integrals)
+    for (auto i = 0; i < N; i++) {
+        struct ijkl_tuple c_idx = compound_idx4_reverse(J_ind[i]);
+        idx_t q = c_idx.i;
 
-        for (auto i = 0; i < N; i++) { // loop over integrals
+        for (auto j = 0; j < N_det; j++) { // loop over diagonal entries
+            auto &det = psi_det[j];
+            auto idx = H_p[j];
 
-            H_v[idx] += det[0][i] * det[1][i] * J[i];
+            H_v[idx] += det[0][q] * det[1][q] * J[i];
         }
     }
 }
@@ -797,6 +828,9 @@ void H_B(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, T
 
             H_v[idx] += det[0][q] * det[0][r] * J[i];
             H_v[idx] += det[1][q] * det[1][r] * J[i];
+
+            H_v[idx] += det[0][q] * det[1][r] * J[i];
+            H_v[idx] += det[0][r] * det[1][q] * J[i];
         }
     }
 }
@@ -930,7 +964,7 @@ void H_E(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, i
             e_24 = (d_row[1][r] != d_row[1][s]) && q_bi;
 
             e_adeg = (d_row[0][q] != d_row[0][r]) && (d_row[1][q] != d_row[1][s]);
-            e_bcfh = (d_row[0][q] != d_row[0][r]) && (d_row[1][q] != d_row[1][s]);
+            e_bcfh = (d_row[0][q] != d_row[0][s]) && (d_row[1][q] != d_row[1][r]);
 
             if (!(e_13 || e_24 || e_adeg || e_bcfh)) // J[i] has no contribution
                 continue;
@@ -1074,16 +1108,17 @@ void H_G(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, i
             // checks for same spin doubles
             // g_ii in (0,1,2,3) :
             // 0 - none, 1 - only alpha 2- only beta 3 - both alpha and beta
-            int g_11, g_22, g_33, g_44 = 0;
+            int g_11, g_22, g_33, g_44;
+            g_11 = g_22 = g_33 = g_44 = 0;
             for (auto spin = 0; spin < 2; spin++) {
-                g_11 = (spin + 1) *
-                       ((d_row[spin][q] && d_row[spin][r]) && (!d_row[spin][s] && !d_row[spin][t]));
-                g_22 = (spin + 1) *
-                       ((d_row[spin][s] && d_row[spin][t]) && (!d_row[spin][q] && !d_row[spin][r]));
-                g_33 = (spin + 1) *
-                       ((d_row[spin][q] && d_row[spin][t]) && (!d_row[spin][s] && !d_row[spin][r]));
-                g_44 = (spin + 1) *
-                       ((d_row[spin][r] && d_row[spin][s]) && (!d_row[spin][q] && !d_row[spin][t]));
+                g_11 += (spin + 1) * ((d_row[spin][q] && d_row[spin][r]) &&
+                                      (!d_row[spin][s] && !d_row[spin][t]));
+                g_22 += (spin + 1) * ((d_row[spin][s] && d_row[spin][t]) &&
+                                      (!d_row[spin][q] && !d_row[spin][r]));
+                g_33 += (spin + 1) * ((d_row[spin][q] && d_row[spin][t]) &&
+                                      (!d_row[spin][s] && !d_row[spin][r]));
+                g_44 += (spin + 1) * ((d_row[spin][r] && d_row[spin][s]) &&
+                                      (!d_row[spin][q] && !d_row[spin][t]));
             }
 
             if (!(g_aceg || g_bdfh ||
@@ -1100,7 +1135,7 @@ void H_G(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, i
                 if (degree != 2) // |d_i> and |d_e> not connnected by double exc.
                     continue;
 
-                int phase;
+                int phase = 0;
                 switch (a_degree) {
                 case 1:
                     // aceg
@@ -1118,19 +1153,23 @@ void H_G(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, i
                     }
                 case 0: {
                     // (0,2) : g_ii >= 2 is criterion for acceptance
-                    bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
-                    if (!aa_check)
+                    bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
+                    if (!bb_check)
                         continue;
 
                     // now must be one of g_11, g_22, g_33, g_44
                     if (g_11 >= 2) {
-                        phase = compute_phase_double_excitation(d_row[0], q, r, s, t);
+                        phase = compute_phase_double_excitation(d_row[1], q, r, s, t);
+                        phase = r < q ? -1 * phase : phase;
                     } else if (g_22 >= 2) {
-                        phase = compute_phase_double_excitation(d_row[0], s, t, q, r);
+                        phase = compute_phase_double_excitation(d_row[1], s, t, q, r);
+                        phase = r < q ? -1 * phase : phase;
                     } else if (g_33 >= 2) {
-                        phase = compute_phase_double_excitation(d_row[0], q, t, s, r);
-                    } else {
-                        phase = compute_phase_double_excitation(d_row[0], r, s, q, t);
+                        phase = compute_phase_double_excitation(d_row[1], q, t, s, r);
+                        phase = r < s ? -1 * phase : phase;
+                    } else if (g_44 >= 2) {
+                        phase = compute_phase_double_excitation(d_row[1], r, s, q, t);
+                        phase = r < s ? -1 * phase : phase;
                     }
 
                     H_v[idx] += J[i] * phase;
@@ -1138,19 +1177,23 @@ void H_G(T *J, idx_t *J_ind, idx_t N, det_t *psi_det, idx_t N_det, idx_t *H_p, i
                 case 2: {
 
                     // (2,0) : g_ii % 2 is criterion for acceptance
-                    bool bb_check = exc[1][q] && exc[1][r] && exc[1][s] && exc[1][t];
-                    if (!bb_check)
+                    bool aa_check = exc[0][q] && exc[0][r] && exc[0][s] && exc[0][t];
+                    if (!aa_check)
                         continue;
 
                     // now must be one of g_11, g_22, g_33, g_44
                     if (g_11 % 2) {
-                        phase = compute_phase_double_excitation(d_row[1], q, r, s, t);
+                        phase = compute_phase_double_excitation(d_row[0], q, r, s, t);
+                        phase = r < q ? -1 * phase : phase;
                     } else if (g_22 % 2) {
-                        phase = compute_phase_double_excitation(d_row[1], s, t, q, r);
+                        phase = compute_phase_double_excitation(d_row[0], s, t, q, r);
+                        phase = r < q ? -1 * phase : phase;
                     } else if (g_33 % 2) {
-                        phase = compute_phase_double_excitation(d_row[1], q, t, s, r);
-                    } else {
-                        phase = compute_phase_double_excitation(d_row[1], r, s, q, t);
+                        phase = compute_phase_double_excitation(d_row[0], q, t, s, r);
+                        phase = r < s ? -1 * phase : phase;
+                    } else if (g_44 % 2) {
+                        phase = compute_phase_double_excitation(d_row[0], r, s, q, t);
+                        phase = r < s ? -1 * phase : phase;
                     }
 
                     H_v[idx] += J[i] * phase;

@@ -1,8 +1,8 @@
 # For forward declaration in type hints
 from __future__ import annotations
 
-from typing import Tuple, Dict, List, NewType, Iterator
-from itertools import chain, product, combinations, takewhile
+from itertools import chain, combinations, product, takewhile
+from typing import Dict, Iterator, List, NewType, Tuple
 
 # Orbital index (0,1,2,...,n_orb-1)
 OrbitalIdx = NewType("OrbitalIdx", int)
@@ -555,8 +555,8 @@ class Determinant:
     def __init__(self, alpha, beta, representation="tuple"):
         self.flag = representation
         if self.flag == "tuple":
-            self.alpha = Spin_determinant_tuple(alpha)
-            self.beta = Spin_determinant_tuple(beta)
+            self.alpha = Spin_determinant_tuple(sorted(alpha))
+            self.beta = Spin_determinant_tuple(sorted(beta))
         else:
             raise NotImplementedError
 

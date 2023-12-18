@@ -1,8 +1,12 @@
+import pathlib
 import unittest
 
 import numpy as np
 from test_types import Test_f32, Test_f64
 
+from arches.determinant import det_t, spin_det_t
+from arches.integrals import load_integrals_into_chunks
+from arches.linked_object import idx_t
 from arches.matrix import DMatrix
 
 seed = 21872
@@ -205,6 +209,68 @@ class Test_DMatrix(unittest.TestCase):
         for _ in range(self.N_trials):
             shape = self.rng.integers(8, 32, 2)
             check_isub(shape)
+
+    def test_mul(self):
+        def check_mul(shape):
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
+
+            A_test = DMatrix(shape[0], shape[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape[0], shape[1], B_ref, dtype=self.dtype)
+
+            self.assertTrue(np.allclose(A_ref * B_ref, (A_test * B_test).np_arr))
+
+        for _ in range(self.N_trials):
+            shape = self.rng.integers(8, 32, 2)
+            check_mul(shape)
+
+    def test_imul(self):
+        def check_imul(shape):
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
+
+            A_test = DMatrix(shape[0], shape[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape[0], shape[1], B_ref, dtype=self.dtype)
+
+            A_ref *= B_ref
+            A_test *= B_test
+
+            self.assertTrue(np.allclose(A_ref, A_test.np_arr))
+
+        for _ in range(self.N_trials):
+            shape = self.rng.integers(8, 32, 2)
+            check_imul(shape)
+
+    def test_truediv(self):
+        def check_truediv(shape):
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
+
+            A_test = DMatrix(shape[0], shape[1], A_ref)
+            B_test = DMatrix(shape[0], shape[1], B_ref)
+
+            self.assertTrue(np.allclose(A_ref / B_ref, (A_test / B_test).np_arr))
+
+        for _ in range(self.N_trials):
+            shape = self.rng.integers(8, 32, 2)
+            check_truediv(shape)
+
+    def test_itruediv(self):
+        def check_itruediv(shape):
+            A_ref = rng.normal(size=shape).astype(self.dtype)
+            B_ref = rng.normal(size=shape).astype(self.dtype)
+
+            A_test = DMatrix(shape[0], shape[1], A_ref, dtype=self.dtype)
+            B_test = DMatrix(shape[0], shape[1], B_ref, dtype=self.dtype)
+
+            A_ref /= B_ref
+            A_test /= B_test
+
+            self.assertTrue(np.allclose(A_ref, A_test.np_arr))
+
+        for _ in range(self.N_trials):
+            shape = self.rng.integers(8, 32, 2)
+            check_itruediv(shape)
 
     def test_subslice_get_shape_error(self):
         row_rank = 64
@@ -615,12 +681,190 @@ class Test_DMatrix(unittest.TestCase):
             check_rt(sslice, dslice)
             check_bt(sslice, dslice)
 
+    def test_neg(self):
+        row_rank = 64
+        col_rank = 32
+        A_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+        A_test = DMatrix(row_rank, col_rank, A_ref, dtype=self.dtype)
+        B_test = -A_test
+        C_test = A_test + B_test
+
+        self.assertTrue(
+            np.allclose(np.zeros((row_rank, col_rank), dtype=self.dtype), C_test.np_arr)
+        )
+
+    def test_column2norm(self):
+        row_rank = 64
+        col_rank = 32
+        for _ in range(self.N_trials):
+            A_ref = rng.normal(size=(row_rank, col_rank)).astype(self.dtype)
+            A_test = DMatrix(row_rank, col_rank, A_ref, dtype=self.dtype)
+            test_norms = A_test.column_2norm()
+            test_norms = test_norms.arr.np_arr
+            ref_norms = np.linalg.norm(A_ref, axis=0)
+            self.assertTrue(np.allclose(test_norms, ref_norms, atol=self.atol, rtol=self.rtol))
+
 
 class Test_DMatrix_f32(Test_f32, Test_DMatrix):
     __test__ = True
 
 
 class Test_DMatrix_f64(Test_f64, Test_DMatrix):
+    __test__ = True
+
+
+class FakeComm:
+    # to avoid initializing MPI for just tests
+    def __init__(self, rank, size):
+        self.rank = rank
+        self.size = size
+
+    def Get_rank(self):
+        return self.rank
+
+    def Get_size(self):
+        return self.size
+
+
+class FilteredDict:
+    def __init__(self, data):
+        self._data = data
+
+    def __getitem__(self, key):
+        try:
+            return self._data[key]
+        except KeyError:
+            return 0.0
+
+    def items(self):
+        return self._data.items()
+
+
+class Test_SymCSRMatrix(unittest.TestCase):
+    __test__ = False
+
+    @staticmethod
+    def launch_H_ii_kernel(kernel, chunk, connected, H):
+        kernel(
+            chunk.J.p,
+            chunk.idx.p,
+            idx_t(chunk.chunk_size),
+            connected.det_pointer,
+            idx_t(connected.N_dets),
+            H.A_p.p,
+            H.A_v.p,
+        )
+
+    @staticmethod
+    def launch_H_ij_kernel(kernel, chunk, connected, H):
+        kernel(
+            chunk.J.p,
+            chunk.idx.p,
+            idx_t(chunk.chunk_size),
+            connected.det_pointer,
+            idx_t(connected.N_dets),
+            H.A_p.p,
+            H.A_c.p,
+            H.A_v.p,
+        )
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rng = rng
+
+        run_folder = pathlib.Path(__file__).parent.resolve()
+        fp = run_folder.joinpath("../data/nh3.5det.fcidump")
+        # fp = run_folder.joinpath("../data/f2_631g.18det.fcidump")
+        # fp = run_folder.joinpath("../data/c2_eq_hf_dz.fcidump")
+        cls.fp = fp
+
+        N_mos, N_elec, E0, chunks = load_integrals_into_chunks(
+            str(fp), FakeComm(0, 1), dtype=cls.dtype
+        )
+
+        cls.N_mos = N_mos
+        cls.E0 = E0
+        cls.chunks = chunks
+
+        max_orb = N_elec // 2
+        ground_state = det_t(
+            N_mos,
+            spin_det_t(N_mos, occ=True, max_orb=max_orb),
+            spin_det_t(N_mos, occ=True, max_orb=max_orb),
+        )
+
+        cls.ground_state = ground_state
+        orbs = cls.ground_state.alpha.as_orb_list
+        h_constraint = orbs[-3:]
+        p_constraint = tuple(set([x for x in range(cls.N_mos)]).difference(set(h_constraint)))[-4:]
+        constraint = (h_constraint, p_constraint)
+
+        print("Generating connected determinants")
+        cls.connected = cls.ground_state.generate_connected_dets(constraint)
+        print("Generating H structure")
+        cls.H = cls.connected.get_H_structure(cls.dtype)
+
+        print("Filling H values")
+        for chunk in chunks:
+            kernels = chunk.H_kernels
+            match chunk.category:
+                case "OE" | "F":
+                    cls.launch_H_ij_kernel(kernels[0], chunk, cls.connected, cls.H)
+                    cls.launch_H_ii_kernel(kernels[1], chunk, cls.connected, cls.H)
+                case "A" | "B":
+                    cls.launch_H_ii_kernel(kernels[1], chunk, cls.connected, cls.H)
+                case _:
+                    cls.launch_H_ij_kernel(kernels[0], chunk, cls.connected, cls.H)
+
+    def test_matmul(self):
+        ref_A = self.rng.normal(size=(self.H.n, self.H.n // 2)).astype(self.dtype)
+        test_A = DMatrix(*ref_A.shape, ref_A, dtype=self.dtype)
+
+        ref_H = np.zeros((self.H.m, self.H.n), dtype=self.dtype)
+        for i in range(self.H.m):
+            row_start = self.H.A_p[i]
+            row_end = self.H.A_p[i + 1]
+            for idx in range(row_start, row_end):
+                j = self.H.A_c[idx]
+                val = self.H.A_v[idx]
+                ref_H[i, j] = val
+                ref_H[j, i] = val
+
+        ref_D_H = DMatrix(self.H.m, self.H.n, ref_H, dtype=self.dtype)
+        ref_B = ref_H @ ref_A
+        test_B = self.H @ test_A
+
+        self.assertTrue(np.allclose((ref_D_H @ test_A).np_arr, ref_B))
+        self.assertTrue(np.allclose(test_B.np_arr, ref_B))
+
+    def test_extract_diagonal(self):
+        ref_diag = np.zeros(self.H.m, dtype=self.dtype)
+
+        for i in range(self.H.m):
+            idx = self.H.A_p[i]
+            ref_diag[i] = self.H.A_v[idx]
+
+        test_diag = self.H.extract_diagonal()
+        self.assertTrue(np.allclose(test_diag.arr.np_arr, ref_diag))
+
+    def test_extract_superdiagonal(self):
+        ref_superdiag = np.zeros(self.H.m - 1, dtype=self.dtype)
+
+        for i in range(self.H.m):
+            idx = self.H.A_p[i] + 1
+            col = self.H.A_c[idx]
+            if col == (i + 1):
+                ref_superdiag[i] = self.H.A_v[idx]
+
+        test_superdiag = self.H.extract_superdiagonal()
+        self.assertTrue(np.allclose(test_superdiag.arr.np_arr, ref_superdiag))
+
+
+class Test_SymCSRMatrix_f32(Test_f32, Test_SymCSRMatrix):
+    __test__ = True
+
+
+class Test_SymCSRMatrix_f64(Test_f64, Test_SymCSRMatrix):
     __test__ = True
 
 

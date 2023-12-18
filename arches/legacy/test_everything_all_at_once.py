@@ -1,37 +1,38 @@
 #!/usr/bin/env python3
 # ruff : noqa : E741
-import unittest
-import time
-import sys
 import os
 import random
+import sys
+import time
+import unittest
+from collections import defaultdict
+from functools import cached_property
+from itertools import product
+
+from mpi4py import MPI
 
 from arches.integral_indexing_utils import (
-    compound_idx4_reverse,
-    compound_idx4,
     canonical_idx4,
     compound_idx2,
     compound_idx2_reverse,
+    compound_idx4,
+    compound_idx4_reverse,
     compound_idx4_reverse_all,
     compound_idx4_reverse_all_unique,
-)
-from arches.drivers import (
     integral_category,
-    Hamiltonian_two_electrons_integral_driven,
-    Hamiltonian_two_electrons_determinant_driven,
-    H_indices_generator,
-    Hamiltonian_generator,
-    Powerplant_manager,
-    selection_step,
-    generate_all_constraints,
-    check_constraint,
 )
 from arches.io import load_eref, load_integrals, load_wf
-from collections import defaultdict
-from itertools import product
-from functools import cached_property
-from arches.fundamental_types import Determinant
-from mpi4py import MPI
+from arches.legacy.drivers import (
+    H_indices_generator,
+    Hamiltonian_generator,
+    Hamiltonian_two_electrons_determinant_driven,
+    Hamiltonian_two_electrons_integral_driven,
+    Powerplant_manager,
+    check_constraint,
+    generate_all_constraints,
+    selection_step,
+)
+from arches.legacy.fundamental_types import Determinant
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -57,6 +58,7 @@ class Timing:
             p.strip_dirs().sort_stats("tottime").print_stats(0.05)
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_Index(Timing, unittest.TestCase):
     ## TODO (Luis RD): Is there a good reason to go all the way to 2^63 - 1? Do we really need indices that far out?
     ## 2^60 is an exabyte array, past that, the integer overflow errors are a little annoying to deal with.
@@ -121,6 +123,7 @@ class Test_Index(Timing, unittest.TestCase):
             check_compound_idx4_reverse_all_unique(ijkl)
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_Category(Timing, unittest.TestCase):
     def test_pair_categorization(self, n=10000, nmax=(1 << 60) - 1):
         def check_category(i, j, k, l):
@@ -281,6 +284,7 @@ class Test_Category(Timing, unittest.TestCase):
             )
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_Minimal(Timing, unittest.TestCase):
     @staticmethod
     def simplify_indices(l):
@@ -365,6 +369,7 @@ class Test_Minimal(Timing, unittest.TestCase):
             getattr(self, f"check_pair_idx_{category}")((psi[a], psi[b]), (i, j, k, l))
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_Constrained_Excitation(Timing, unittest.TestCase):
     @property
     def psi_and_norb_2det(self):
@@ -475,6 +480,7 @@ class Test_Constrained_Excitation(Timing, unittest.TestCase):
                 self.assertListEqual(ref_det_I_conn_by_C, det_I_conn_by_C)
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_Integral_Driven_Categories(Test_Minimal):
     @property
     def integral_by_category(self):
@@ -857,6 +863,7 @@ class Test_Integral_Driven_Categories(Test_Minimal):
             self.assertListEqual((indices_PT2_con), (ref_indices_PT2_con))
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_VariationalPowerplant:
     def test_c2_eq_dz_3(self):
         fcidump_path = "c2_eq_hf_dz.fcidump*"
@@ -919,16 +926,19 @@ def load_and_compute(fcidump_path, wf_path, driven_by):
     return Powerplant_manager(comm, lewis).E(psi_coef)
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_VariationalPowerplant_Determinant(Timing, unittest.TestCase, Test_VariationalPowerplant):
     def load_and_compute(self, fcidump_path, wf_path):
         return load_and_compute(fcidump_path, wf_path, "determinant")
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_VariationalPowerplant_Integral(Timing, unittest.TestCase, Test_VariationalPowerplant):
     def load_and_compute(self, fcidump_path, wf_path):
         return load_and_compute(fcidump_path, wf_path, "integral")
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_VariationalPT2Powerplant:
     def test_f2_631g_1det(self):
         fcidump_path = "f2_631g.FCIDUMP"
@@ -970,16 +980,19 @@ def load_and_compute_pt2(fcidump_path, wf_path, driven_by):
     return Powerplant_manager(comm, lewis).E_pt2(psi_coef)
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_VariationalPT2_Determinant(Timing, unittest.TestCase, Test_VariationalPT2Powerplant):
     def load_and_compute_pt2(self, fcidump_path, wf_path):
         return load_and_compute_pt2(fcidump_path, wf_path, "determinant")
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_VariationalPT2_Integral(Timing, unittest.TestCase, Test_VariationalPT2Powerplant):
     def load_and_compute_pt2(self, fcidump_path, wf_path):
         return load_and_compute_pt2(fcidump_path, wf_path, "integral")
 
 
+@unittest.skipUnless(__name__ == "__main__", "legacy tests run only if requested directly.")
 class Test_Selection(Timing, unittest.TestCase):
     def load(self, fcidump_path, wf_path):
         # Load integrals

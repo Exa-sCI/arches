@@ -1,11 +1,11 @@
 #pragma once
 
 #include "integral_indexing_utils.h"
-#include "matrix.h"
 #include <array>
 #include <bitset>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -31,14 +31,14 @@ class spin_det_t {
     idx_t N_blocks;
     mo_block_t *block_arr;
     mo_block_t read_mask;
-    mo_block_t block_size;
+    mo_block_t block_size = sizeof(mo_block_t) * 8;
 
     // needed for det_t to compile
-    spin_det_t(){};
+   spin_det_t() { read_mask = ((mo_block_t)1) << (block_size - 1); };
 
     // empty initialization
     spin_det_t(idx_t min_mos) {
-        block_size = sizeof(mo_block_t) * 8;
+        // block_size = sizeof(mo_block_t) * 8;
         read_mask = ((mo_block_t)1) << (block_size - 1);
 
         N_mos = min_mos;
@@ -65,8 +65,10 @@ class spin_det_t {
     spin_det_t &operator=(const spin_det_t &other) {
         N_mos = other.N_mos;
         N_blocks = other.N_blocks;
+        block_size = other.block_size;
+        read_mask = ((mo_block_t)1) << (block_size - 1);
 
-        std::unique_ptr<mo_block_t[]> p(new mo_block_t[N_blocks]);
+        std::unique_ptr<mo_block_t[]> p(new mo_block_t[N_blocks]());
         block_arr_ptr = std::move(p);
         block_arr = block_arr_ptr.get();
         std::copy(other.block_arr, other.block_arr + N_blocks, block_arr);
@@ -77,6 +79,8 @@ class spin_det_t {
     spin_det_t &operator=(spin_det_t &&other) {
         N_mos = other.N_mos;
         N_blocks = other.N_blocks;
+        block_size = other.block_size;
+        read_mask = ((mo_block_t)1) << (block_size - 1);
 
         block_arr_ptr = std::move(other.block_arr_ptr);
         block_arr = block_arr_ptr.get();
@@ -98,7 +102,6 @@ class spin_det_t {
         // assert(orb < N_mos);
         idx_t block = orb / block_size;
         idx_t offset = orb % block_size;
-        // std::cout << std::bitset<sizeof(mo_block_t) * 8>(block_arr[block]) << std::endl;
         return (block_arr[block] << offset) & read_mask;
     }
 
@@ -163,18 +166,22 @@ class spin_det_t {
     bool operator<(const spin_det_t &other) const {
         // assert(N_blocks = other.N_blocks);
         idx_t i = 0;
-        bool success;
-        while ((success = this->block_arr[i] < other.block_arr[i]) && (i < N_blocks))
+        bool success = true;
+        while (success && (i < this->N_blocks)) {
+            success = this->block_arr[i] < other.block_arr[i];
             i++;
+        }
         return success;
     }
 
     bool operator==(const spin_det_t &other) const {
         // assert(N_blocks = other.N_blocks);
         idx_t i = 0;
-        bool success;
-        while ((success = block_arr[i] == other.block_arr[i]) && (i < N_blocks))
+        bool success = true;
+        while (success && (i < this->N_blocks)) {
+            success = this->block_arr[i] == other.block_arr[i];
             i++;
+        }
         return success;
     }
 
@@ -310,19 +317,40 @@ class DetArray {
         N_mos = min_mos;
 
         std::vector<det_t> _temp(size);
-        // storage.reserve(size);
-        for (auto i = 0; i < size; i++) {
-            _temp.emplace_back(N_mos);
-        }
-
+        det_t empty_det(N_mos);
+        std::fill(_temp.begin(), _temp.end(), empty_det);
         storage = std::move(_temp);
+        arr = &storage[0];
+    }
+
+    // copy constructor
+    DetArray(const std::vector<det_t> &other) {
+        size = other.size();
+        N_mos = other[0].N_mos;
+        storage = other;
+        arr = &storage[0];
+    }
+
+    // safer move connstructor
+    DetArray(const std::vector<det_t> &&other, det_t *source) {
+        size = other.size();
+        N_mos = source->N_mos; // in case other has no dets
+        storage = std::move(other);
+        arr = &storage[0];
+    }
+
+    const det_t &operator[](idx_t i) const { return arr[i]; }
+
+    void extend_with_filter(const DetArray &other, idx_t *filter, const idx_t N) {
+        for (auto i = 0; i < N; i++) {
+            storage.push_back(other[filter[i]]);
+        }
+        size += N;
         arr = &storage[0];
     }
 
     ~DetArray() = default;
 };
-
-std::hash<mo_block_t> block_hash;
 
 template <> struct std::hash<spin_det_t> {
     // Implementing something quick a dirty for now along the lines of:
@@ -330,45 +358,94 @@ template <> struct std::hash<spin_det_t> {
     // TODO: Profile this in particular! Or come up with another algorithm that is unique and fast
     // and has good dispersion.
     std::size_t operator()(spin_det_t const &s) const noexcept {
-        std::size_t m = ~0 >> (sizeof(std::size_t) * 8 - 19); // should be the Mersenne prime 2^19-1
-        std::size_t res = 0x402df854;                         // e
+        // std::hash<mo_block_t> block_hash;
+        // std::size_t m = ~((std::size_t)0) >>
+        //                 (sizeof(std::size_t) * 8 - 19); // should be the Mersenne prime 2^19-1
+        // std::size_t res = 0x5b174a16; // X0
+        std::size_t res = 0x77123456; // X0
+        std::size_t m = 0x402df854;   // e
         for (auto i = 0; i < s.N_blocks; i++) {
-            res = (block_hash(s.block_arr[i]) ^ res) * m;
+            res = (s.block_arr[i] ^ res) * m;
         }
         return res;
     }
 };
 
-std::hash<spin_det_t> spin_det_hash;
-
 template <> struct std::hash<det_t> {
     std::size_t operator()(det_t const &s) const noexcept {
-        std::size_t h1 = spin_det_hash(s.alpha);
-        std::size_t h2 = spin_det_hash(s.beta);
-        return h1 ^ (h2 << 1);
+        // std::hash<spin_det_t> spin_det_hash;
+        // std::size_t h1 = spin_det_hash(s.alpha);
+        // std::size_t h2 = spin_det_hash(s.beta);
+
+        // std::size_t m = 0x402df854; // e
+        // std::size_t n = 0x40490fdb; // pi
+        // return (h1 * m) ^ (h2 * n);
+
+        std::size_t res = 0x77123456; // X0
+        std::size_t m = 0x402df854;   // e
+        for (auto i = 0; i < s[0].N_blocks; i++) {
+            res = (s[0].block_arr[i] ^ res) * m;
+            res = (s[1].block_arr[i] ^ res) * m;
+        }
+        return res;
     }
 };
 
-std::hash<det_t> det_hash;
+class LinearUnorderedMap {
+  protected:
+    std::unordered_map<std::size_t, det_t> map;
+    std::unordered_map<std::size_t, idx_t> order;
+    std::hash<det_t> hash_f;
 
-// // Should be moved in the cpp of det
-// inline std::ostream &operator<<(std::ostream &os, const det_t &obj) {
-//     return os << "(" << obj.alpha << "," << obj.beta << ")";
-// }
+  public:
+    LinearUnorderedMap() = default;
+    ~LinearUnorderedMap() = default;
 
-det_t exc_det(det_t &a, det_t &b);
+    int add_det(const det_t &d) {
+        // Hash is not perfect, but collisions are low
+        // If collides, use linear probing to augment hash_val
+        std::size_t hash_val = hash_f(d);
+        while (map.count(hash_val) == 1) {
+            if (map[hash_val] == d) {
+                return 0;
+            }
+            hash_val++;
+        }
+
+        map[hash_val] = d;
+        return 1;
+    }
+
+    idx_t add_det_get_order(const det_t &d, idx_t *count) {
+        // Hash is not perfect, but collisions are low
+        // If collides, use linear probing to augment hash_val
+        std::size_t hash_val = hash_f(d);
+        while (map.count(hash_val) == 1) {
+            if (map[hash_val] == d) {
+                return order[hash_val];
+            }
+            hash_val++;
+        }
+
+        map[hash_val] = d;
+        order[hash_val] = *count++;
+        return order[hash_val];
+    }
+};
 
 int compute_phase_single_excitation(spin_det_t d, idx_t h, idx_t p);
 int compute_phase_double_excitation(spin_det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
 int compute_phase_double_excitation(det_t d, idx_t h1, idx_t h2, idx_t p1, idx_t p2);
 
-// overload phase compute for (1,1) excitations
-det_t apply_single_excitation(det_t s, int spin, idx_t hole, idx_t particle);
+det_t exc_det(det_t &a, det_t &b);
 
-spin_det_t apply_single_excitation(spin_det_t s, idx_t hole, idx_t particle);
+spin_det_t apply_single_excitation(spin_det_t det, idx_t h, idx_t p, bool &succcess);
+det_t apply_single_excitation(det_t det, int spin, idx_t h, idx_t p, bool &succcess);
 
-// det_t apply_double_excitation(det_t s, std::pair<int, int> spin, idx_t h1, idx_t h2, idx_t p1,
-//                               idx_t p2);
+spin_det_t apply_double_excitation(spin_det_t det, idx_t h1, idx_t h2, idx_t p1, idx_t p2,
+                                   bool &success);
+det_t apply_double_excitation(det_t det, int s1, int s2, idx_t h1, idx_t h2, idx_t p1, idx_t p2,
+                              bool &success);
 
 typedef std::vector<idx_t> spin_constraint_t;
 typedef std::pair<spin_constraint_t, spin_constraint_t> exc_constraint_t;
@@ -383,11 +460,9 @@ std::string to_string(const spin_constraint_t &c, idx_t max_orb) {
 
 spin_constraint_t to_constraint(const spin_det_t &c) {
     spin_constraint_t res;
-    int count = 0;
     for (auto i = 0; i < c.N_mos; i++) {
         if (c[i]) {
             res.push_back(i);
-            count++;
         }
     }
     return res;
@@ -395,12 +470,6 @@ spin_constraint_t to_constraint(const spin_det_t &c) {
 
 // std::vector<det_t> get_constrained_determinants(det_t d, exc_constraint_t constraint,
 //                                                 idx_t max_orb);
-
-std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t constraint, idx_t max_orb);
-
-std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb);
-
-std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t constraint, idx_t max_orb);
 
 std::vector<det_t> get_singles_by_exc_mask(det_t d, int spin, spin_constraint_t h,
                                            spin_constraint_t p);
@@ -413,51 +482,21 @@ std::vector<det_t> get_ss_doubles_by_exc_mask(det_t d, int spin, spin_constraint
 
 std::vector<det_t> get_all_singles(det_t d);
 
-// void get_connected_dets(DetArray *dets_int, DetArray *dets_ext, idx_t *hc_alpha, idx_t *hc_beta,
-//                         idx_t *pc_alpha, idx_t *pc_beta);
+std::vector<det_t> get_constrained_singles(det_t d, exc_constraint_t alpha_constraint,
+                                           exc_constraint_t beta_constraint);
 
-// This is way too slow for actual formation of explicit Hamiltonians, but it's easy to write!
-// Should get bilinear mappings so that we can iterate over known determinants and find connections
-// directly. Or, resort to on the fly generation of the Hamiltonian structure, which would need true
-// expandable vectors inside the offloaded kernels
-template <class T>
-void get_H_structure_naive(DetArray *psi_det, SymCSRMatrix<T> *H, idx_t N_det, T dummy) {
+std::vector<det_t> get_os_doubles(det_t d, bool return_singles);
 
-    std::vector<std::vector<idx_t>> csr_rows;
-    std::unique_ptr<idx_t[]> H_p(new idx_t[N_det + 1]);
+std::vector<det_t> get_constrained_os_doubles(det_t d, exc_constraint_t alpha_constraint,
+                                              exc_constraint_t beta_constraint,
+                                              bool return_singles);
 
-    // find non-zero entries
-    for (auto i = 0; i < N_det; i++) {
-        det_t &d_row = psi_det->arr[i];
+std::vector<det_t> get_ss_doubles(det_t d);
 
-        H_p[i + 1] += 1; // add H_ii
-        csr_rows[i].push_back(i);
-        for (auto j = i + 1; j < N_det; j++) {
-            det_t &d_col = psi_det->arr[j];
+std::vector<det_t> get_constrained_ss_doubles(det_t d, exc_constraint_t alpha_constraint,
+                                              exc_constraint_t beta_constraint);
 
-            det_t exc = exc_det(d_row, d_col);
-            auto degree = (exc[0].count() + exc[1].count()) / 2;
+std::vector<det_t> get_all_connected_dets(det_t *d, idx_t N_dets);
 
-            if (degree <= 2) { // add H_ij
-                csr_rows[i].push_back(j);
-                H_p[i + 1] += 1;
-            }
-        }
-
-        H_p[i + 1] += H_p[i]; // adjust global row offset
-    }
-
-    // copy over from vector of vectors into single array
-    std::unique_ptr<idx_t[]> H_c(new idx_t[H_p[N_det]]);
-    idx_t *H_c_p = H_c.get();
-    for (auto i = 0; i < N_det; i++) {
-        std::copy(csr_rows[i].begin(), csr_rows[i].end(), H_c_p + H_p[i]);
-    }
-
-    // initialize values at 0
-    std::unique_ptr<T[]> H_v(new T[H_p[N_det]]);
-    T *H_v_p = H_v.get();
-    std::fill(H_v_p, H_v_p + H_p[N_det], (T)0.0);
-
-    *H = SymCSRMatrix<T>(N_det, N_det, H_p, H_c, H_v); // use the move constructor + move operator
-}
+std::vector<det_t> get_constrained_connected_dets(det_t d, exc_constraint_t alpha_constraint,
+                                                  exc_constraint_t beta_constraint);

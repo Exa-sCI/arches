@@ -4,11 +4,17 @@ from typing import Iterable
 
 import numpy as np
 from mpi4py import MPI
-from scipy.linalg import lapack
 
-from arches.fundamental_types import Determinant
 from arches.integrals import JChunk
-from arches.matrix import AMatrix, diagonalize
+from arches.kernels import (
+    launch_denom_kernel,
+    launch_H_ii_kernel,
+    launch_H_ij_kernel,
+    launch_num_kernel,
+)
+from arches.linked_object import get_indices_by_threshold, get_LArray
+from arches.log_timer import ScopedTimer
+from arches.matrix import DMatrix, diagonalize, gtsv, qr_factorization
 
 
 def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
@@ -32,24 +38,28 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
         T_0 (array) : (s*p) by (s*p) matrix, initial T matrix s.t. T = (triu(Q.T @ Q))^-1
     """
 
-    m, n = X.shape
+    m = X.m
+    n = X.n
     s = n // p
 
     # preallocate Q, R, and T
-    Q = np.zeros_like(X)
-    R = np.zeros((n, n))
-    T = np.zeros((n, n))
+    Q = DMatrix(m, n, dtype=X.dtype)
+    R = DMatrix(n, n, dtype=X.dtype)
+    T = DMatrix(n, n, dtype=X.dtype)
 
+    T_block = DMatrix(p, p, np.eye(p, dtype=X.dtype), dtype=X.dtype)
     if (Q_0 is None) or (R_0 is None) or (T_0 is None):
-        Q_0, R_0 = np.linalg.qr(X[:, :p], mode="reduced")
-        T_0 = np.eye(p)
+        Q_0 = DMatrix(X.m, p, dtype=X.dtype)
+        Q_0[:, :] = X[:, :p]
+        R_0 = qr_factorization(Q_0)
+
         Q[:, :p] = Q_0
         R[:p, :p] = R_0
-        T[:p, :p] = T_0
+        T[:p, :p] = T_block
         s_idx = 1
     else:
         # infer start step from size of input guesses
-        s_idx = Q_0.shape[1] // p
+        s_idx = Q_0.n // p
         ss = slice(int(s_idx * p))
         Q[:, ss] = Q_0
         R[ss, ss] = R_0
@@ -63,285 +73,275 @@ def bmgs_h(X, p, Q_0=None, R_0=None, T_0=None):
         H_k = T[a, a].T @ H_k
 
         Y_k = X[:, b] - Q[:, a] @ H_k
-        Q_kk, R_kk = np.linalg.qr(Y_k, mode="reduced")  # any fast, stable QR can replace this
-        F_k = Q[:, a].T @ Q_kk
+        R_k = qr_factorization(Y_k)
+        F_k = Q[:, a].T @ Y_k
         G_k = -T[a, a] @ F_k
 
-        Q[:, b] = Q_kk
+        Q[:, b] = Y_k
 
         R[a, b] = H_k
-        R[b, b] = R_kk
+        R[b, b] = R_k
 
         T[a, b] = G_k
-        T[b, b] = np.eye(p)
+        T[b, b] = T_block
 
     return Q, R, T
 
 
-def davidson(H, *args, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-6, **kwargs):  # noqa: E741
+def davidson(
+    H,
+    *args,
+    V_0=None,
+    N_states=1,
+    l=32,
+    pc="D",
+    max_subspace_rank=256,
+    max_iter=100,
+    tol=1e-6,
+    rtol=1e-4,
+    atol=1e-6,
+    **kwargs,
+):  # noqa: E741
     """
     Implementation of the Davidson diagonalization algorithm in serial,
     with blocked eigenvector prediction and BMGS.
     """
+    V_k = DMatrix(H.m, l, dtype=H.dtype)
     if V_0 is None:
-        V_k = np.zeros((H.shape[0], l))
-        V_k[:l, :l] = np.eye(l)
+        V_k[:l, :l] = DMatrix.eye(l, dtype=H.dtype)
     else:
-        V_k = V_0
+        V_k[: V_0.m, :l] = V_0[:, :l]
+        V_k[V_0.m : V_0.m + l, :l] = DMatrix.eye(l, dtype=H.dtype)
 
-    R_k = np.eye(l)
-    T_k = np.eye(l)
-    N = H.shape[0]
-    C_d = np.diag(H)
+    bmgs_R_k = DMatrix.eye(l, dtype=H.dtype)
+    bmgs_T_k = DMatrix.eye(l, dtype=H.dtype)
+    N = H.m
+    C_d = H.extract_diagonal()
     if pc == "T":
-        C_sd = np.zeros(N - 1)
-        for i in range(N - 1):
-            C_sd[i] = H[i, i + 1]
+        C_sd = H.extract_superdiagonal()
 
-        ptsvx = lapack.get_lapack_funcs("ptsvx", dtype=H.dtype)
-
+    max_subspace_rank = min(max_subspace_rank, H.m)
     for k in range(max_iter):
         ### Project Hamiltonian onto subspace spanned by V_k
+        # S_k -> Q_k is diagonalized in place since S_k is not needed again afterwards
         W_k = H @ V_k
-        S_k = V_k.T @ W_k
+        Q_k = V_k.T @ W_k
 
         ### diagonalize S_k to find (projected) eigenbasis
-        L_k, Q_k = diagonalize(S_k)  # L_k is sorted smallest -> largest
+        w = diagonalize(Q_k)  # L_k is sorted smallest -> largest
+
+        L_k = DMatrix(V_k.n, V_k.n, dtype=H.dtype)
+        L_k.fill_diagonal(w)
 
         ### Form Ritz vectors (in place) and calculate residuals
         R_k = V_k @ Q_k[:, :l] @ L_k[:l, :l] - W_k @ Q_k[:, :l]
 
-        r_norms = np.linalg.norm(R_k, axis=0)
+        r_norms = R_k.column_2norm()
+        r_norms = r_norms.arr.np_arr
 
         # process early exits
         early_exit = False
         if np.all(r_norms[:N_states] < tol):
             early_exit = True
-            print(f"Davidson has converged with tolerance {tol:0.4e}")
+            print(f"Davidson has converged with tolerance {tol:0.2e} in {k+1} iterations")
             for i in range(N_states):
-                print(f"Energy of state {i}:{L_k[i]} Ha")
+                print(f"Energy of state {i} : {w.arr[i]:0.6e} Ha. Residual {r_norms[i]:0.6e}")
 
         elif k == max_iter - 1:
             early_exit = True
             print("Davidson has hit max number of iterations. Exiting early.")
             for i in range(N_states):
-                print(f"Energy of state {i}:{L_k[i]} Ha. Residual {r_norms[i]}")
+                print(f"Energy of state {i} : {w.arr[i]:0.6e} Ha. Residual {r_norms[i]:0.6e}")
 
         if early_exit:
-            return L_k[:N_states], Q_k[:, :N_states]
+            # TODO: This works okay in this case because __setitem__ does the bounds checks,
+            # but should really implement __getitem__ on LinkedArrays
+            # and make sure desired ranges are compatible
+            E = w.allocate_result(N_states)
+            E.arr[:N_states] = w.arr
+
+            psi = DMatrix(H.m, N_states, dtype=H.dtype)
+            psi[:, :] = V_k @ Q_k[:, :N_states]
+
+            V_0 = DMatrix(H.m, l, dtype=H.dtype)
+            V_0[: H.m, :] = V_k @ Q_k[:, :l]
+
+            return E, psi, V_0
 
         ### Calculate next batch of trial vectors
-        # TODO: get rid of allocatons in loop
-        V_kk = np.zeros((H.shape[0], l))
+        V_trial = DMatrix(H.m, l, dtype=H.dtype)
 
         for i in range(l):
             if pc == "D":  # diagonal preconditioner
-                C_ki = np.ones(N) * L_k[i] - C_d
-                C_ki = 1.0 / C_ki
-                V_kk[:, i] = C_ki * R_k[:, i]
+                # If eigenvalue collides with diagonal value, this can propagate NaNs
+                # So replace preconditioner entry and accept a bad vector
+                C_ki = get_LArray(C_d.arr.dtype)(N, fill=w.arr[i]) - C_d
+                C_ki.reset_near_zeros(np.finfo(H.dtype).eps, 1.0)
+                V_trial[:, i] = R_k[:, i] / C_ki
             elif pc == "T":  # tridiagonal preconditioner
-                C_d_i = np.ones(N) * L_k[i] - C_d
-                res = ptsvx(C_d_i, C_sd, R_k[:, i])
-                V_kk[:, i] = res[0]
+                C_d_i = get_LArray(C_d.arr.dtype)(N, fill=w.arr[i]) - C_d
+                C_d_i.reset_near_zeros(np.finfo(H.dtype).eps, 1.0)
+                C_sd_i = get_LArray(C_d.arr.dtype)(
+                    N - 1, fill=C_sd
+                )  # need a copy since gtsv overwrites array
+                # TODO: I believe the tridiagonal preconditioner should get -C_sd,
+                # but it seems to fare better with +C_sd on random matrices...
+                # C_sd_i = -C_sd
+                gtsv(C_d_i, C_sd_i, R_k[:, i])  # solution written into R_k
+                V_trial[:, i] = R_k[:, i]
 
         ### Form new orthonormal subspace
-        V_k, R_k, T_k = bmgs_h(np.hstack([V_k, V_kk]), l // 2, V_k, R_k, T_k)
+        reset_subspace = V_k.n + l >= max_subspace_rank
+        if reset_subspace:
+            new_rank = 2 * l
+            V_kk = DMatrix(V_k.m, new_rank, dtype=H.dtype)
+            V_kk[:, :l] = V_k @ Q_k[:, :l]
+            V_kk[:, l:] = V_trial
+            V_k = None
+        else:
+            new_rank = V_k.n + l
+            V_kk = DMatrix(V_k.m, new_rank, dtype=H.dtype)
+            V_kk[:, : V_k.n] = V_k
+            V_kk[:, V_k.n :] = V_trial
 
-
-def davidson_par_0(
-    H, comm, *args, V_0=None, N_states=1, l=32, pc="D", max_iter=100, tol=1e-6, **kwargs
-):  # noqa: E741
-    """
-    Implementation of the Davidson diagonalization algorithm in parallel.
-
-    Assumes each worker i has partial component of H s.t. H = \sum_i H_i
-
-    Assume that subspace is small enough that diagonalization/BMGS are fast enough locally
-    to outspeed communicating
-    """
-
-    if V_0 is None:
-        V_k = np.zeros((H.shape[0], l))
-        V_k[:l, :l] = np.eye(l)
-    else:
-        V_k = V_0
-
-    R_k = np.eye(l)
-    T_k = np.eye(l)
-    N = H.shape[0]
-
-    ## TODO: Diagonal and subdiagonal need to be communicated
-    C_d = np.diag(H)
-    if pc == "T":
-        C_sd = np.zeros(N - 1)
-        for i in range(N - 1):
-            C_sd[i] = H[i, i + 1]
-
-        ptsvx = lapack.get_lapack_funcs("ptsvx", dtype=H.dtype)
-
-    rank = comm.Get_rank()
-    assert l == comm.Get_size()
-
-    for k in range(max_iter):
-        ### Project Hamiltonian onto subspace spanned by V_k
-        W_k = H @ V_k
-        comm.Allreduce(MPI.IN_PLACE, [W_k, MPI.DOUBLE])  ## Synchronization
-
-        S_k = V_k.T @ W_k
-
-        ### diagonalize S_k to find (projected) eigenbasis
-        # assume S_k \in R^(kl, kl) is small enough to diagonalize locally
-        L_k, Q_k = diagonalize(S_k)  # L_k is sorted smallest -> largest
-
-        ### Calculate residual of owned Ritz vector
-        R_k = L_k[rank] * V_k @ Q_k[:, rank] - W_k @ Q_k[:, rank]
-
-        r_norm = np.linalg.norm(R_k)
-        r_norms = np.zeros(l)
-        comm.Allgather([r_norm, MPI.DOUBLE], [r_norms, MPI.DOUBLE])  ## Synchronization
-
-        # process early exits
-        early_exit = False
-        if np.all(r_norms[:N_states] < tol):
-            early_exit = True
-            if rank == 0:
-                print(f"Davidson has converged with tolerance {tol:0.4e}")
-                for i in range(N_states):
-                    print(f"Energy of state {i}:{L_k[i]} Ha")
-        elif k == max_iter - 1:
-            early_exit = True
-            if rank == 0:
-                print("Davidson has hit max number of iterations. Exiting early.")
-                for i in range(N_states):
-                    print(f"Energy of state {i}:{L_k[i]} Ha. Residual {r_norms[i]}")
-
-        if early_exit:
-            return L_k[:N_states], Q_k[:, :N_states]
-
-        ### Calculate next batch of trial vectors
-        # TODO: get rid of allocatons in loop
-        V_kk = np.zeros((H.shape[0], l))
-
-        if pc == "D":  # diagonal preconditioner
-            C_ki = np.ones(N) * L_k[rank] - C_d
-            C_ki = 1.0 / C_ki
-            V_kk[:, rank] = C_ki * R_k
-        elif pc == "T":  # tridiagonal preconditioner
-            C_d_i = np.ones(N) * L_k[rank] - C_d
-            res = ptsvx(C_d_i, C_sd, R_k)
-            V_kk[:, rank] = res[0]
-
-        comm.Allgather(MPI.IN_PLACE, [V_kk, MPI.DOUBLE])
-
-        ### Form new orthonormal subspace
-        V_k, R_k, T_k = bmgs_h(np.hstack([V_k, V_kk]), l // 2, V_k, R_k, T_k)
-
-
-def get_connected_dets(int_dets: Iterable[Determinant]) -> Iterable[Determinant]:
-    raise NotImplementedError
-
+        V_k, bmgs_R_k, bmgs_T_k = bmgs_h(V_kk, l // 2, V_k, bmgs_R_k, bmgs_T_k)
 
 def cipsi(
     E0,
+    V_nn,
     int_dets,
     psi_coef,
     J_chunks: Iterable[JChunk],
     *args,
     N_states=1,
-    pt2_threshold=1e-8,
-    exc_constraints=None,
+    pt2_threshold=1e-4,
+    exc_constraint=None,
     **kwargs,
 ):
-    ext_dets = get_connected_dets(int_dets, exc_constraints)
+    with ScopedTimer(
+        log_message=f"Generating connected space for {int_dets.N_dets} internal determinants"
+    ):
+        ext_dets = int_dets.generate_connected_dets(exc_constraint)
 
-    e_pt2_n = np.array(
-        len(ext_dets)
-    )  # TODO: convert these arrays to LinkedArrays and expand over states
-    e_pt2_d = np.array(len(ext_dets))  # TODO: initialize with E_0/E_i
+    e_pt2_n = get_LArray(psi_coef.dtype)(ext_dets.N_dets * N_states, fill=0.0)
+    e_pt2_d = get_LArray(psi_coef.dtype)(ext_dets.N_dets * N_states, fill=0.0)
 
-    for chunk in J_chunks:
-        kernels = (
-            chunk.pt2_kernels
-        )  # kernels[0] is numerator contrib., kernels[1] is denom. contrib.
-        match chunk.category:
-            case "OE" | "F":  # both num and denominator
-                kernels[0](
-                    chunk.J.p,
-                    chunk.idx.p,
-                    chunk.chunk_size,
-                    int_dets.p,
-                    psi_coef.p,
-                    int_dets.size,
-                    N_states,
-                    ext_dets.p,
-                    ext_dets.size,
-                    e_pt2_n.p,
-                )
-                kernels[1](
-                    chunk.J.p,
-                    chunk.idx.p,
-                    chunk.chunk_size,
-                    N_states,
-                    ext_dets.p,
-                    ext_dets.size,
-                    e_pt2_n.p,
-                )
-            case "A" | "B":  # only denominator
-                kernels[1](
-                    chunk.J.p,
-                    chunk.idx.p,
-                    chunk.chunk_size,
-                    N_states,
-                    ext_dets.p,
-                    ext_dets.size,
-                    e_pt2_n.p,
-                )
-            case _:  # only numerator
-                kernels[0](
-                    chunk.J.p,
-                    chunk.idx.p,
-                    chunk.chunk_size,
-                    int_dets.p,
-                    psi_coef.p,
-                    int_dets.size,
-                    N_states,
-                    ext_dets.p,
-                    ext_dets.size,
-                    e_pt2_n.p,
-                )
+    with ScopedTimer(
+        log_message=f"Calculating pt2 contribution for {ext_dets.N_dets} external determinants"
+    ):
+        for chunk in J_chunks:
+            kernels = (
+                chunk.pt2_kernels
+            )  # kernels[0] is numerator contrib., kernels[1] is denom. contrib.
+            match chunk.category:
+                case "OE" | "F":  # both num and denominator
+                    launch_num_kernel(
+                        kernels[0], chunk, int_dets, psi_coef, ext_dets, N_states, e_pt2_n
+                    )
+                    launch_denom_kernel(kernels[1], chunk, ext_dets, N_states, e_pt2_d)
+                case "A" | "B":  # only denominator
+                    launch_denom_kernel(kernels[1], chunk, ext_dets, N_states, e_pt2_d)
+                case _:  # only numerator
+                    launch_num_kernel(
+                        kernels[0], chunk, int_dets, psi_coef, ext_dets, N_states, e_pt2_n
+                    )
 
-    # reduce e_pt2_n,d over processes
+    E0_arr = get_LArray(psi_coef.dtype)(ext_dets.N_dets * N_states, E0.arr[0])
+    V_nn_arr = get_LArray(psi_coef.dtype)(ext_dets.N_dets * N_states, V_nn)
+
+    e_pt2_d = E0_arr - (V_nn_arr + e_pt2_d)
     e_pt2 = e_pt2_n / e_pt2_d
-    pt2_filter = e_pt2 > pt2_threshold  # TODO: pass this off to customizable selection function
-    e_pt2_total = np.sum(e_pt2)
+    e_pt2_total = np.sum(e_pt2.arr.np_arr)
 
+    pt2_filter = get_indices_by_threshold(e_pt2, pt2_threshold)
+    int_dets = int_dets.extend_with_filter(ext_dets, pt2_filter)
     # TODO: sort ext dets so that they are in weight order? Or otherwise, pass in information if N_max_dets will be hit
-    return int_dets + ext_dets[pt2_filter], e_pt2_total
+
+    print(f"Internal det space is now rank {int_dets.N_dets}")
+    return int_dets, e_pt2_total
 
 
-def prepare_hamiltonian(psi_dets, H_partial: AMatrix = None) -> AMatrix:
-    raise NotImplementedError
+def evaluate_H_entries(H, psi_dets, chunks, E0):
+    H.add_to_diagonal(E0)
+
+    for chunk in chunks:
+        kernels = chunk.H_kernels
+        match chunk.category:
+            case "OE" | "F":
+                launch_H_ij_kernel(kernels[0], chunk, psi_dets, H)
+                launch_H_ii_kernel(kernels[1], chunk, psi_dets, H)
+            case "A" | "B":
+                launch_H_ii_kernel(kernels[1], chunk, psi_dets, H)
+            case _:
+                launch_H_ij_kernel(kernels[0], chunk, psi_dets, H)
+
+
+def prepare_hamiltonian(psi_dets, chunks, E0):
+    with ScopedTimer(log_message="Finding non-zero Hamiltonian entries"):
+        H = psi_dets.get_H_structure(chunks[0].dtype)
+
+    with ScopedTimer(log_message="Calculating Hamiltonian entries"):
+        evaluate_H_entries(H, psi_dets, chunks, E0)
+
+    return H
+
+
+def get_davidson_work(rank):
+    if rank < 64:
+        return 8, 2
+    elif rank < 512:
+        return 32, 8
+    else:
+        return 256, 8
 
 
 def s_CI(
+    V_nn,
     E0,
     dets,
     psi_coef,
     J_chunks,
     *args,
+    constraint=None,
     N_states=1,
     N_max_dets=1e6,
-    pt2_conv=1e-4,
+    pt2_conv=1e-6,
+    pt2_threshold=1e-7,
     **kwargs,
 ):
     est_pt2_correction = np.inf
+    print(f"Starting selected CI routine with {dets.N_dets} determinants. SCF energy {E0:0.4f} Ha")
+    E0 = get_LArray(J_chunks[0].dtype)(1, E0)
+    N_rounds = 0
+    while dets.N_dets < N_max_dets and np.abs(est_pt2_correction) > pt2_conv:
+        print("\n###################\n")
+        with ScopedTimer(log_message=f"CIPSI with {dets.N_dets} internal determinants"):
+            # expand wavefunction in space of Slater determinants
+            dets, est_pt2_correction = cipsi(
+                E0,
+                V_nn,
+                dets,
+                psi_coef,
+                J_chunks,
+                pt2_threshold=pt2_threshold,
+                exc_constraint=constraint,
+            )
 
-    while len(dets) < N_max_dets and est_pt2_correction > pt2_conv:
-        # expand wavefunction in space of Slater determinants
-        dets, est_pt2_correction = cipsi(E0, dets, psi_coef, J_chunks)
-
+        print(f"Estimated pt2 contribution {est_pt2_correction:0.4e} Ha")
         # find wavefunctions and energies of first N states
-        H = prepare_hamiltonian(dets)
-        E0, psi_coef = davidson(H)
+        with ScopedTimer(log_message=f"Generating Hamiltonian with rank {dets.N_dets}"):
+            H = prepare_hamiltonian(dets, J_chunks, V_nn)
+
+        max_subspace_rank, N_trial_vectors = get_davidson_work(H.m)
+        with ScopedTimer(log_message=f"Davidson for sparse H with {H.N_entries} entries"):
+            E0, psi_coef, _ = davidson(H, l=N_trial_vectors, max_subspace_rank=max_subspace_rank)
+
+        N_rounds += 1
+        print("\n## sCI Iteration Summary")
+        for i in range(N_states):
+            Evar_with_pt2 = E0.arr[i] + est_pt2_correction
+            print(
+                f"E{i} after {N_rounds} rounds (Ha): E{i}_var : {E0.arr[i]:0.4f} | E_pt2 : {est_pt2_correction:0.4e}  | E_var + pt2 : {Evar_with_pt2:0.4f}"
+            )
 
     return E0, psi_coef, dets
