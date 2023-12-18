@@ -116,10 +116,6 @@ def load_integrals(
         return n_orb, E0, d_one_e_integral, d_two_e_integral
 
 
-def get_mo_size():
-    pass
-
-
 def load_wf(path_wf, det_representation="tuple") -> Tuple[List[float], List[Determinant]]:
     """Read the input file :
     Representation of the Slater determinants (basis) and
