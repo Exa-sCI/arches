@@ -1,6 +1,7 @@
 #pragma once
 #include "integral_indexing_utils.h"
 #include <algorithm>
+#include <iostream>
 #include <memory>
 
 template <class T> class LArray {
@@ -10,6 +11,8 @@ template <class T> class LArray {
   public:
     idx_t size;
     T *arr;
+
+    LArray(){};
 
     LArray(idx_t n) { // no initializaiton
         size = n;
@@ -26,6 +29,26 @@ template <class T> class LArray {
     LArray(idx_t n, T *fill) : LArray(n) { std::copy(fill, fill + size, arr); };
 
     ~LArray() = default;
+};
+
+class work_array : public LArray<idx_t> {
+
+  public:
+    // work_array(){};
+    using LArray::LArray;
+
+    // work_array(std::unique_ptr<idx_t> work , idx_t N){
+    //     size = N;
+    //     ptr = work; //std::move(work);
+    //     arr = ptr.get();
+    // }
+
+    work_array &operator=(work_array &&other) {
+        size = other.size;
+        ptr = std::move(other.ptr);
+        arr = ptr.get();
+        return *this;
+    };
 };
 
 // no const array, in case *a=*b=*c; for implementing ipow2
