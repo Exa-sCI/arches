@@ -254,6 +254,7 @@ class JChunkFactory:
         chunk_size=-1,
         comm=None,
         constraint=None,
+        screening_threshold=None,
     ):
         if comm is None:
             self.comm_rank = 0
@@ -267,6 +268,14 @@ class JChunkFactory:
         self.src_data = src_data
         self.constraint = constraint
         self.category = category
+        self.screening = False
+        self.screening_threshold = screening_threshold
+
+        if screening_threshold is not None:
+            if chunk_size < 0:
+                raise NotImplementedError("Must used batched chunks for integral screening")
+            self.screening_filter = np.zeros(chunk_size, dtype=bool)
+            self.screening = True
 
     @property
     def category(self):
@@ -332,6 +341,20 @@ class JChunkFactory:
             yield self.src_data[idx]
 
     @property
+    def screened_val_iter(self):
+        for i, idx in enumerate(self.idx_iter):
+            val = self.src_data[idx]
+            if np.abs(val) >= self.screening_threshold:
+                self.screening_filter[i] = True
+                yield val
+
+    @property
+    def screened_idx_iter(self):
+        for i, idx in enumerate(self.idx_iter):
+            if self.screening_filter[i]:
+                yield idx
+
+    @property
     def idx_iter(self):
         if self.batched:
             return self._batch_iter
@@ -394,8 +417,11 @@ class JChunkFactory:
                 # TODO: Would really like to be able to tie the count to the chunk size for performance
                 # but with this current design it is hard to see if this is the last batch
                 # TODO: Change np.int64 to map from idx_t
-                J_ind = np.fromiter(self.idx_iter, count=-1, dtype=np.int64)
-                J_vals = np.fromiter(self.val_iter, count=-1, dtype=self.src_data.dtype)
+                viter = self.screened_val_iter if self.screening else self.val_iter
+                iiter = self.screened_idx_iter if self.screening else self.idx_iter
+
+                J_vals = np.fromiter(viter, count=-1, dtype=self.src_data.dtype)
+                J_ind = np.fromiter(iiter, count=-1, dtype=np.int64)
                 chunk_size = J_ind.shape[0]
                 new_chunk = JChunk(
                     self.category, chunk_size, J_ind, J_vals, dtype=self.src_data.dtype
@@ -434,12 +460,7 @@ def default_comm_cat_map(rank):
 
 
 def load_integrals_into_chunks(
-    fp,
-    comm,
-    comm_cat_map=default_comm_cat_map,
-    chunk_size=-1,
-    dtype=np.float64,
-    constraint=None,
+    fp, comm, comm_cat_map=default_comm_cat_map, dtype=np.float64, **kwargs
 ):
     # Set-up IO
     n_orb, n_elec, E0, J_oe, J_te = load_integrals(fp, return_N_elec=True)
@@ -452,9 +473,9 @@ def load_integrals_into_chunks(
     chunks = []
     for cat in cats:
         if cat == "OE":
-            fact = JChunkFactory(n_orb, cat, J_oe_reader, chunk_size, comm)
+            fact = JChunkFactory(n_orb, cat, J_oe_reader, comm=comm, **kwargs)
         else:
-            fact = JChunkFactory(n_orb, cat, J_te_reader, chunk_size, comm, constraint)
+            fact = JChunkFactory(n_orb, cat, J_te_reader, comm=comm, **kwargs)
 
         # add new chunks and prune any empty chunks coming from bad distribution of integrals
         chunks += [chunk for chunk in fact.get_chunks() if chunk.chunk_size > 0]

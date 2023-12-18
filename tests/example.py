@@ -66,6 +66,8 @@ def run_example(fp, config, dtype):
         FakeComm(0, 1),
         dtype=dtype,
         constraint=config["constraint"],
+        chunk_size=512,
+        screening_threshold=config["screening_threshold"],
     )
 
     E0 = get_E0(ground_det, chunks, V_nn, dtype)
@@ -78,10 +80,11 @@ def nh3(dtype):
     fp = pathlib.Path("../data/nh3.5det.fcidump")
     config = {
         "N_states": 1,
-        "N_max_dets": 1000,
-        "pt2_conv": 1e-4,
-        "pt2_threshold": 1e-6,
-        "constraint": (3, 3),
+        "N_max_dets": 2000,
+        "pt2_conv": 1e-6,
+        "pt2_threshold": 1e-8,
+        "constraint": (4, 4),
+        "screening_threshold": 1e-8,
     }
     run_example(fp, config, dtype)
     print("###### NH3 example finished ######\n")
@@ -92,10 +95,11 @@ def f2(dtype):
     fp = pathlib.Path("../data/f2_631g.18det.fcidump")
     config = {
         "N_states": 1,
-        "N_max_dets": 1000,
-        "pt2_conv": 1e-4,
-        "pt2_threshold": 1e-6,
-        "constraint": (3, 3),
+        "N_max_dets": 2000,
+        "pt2_conv": 1e-6,
+        "pt2_threshold": 1e-8,
+        "constraint": (4, 4),
+        "screening_threshold": 1e-8,
     }
     run_example(fp, config, dtype)
     print("###### F2 example finished ######\n")
@@ -106,10 +110,11 @@ def c2(dtype):
     fp = pathlib.Path("../data/c2_eq_hf_dz.fcidump")
     config = {
         "N_states": 1,
-        "N_max_dets": 1000,
-        "pt2_conv": 1e-4,
-        "pt2_threshold": 1e-7,
-        "constraint": (3, 3),
+        "N_max_dets": 2000,
+        "pt2_conv": 1e-6,
+        "pt2_threshold": 1e-8,
+        "constraint": (4, 4),
+        "screening_threshold": 1e-8,
     }
     run_example(fp, config, dtype)
     print("###### C2 example finished ######\n")
